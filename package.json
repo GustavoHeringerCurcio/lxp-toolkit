@@ -15,6 +15,13 @@
     "capture-api": "tsx scripts/capture-api.ts",
     "crawl-routes": "tsx scripts/crawl-routes.ts",
     "agent": "tsx scripts/agent.ts",
+    "exercises": "tsx scripts/exercises.ts",
+    "homework": "tsx scripts/homework.ts",
+    "index": "tsx scripts/build-homework-index.ts",
+    "web": "tsx scripts/serve-web.ts",
+    "web:docs": "tsx scripts/serve-docs.ts",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

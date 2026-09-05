@@ -20,14 +20,16 @@ If the task is narrow (e.g. "why did grades come back empty"), read the one rele
 
 ```
 agent-docs/         ← THIS knowledge base (read this first)
-docs/               ← human docs + full scraped data (big; read specific files, not wholesale)
+docs/                ← human docs + full scraped data (big; read specific files, not wholesale)
 ├── auth.md, api-endpoints.md, topic-types.md, gaps.md, README.md, PLAN.md
 ├── courses/{courseId}-{slug}/   ← 145 item .md dumps + downloaded files/
-├── raw/            ← content-tree.json, surfaces.json, api-calls.json, topic-types.json …
+├── raw/            ← content-tree.json, homework-index.json, surfaces.json, topic-types.json …
 ├── routes/         ← SPA route DOM captures
 └── grades-*.md, calendar.md, notices.md, messages.md, achievements.md, lti-tools.md …
-src/                ← TypeScript source (config, client, auth, session, network, content, actions)
-scripts/            ← runnable entry points (login, dump, dump-surfaces, crawl-routes, capture-api, agent)
+src/                ← TypeScript source (config, client, auth, session, network, content, actions, exercises)
+scripts/            ← runnable entry points (login, dump, dump-surfaces, crawl-routes, capture-api,
+                      agent, index, homework, exercises, serve-web, serve-docs)
+web/                ← Vite + React local dashboard (npm run web)
 ```
 
 ## Golden rules (always true)

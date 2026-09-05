@@ -22,6 +22,11 @@ cp .env.example .env    # then fill LXP_USERNAME (RA) and LXP_PASSWORD
 | `crawl-routes` | `scripts/crawl-routes.ts` | capture SPA pages via client-side nav → `docs/routes/**` + `docs/portal-map.md` |
 | `capture-api` | `scripts/capture-api.ts` | record network traffic → `docs/api-captured.md` + `docs/raw/api-calls.json` |
 | `agent` | `scripts/agent.ts` | list actionable items; `--read` auto-completes undone readings; `--dry-run` previews |
+| `index` | `scripts/build-homework-index.ts` | build `docs/raw/homework-index.json` (topic-linked: upload ↔ section ↔ sibling content ↔ local files) |
+| `homework` | `scripts/homework.ts` | friendly terminal board of open homework (grouped by section, sorted by due date); `--fresh`, `--json` |
+| `exercises` | `scripts/exercises.ts` | read-only: `npm run exercises -- <itemId>` prints a quiz's questions or an upload's info |
+| `web` | `scripts/serve-web.ts` | build + serve the local web dashboard (`web/`, Vite+React) at `http://localhost:4173`, serving `docs/**` too |
+| `web:dev` | — | Vite HMR dev server (needs `npm run web:docs` for the `/docs` proxy) |
 | `typecheck` | — | `tsc --noEmit` (run after any code change) |
 
 ## Architecture (src/)
@@ -34,8 +39,16 @@ cp .env.example .env    # then fill LXP_USERNAME (RA) and LXP_PASSWORD
 | `session.ts` | `createSession()` — launch Chromium, always fresh-login, return `{browser,context,page,client,auth}` |
 | `network.ts` | `NetworkRecorder` — capture API traffic (redacts auth/cookie headers) |
 | `content.ts` | `fetchCourses`, `collectContent` (tree walk), `classify`, parse helpers |
+| `exercises.ts` | read helpers (`fetchQuiz`, `fetchUploadTask`) + safe write-side stubs (`submitAnswer`, `uploadFile`) that throw until the submit endpoint is captured |
 | `actions.ts` | `markRead` (progress POST), `downloadPdf` |
 | `markdown.ts`, `util.ts` | html→md, slugify, sanitize, io helpers |
+
+## Prefer the offline index
+
+`docs/raw/homework-index.json` (built by `npm run index`) links every open assignment to its
+section, sibling content, and local files. Read it instead of re-scraping. `npm run homework` is
+the friendly terminal board; `npm run web` is the browser dashboard (see `web/`).
+
 
 ## The three gotchas that WILL bite you
 

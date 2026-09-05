@@ -29,7 +29,16 @@ Scraped + reverse-engineered state of the **UniFOA / Grupoa LXP** platform
   LTI tools, each as readable markdown + raw JSON.
 - **Raw JSON** (`docs/raw/`) — `content-tree.json`, `routes.json`, `api-calls.json`,
   `surfaces.json`, `topic-types.json`, `example-quiz-topic.json`, `example-upload-topic.json`,
-  `deep-api.json`, `deep-routes.json`.
+  `deep-api.json`, `deep-routes.json`, `homework-index.json`.
+
+## Friendly dashboards
+
+- **Terminal board:** `npm run homework` → open assignments/quizzes grouped by section, sorted by
+  due date (`npm run homework -- --fresh` rebuilds the index first).
+- **Web app:** `npm run web` → local dashboard at `http://localhost:4173` (Plan + Browse views,
+  opens the downloaded PDFs natively). Built with Vite + React in `web/`.
+- **LXP Assistant** (automation + AI product, lives in `assistant/`): ordered exercise list with
+  green/red badges and **gpt-4o-mini answers in pt-BR**. See `assistant/README.md`.
 
 ## Facts worth remembering
 
@@ -50,6 +59,10 @@ npm run dump-surfaces  # scrape grades, calendar, notices, messages, achievement
 npm run crawl-routes   # crawl SPA routes (client-side) → docs/routes/** + portal-map.md
 npm run capture-api    # record network → docs/api-captured.md
 npm run agent          # list / auto-complete readings (quiz/upload pending — see gaps.md)
+npm run index          # build docs/raw/homework-index.json (topic-linked homework index)
+npm run homework       # friendly terminal board of open homework
+npm run exercises -- <itemId>   # read a quiz's questions or an upload's info from the API
+npm run web            # local web dashboard (builds web/ + serves docs)
 ```
 
 ## Topics to learn

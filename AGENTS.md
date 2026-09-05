@@ -15,4 +15,8 @@ scraped data and human notes; `agent-docs/` is the distilled context an agent ne
 - API base: `https://api.plataforma.grupoa.education`. `unifoa.lyceum.com.br` is login-only.
 - Course: `5254272` "PROGRAMAÇÃO BACK-END", 145 items, 8 quizzes, 35 file-uploads.
 - Commands: `npm run dump`, `npm run dump-surfaces`, `npm run crawl-routes`,
-  `npm run capture-api`, `npm run agent`. Run `npm run typecheck` after code changes.
+  `npm run capture-api`, `npm run agent`, `npm run homework`, `npm run exercises`,
+  `npm run web`. Run `npm run typecheck` after code changes.
+- `docs/raw/homework-index.json` (built by `npm run index`) links each open assignment to its
+  section + sibling content + local files — prefer it over re-scraping. The web dashboard is
+  `npm run web` (Vite + React under `web/`).
