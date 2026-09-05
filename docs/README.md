@@ -51,3 +51,55 @@ npm run crawl-routes   # crawl SPA routes (client-side) → docs/routes/** + por
 npm run capture-api    # record network → docs/api-captured.md
 npm run agent          # list / auto-complete readings (quiz/upload pending — see gaps.md)
 ```
+
+## Topics to learn
+
+This project is a real-world intro to reverse-engineering a web app. If you're an intern getting
+started, work through these in order — each one maps directly to a file or concept in this repo.
+
+### 1. JavaScript + TypeScript (foundation)
+Variables, functions, `async`/`await`, objects/arrays, `import`/`export`, and `fetch`.
+Every `src/*.ts` file is a small, readable example.
+
+### 2. HTTP — how the web actually works
+Methods (GET/POST), URLs + query params, headers, request/response bodies, status codes
+(200 / 204 / 403 / 429). This is the most important concept here — every entry in
+[docs/api-endpoints.md](api-endpoints.md) is just "a URL + a verb + headers". Read
+[src/client.ts](../src/client.ts) to see it in practice.
+
+### 3. Browser DevTools → Network tab (your #1 reverse-engineering tool)
+Press F12 → **Network** → filter by **Fetch/XHR**, click around the site, and read each request:
+URL, headers, response JSON. This is exactly how this whole API was mapped. Pair it with
+[src/network.ts](../src/network.ts) (`NetworkRecorder`).
+
+### 4. Authentication — bearer tokens & SSO
+How `authorization: <token>` works, what `localStorage` is, why tokens expire. A concrete,
+annotated example lives in [docs/auth.md](auth.md) and [src/auth.ts](../src/auth.ts).
+
+### 5. Playwright (browser automation)
+`page.goto`, `page.fill`, `page.evaluate`, `page.on("request")`. Used here to log in, grab the
+token, and navigate. See [src/session.ts](../src/session.ts) and the `scripts/*.ts` files.
+
+### 6. How SPAs work (single-page apps)
+This site is a Nuxt 3 SPA: the browser renders the UI and calls a JSON API behind the scenes.
+That's why link-crawling doesn't work and you must navigate with `$nuxt.$router.push()`.
+
+### Suggested first exercise
+Write a tiny script that logs in and prints your grades by reusing `createSession()` and:
+
+```ts
+const res = await client.get("/v1/plataforma/grades/me/course/5254272");
+console.log(JSON.stringify(res.data, null, 2));
+```
+
+That single exercise teaches auth, HTTP, and the API in one go. Then try a Discord/Telegram
+notifier that polls `/v1/notification-service/notifications`.
+
+### Gotchas you *will* hit
+- The token dies on a full page reload → navigate with `$nuxt.$router.push`, never `page.goto`.
+- `tsx` breaks `page.evaluate` with `__name is not defined` → a shim already handles it
+  (see [src/session.ts](../src/session.ts)).
+- The API sits behind AWS WAF → GET works fine; writes (quiz/upload submit) may need a real
+  browser to solve the challenge.
+- Automating your own coursework touches your institution's academic-integrity rules — know
+  what's allowed, and keep request volume low to avoid rate-limits.
