@@ -1,0 +1,384 @@
+import type { ApiClient } from "./client.js";
+import { logger } from "./config.js";
+
+export interface ContentAttachment {
+  url: string;
+  filename: string | null;
+  filesize: number | null;
+}
+
+export interface QuizOption {
+  id: number;
+  text: string;
+}
+
+export interface QuizQuestion {
+  id: number;
+  questionTypeId: number;
+  enunciated: string;
+  options: QuizOption[];
+  hasFileUpload?: boolean;
+  grade?: unknown;
+  feedbackTypeId?: number;
+}
+
+export interface LinkItem {
+  id: number | null;
+  title: string;
+  type: string | null;
+  url: string;
+  html: string | null;
+}
+
+export interface ContentItem {
+  courseId: number;
+  courseName: string;
+  moduleId: number;
+  moduleTitle: string;
+  sectionId: number | null;
+  sectionTitle: string | null;
+  itemId: number;
+  itemTitle: string;
+  topicTypeId: number;
+  categoryTypeId: number | null;
+  kind: ContentKind;
+  progressTypeId: number;
+  isRecordProgress: boolean;
+  done: boolean;
+  viewed: boolean;
+  expired: boolean;
+  hasDeadline: boolean;
+  deadlineAt: string | null;
+  hasCompletedAllAttempts: boolean | null;
+  grade: unknown;
+  studentGrade: unknown;
+  attachments: ContentAttachment[];
+  html: string | null;
+  content: Record<string, unknown> | null;
+  context: Record<string, unknown> | null;
+  links: LinkItem[];
+}
+
+export interface ContentCourse {
+  courseId: number;
+  courseName: string;
+  items: ContentItem[];
+}
+
+export type ContentKind =
+  | "pdf"
+  | "reading"
+  | "quiz"
+  | "file_upload"
+  | "link"
+  | "forum"
+  | "other";
+
+const PDF_TAG_RE = /<grupoabook\b[^>]*>/gi;
+const ATTACH_TAG_RE = /<grupoaattachment\b[^>]*>/gi;
+
+const NAMED_ENTITIES: Record<string, string> = {
+  aacute: "á", eacute: "é", iacute: "í", oacute: "ó", uacute: "ú",
+  Aacute: "Á", Eacute: "É", Iacute: "Í", Oacute: "Ó", Uacute: "Ú",
+  atilde: "ã", otilde: "õ", Atilde: "Ã", Otilde: "Õ",
+  ccedil: "ç", Ccedil: "Ç", ntilde: "ñ", Ntilde: "Ñ",
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
+};
+
+function decodeHtmlEntities(input: string): string {
+  return input
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&([a-zA-Z]+);/g, (_, name: string) => NAMED_ENTITIES[name] ?? `&${name};`);
+}
+
+function attrOf(tag: string, name: string): string | null {
+  const re = new RegExp(`${name}\\s*=\\s*"([^"]*)"`, "i");
+  const match = tag.match(re);
+  return match ? (match[1] ?? null) : null;
+}
+
+export function parsePdfAttachments(html: string | null | undefined): ContentAttachment[] {
+  if (!html) return [];
+  const out: ContentAttachment[] = [];
+  const seen = new Set<string>();
+  for (const tag of html.match(PDF_TAG_RE) ?? []) {
+    const file = attrOf(tag, "file");
+    if (!file || !/\.pdf$/i.test(file) || seen.has(file)) continue;
+    const filename = attrOf(tag, "filename");
+    const filesize = attrOf(tag, "filesize");
+    seen.add(file);
+    out.push({
+      url: file,
+      filename: filename ? decodeHtmlEntities(filename) : null,
+      filesize: filesize ? Number(filesize) || null : null,
+    });
+  }
+  // `<grupoaattachment>` embeds template files (docx/pdf/...) in file-upload tasks.
+  for (const tag of html.match(ATTACH_TAG_RE) ?? []) {
+    const file = attrOf(tag, "file");
+    if (!file || seen.has(file)) continue;
+    const filename = attrOf(tag, "filename");
+    const filesize = attrOf(tag, "filesize");
+    seen.add(file);
+    out.push({
+      url: file,
+      filename: filename ? decodeHtmlEntities(filename) : null,
+      filesize: filesize ? Number(filesize) || null : null,
+    });
+  }
+  return out;
+}
+
+/** Extract the quiz questions embedded in a topic-detail `content` object. */
+export function parseQuizQuestions(content: Record<string, unknown> | null | undefined): QuizQuestion[] {
+  if (!content) return [];
+  const questions = content.questions;
+  if (!Array.isArray(questions)) return [];
+  return questions.map((q) => {
+    const raw = q as Record<string, unknown>;
+    const options = Array.isArray(raw.options)
+      ? raw.options.map((o) => {
+          const opt = o as Record<string, unknown>;
+          return { id: Number(opt.id), text: String(opt.text ?? "") };
+        })
+      : [];
+    return {
+      id: Number(raw.id),
+      questionTypeId: Number(raw.questionTypeId ?? 0),
+      enunciated: String(raw.enunciated ?? ""),
+      options,
+      hasFileUpload: raw.hasFileUpload === true,
+      grade: raw.grade ?? null,
+      feedbackTypeId: raw.feedbackTypeId != null ? Number(raw.feedbackTypeId) : undefined,
+    };
+  });
+}
+
+/** Extract the list of links embedded in a topic-detail `content.items` (type 7 "Links"). */
+export function parseLinks(content: Record<string, unknown> | null | undefined): LinkItem[] {
+  if (!content) return [];
+  const items = content.items;
+  if (!Array.isArray(items)) return [];
+  return items.map((it) => {
+    const raw = it as Record<string, unknown>;
+    return {
+      id: raw.id != null ? Number(raw.id) : null,
+      title: String(raw.title ?? ""),
+      type: raw.type != null ? String(raw.type) : null,
+      url: String(raw.url ?? ""),
+      html: raw.html != null ? String(raw.html) : null,
+    };
+  });
+}
+
+export function classify(topicTypeId: number, progressTypeId: number, hasPdf: boolean): ContentKind {
+  switch (topicTypeId) {
+    case 8:
+      return "file_upload";
+    case 37:
+    case 15:
+    case 29:
+    case 30:
+      return "quiz";
+    case 7:
+      return "link";
+    case 9:
+      return "forum";
+    case 3:
+      if (progressTypeId === 2) return "reading";
+      if (hasPdf) return "pdf";
+      return "reading";
+    default:
+      return "other";
+  }
+}
+
+export function isDone(item: {
+  progressId?: number | null;
+  viewed?: boolean | null;
+  grade?: unknown;
+  hasCompletedAllAttempts?: boolean | null;
+}): boolean {
+  if (item.progressId != null) return true;
+  if (item.hasCompletedAllAttempts === true) return true;
+  if (item.grade != null) return true;
+  return item.viewed === true;
+}
+
+export const ACTIONABLE_KINDS: ContentKind[] = ["pdf", "reading", "quiz", "file_upload"];
+
+interface RawLeaf {
+  courseId: number;
+  courseName: string;
+  moduleId: number;
+  moduleTitle: string;
+  sectionId: number | null;
+  sectionTitle: string | null;
+  itemId: number;
+  itemTitle: string;
+  topicTypeId: number;
+  categoryTypeId: number | null;
+  progressTypeId: number;
+  progressId: number | null;
+  viewed: boolean;
+  grade: unknown;
+  isRecordProgress: boolean;
+  expired: boolean;
+  hasCompletedAllAttempts: boolean | null;
+  hasDeadline: boolean;
+  deadlineAt: string | null;
+}
+
+/** Enumerate all enrolled courses. Returns `{ id, name }[]`. */
+export async function fetchCourses(client: ApiClient): Promise<{ id: number; name: string }[]> {
+  const res = await client.get<{ courses?: { id: number; name: string }[] }>(
+    "/v1/plataforma/academic/courses/me?state=all&page=1&limit=50&sort=asc&sortBy=name&type=courses",
+  );
+  return res.data.courses ?? [];
+}
+
+interface ContentTreeNode {
+  id: number;
+  title: string;
+  topicTypeId?: number;
+  categoryTypeId?: number | null;
+  children?: ContentTreeNode[];
+  progressTypeId?: number;
+  progressId?: number | null;
+  viewed?: boolean;
+  grade?: { value?: unknown };
+  isRecordProgress?: boolean;
+  expired?: boolean;
+  hasCompletedAllAttempts?: boolean | null;
+  hasDeadline?: boolean;
+  deadlineAt?: string | null;
+}
+
+/** Walk the content tree and collect every leaf item across all courses. */
+export async function collectContent(
+  client: ApiClient,
+  courseIds: number[] = [],
+): Promise<ContentCourse[]> {
+  const courses = await fetchCourses(client);
+  const wanted = new Set(courseIds);
+  const result: ContentCourse[] = [];
+
+  for (const course of courses) {
+    if (wanted.size > 0 && !wanted.has(course.id)) continue;
+
+    const tree = await client.get<{ topics?: ContentTreeNode[] }>(
+      `/v2/plataforma/content/academics-main/${course.id}/contents`,
+    );
+    const leaves: RawLeaf[] = [];
+    const sectionIds: number[] = [];
+
+    const walk = (
+      node: ContentTreeNode,
+      moduleId: number,
+      moduleTitle: string,
+      sectionId: number | null,
+      sectionTitle: string | null,
+    ): void => {
+      const t = node.topicTypeId ?? 0;
+      const children = node.children ?? [];
+      if (t === 1) {
+        for (const child of children) walk(child, node.id, node.title, null, null);
+        return;
+      }
+      if (t === 2) {
+        sectionIds.push(node.id);
+        for (const child of children) walk(child, moduleId, moduleTitle, node.id, node.title);
+        return;
+      }
+      leaves.push({
+        courseId: course.id,
+        courseName: course.name,
+        moduleId,
+        moduleTitle,
+        sectionId,
+        sectionTitle,
+        itemId: node.id,
+        itemTitle: node.title,
+        topicTypeId: t,
+        categoryTypeId: node.categoryTypeId ?? null,
+        progressTypeId: node.progressTypeId ?? 1,
+        progressId: node.progressId ?? null,
+        viewed: node.viewed === true,
+        grade: node.grade?.value ?? null,
+        isRecordProgress: node.isRecordProgress === true,
+        expired: node.expired === true,
+        hasCompletedAllAttempts: node.hasCompletedAllAttempts ?? null,
+        hasDeadline: node.hasDeadline === true,
+        deadlineAt: node.deadlineAt ?? null,
+      });
+    };
+
+    for (const module of tree.data.topics ?? []) {
+      walk(module, module.id, module.title, null, null);
+    }
+
+    const htmlByItemId = new Map<string, string>();
+    for (const sid of sectionIds) {
+      try {
+        const detail = await client.get<{ topics?: { id: number; content?: { html?: string } }[] }>(
+          `/v2/plataforma/content/academics-main/${course.id}/topics/${sid}`,
+        );
+        for (const child of detail.data.topics ?? []) {
+          const html = child.content?.html;
+          if (html) htmlByItemId.set(String(child.id), html);
+        }
+      } catch (err) {
+        logger.warn({ courseId: course.id, sectionId: sid, err }, "failed to fetch section detail");
+      }
+    }
+
+    // The *topic* detail (`/topics/{itemId}`) is the richest source: it carries
+    // `topics.content` (html / questions / links / upload metadata), plus `context`
+    // (full academic context) and `topics.studentGrade`. Fetch it for EVERY leaf so
+    // nothing is left behind. Done with limited concurrency to finish within the
+    // token's lifetime.
+    interface TopicDetail {
+      context?: Record<string, unknown>;
+      topics?: { id?: number; content?: Record<string, unknown>; studentGrade?: unknown };
+    }
+    const topicDetailByItemId = new Map<string, TopicDetail>();
+
+    const CONCURRENCY = 5;
+    let next = 0;
+    const workers = Array.from({ length: Math.min(CONCURRENCY, leaves.length) }, async () => {
+      while (next < leaves.length) {
+        const idx = next++;
+        const leaf = leaves[idx];
+        try {
+          const detail = await client.get<TopicDetail>(
+            `/v2/plataforma/content/academics-main/${course.id}/topics/${leaf.itemId}`,
+          );
+          topicDetailByItemId.set(String(leaf.itemId), detail.data);
+        } catch (err) {
+          logger.warn({ itemId: leaf.itemId, err }, "failed to fetch topic detail");
+        }
+      }
+    });
+    await Promise.all(workers);
+
+    const items: ContentItem[] = leaves.map((leaf) => {
+      const detail = topicDetailByItemId.get(String(leaf.itemId)) ?? null;
+      const content = detail?.topics?.content ?? null;
+      const context = detail?.context ?? null;
+      const studentGrade = detail?.topics?.studentGrade ?? null;
+      const html = content?.html ? String(content.html) : htmlByItemId.get(String(leaf.itemId)) ?? null;
+      const attachments = parsePdfAttachments(html);
+      const links = parseLinks(content);
+      const hasPdf = attachments.some((a) => a.url.toLowerCase().endsWith(".pdf"));
+      const kind = classify(leaf.topicTypeId, leaf.progressTypeId, hasPdf);
+      const done = isDone(leaf);
+      return { ...leaf, kind, done, attachments, html, content, context, links, studentGrade };
+    });
+
+    result.push({ courseId: course.id, courseName: course.name, items });
+    logger.info({ course: course.name, items: items.length }, "course content collected");
+  }
+
+  return result;
+}
