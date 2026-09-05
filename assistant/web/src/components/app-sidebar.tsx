@@ -16,7 +16,6 @@ import type { ExerciseStatus } from "@/types";
 import { accentFor } from "@/lib/prof";
 
 export type Scope = "open" | "expired" | "done" | "all";
-export type Kind = "all" | "upload" | "quiz";
 
 const NAV: { key: Scope; label: string; icon: typeof ListChecks }[] = [
   { key: "open", label: "Abertas", icon: Clock3 },

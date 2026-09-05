@@ -5,10 +5,10 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { fetchConfig, fetchExercises, saveNote, type AiConfigDto } from "@/api";
 import type { Exercise } from "@/types";
-import { AppSidebar, type Kind, type Scope } from "@/components/app-sidebar";
+import { AppSidebar, type Scope } from "@/components/app-sidebar";
 import { ActivityCard } from "@/components/activity-card";
 import { ActivityDetail } from "@/components/activity-detail";
-import { KindToggle, NextCard, StatCards } from "@/components/section-cards";
+import { NextCard, StatCards } from "@/components/section-cards";
 import { countInfo } from "@/lib/status";
 
 function cmp(a: Exercise, b: Exercise): number {
@@ -26,7 +26,6 @@ export default function App() {
   const [cfg, setCfg] = useState<AiConfigDto | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [scope, setScope] = useState<Scope>("open");
-  const [kind, setKind] = useState<Kind>("all");
   const [selected, setSelected] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
@@ -47,9 +46,8 @@ export default function App() {
     () =>
       items
         .filter((e) => (scope === "all" ? true : e.status === scope))
-        .filter((e) => (kind === "all" ? true : e.kind === kind))
         .sort(cmp),
-    [items, scope, kind],
+    [items, scope],
   );
 
   const counts = useMemo(() => countInfo(items), [items]);
@@ -104,11 +102,8 @@ export default function App() {
           <NextCard next={next} />
           <StatCards counts={counts} />
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm text-muted-foreground">
-              {scope === "open" ? "Abertas" : scope === "expired" ? "Atrasadas" : scope === "done" ? "Concluídas" : "Todas"} · {shown.length}
-            </div>
-            <KindToggle value={kind} onChange={setKind} />
+          <div className="text-sm text-muted-foreground">
+            {scope === "open" ? "Abertas" : scope === "expired" ? "Atrasadas" : scope === "done" ? "Concluídas" : "Todas"} · {shown.length}
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">

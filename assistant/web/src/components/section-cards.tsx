@@ -45,26 +45,3 @@ export function StatCards({ counts }: { counts: { open: number; expired: number;
     </div>
   );
 }
-
-export function KindToggle({ value, onChange }: { value: "all" | "upload" | "quiz"; onChange: (k: "all" | "upload" | "quiz") => void }) {
-  const btn = (label: string, key: "all" | "upload" | "quiz") => (
-    <button
-      key={key}
-      onClick={() => onChange(key)}
-      className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-        value === key
-          ? "border-transparent bg-primary text-primary-foreground"
-          : "border-border bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-      }`}
-    >
-      {label}
-    </button>
-  );
-  return (
-    <div className="flex items-center gap-1.5">
-      {btn("Todas", "all")}
-      {btn("📤 Tarefas", "upload")}
-      {btn("❓ Quizzes", "quiz")}
-    </div>
-  );
-}
