@@ -6,7 +6,7 @@ import { extractPdfText } from "../src/pdf.js";
 import { generateAnswer } from "../src/ai.js";
 import { exportAnswer } from "../src/export.js";
 import { assist } from "../src/paths.js";
-import { isTTY, color, chip, icon, deadlineSuffix } from "./render.js";
+import { isTTY, color, typeChip, deadlineChip, deadlineLabel, contextLine, icon } from "./render.js";
 
 function usage(): void {
   console.log(`LXP Assistant — organize your exercises + AI answers
@@ -42,12 +42,8 @@ function printList(scope: "open" | "expired" | "done" | "all"): void {
   );
 
   for (const v of show) {
-    console.log(`  ${icon(v.kind, v.done)} ${v.title}  ${chip(v)}${deadlineSuffix(v)}`);
-    const sub: string[] = [];
-    if (v.moduleTitle) sub.push(v.moduleTitle);
-    if (v.sectionTitle) sub.push(v.sectionTitle);
-    const line = sub.join(" · ");
-    console.log(`      ${color.dim(line.length > 110 ? line.slice(0, 110) + "…" : line)}`);
+    console.log(`  ${icon(v)} ${v.title}  [${typeChip(v)}] [${deadlineChip(v)}]`);
+    console.log(`      ${contextLine(v)}`);
   }
 
   if (show.length === 0) {
@@ -63,9 +59,10 @@ function showOne(id: number): void {
     console.error(`Exercise ${id} not found. Run \`npm run assistant -- list --all\` to see ids.`);
     process.exit(1);
   }
-  console.log(`\n${color.bold(icon(v.kind, v.done) + " " + v.title)}`);
-  console.log(`  ${chip(v)}${deadlineSuffix(v)}`);
-  console.log(`  ${v.moduleTitle}${v.sectionTitle ? " — " + v.sectionTitle : ""} (id ${v.id})`);
+  const d = deadlineLabel(v);
+  console.log(`\n${color.bold(icon(v) + " " + v.title)}`);
+  console.log(`  ${typeChip(v)} · ${deadlineChip(v)}${v.deadlineAt ? `  (${v.deadlineAt})` : ""}`);
+  console.log(`  ${contextLine(v)}  (id ${v.id})`);
   if (v.notes) console.log(color.dim(`  📝 nota: ${v.notes}`));
 
   if (v.files.length) {

@@ -19,6 +19,8 @@ export interface Exercise {
   courseId: number;
   courseName: string;
   moduleTitle: string;
+  moduleName: string;
+  professor: string | null;
   sectionTitle: string | null;
   topicTypeId: number;
   status: ExerciseStatus;

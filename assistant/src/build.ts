@@ -94,6 +94,13 @@ function parseQuestions(content: Record<string, unknown> | null): QuizQ[] {
   });
 }
 
+/** Split a module title like "Arquitetura de Software - Prof. Leonardo Dias". */
+export function splitModule(moduleTitle: string): { moduleName: string; professor: string | null } {
+  const m = moduleTitle.match(/^(.*?)\s+-\s+(Profa?\.\s*.*)$/i);
+  if (m) return { moduleName: m[1].trim(), professor: m[2].trim() };
+  return { moduleName: moduleTitle.trim(), professor: null };
+}
+
 export function buildExercises(): Exercise[] {
   const file = raw("content-tree.json");
   if (!existsSync(file)) {
@@ -106,6 +113,7 @@ export function buildExercises(): Exercise[] {
       if (it.kind !== "file_upload" && it.kind !== "quiz") continue;
       const deadlineAt = it.deadlineAt ?? null;
       const status = computeStatus(it.done, it.hasDeadline, deadlineAt);
+      const { moduleName, professor } = splitModule(it.moduleTitle);
       out.push({
         id: it.itemId,
         title: it.itemTitle,
@@ -114,6 +122,8 @@ export function buildExercises(): Exercise[] {
         courseName: course.courseName,
         moduleId: it.moduleId,
         moduleTitle: it.moduleTitle,
+        moduleName,
+        professor,
         sectionId: it.sectionId,
         sectionTitle: it.sectionTitle,
         topicTypeId: it.topicTypeId,
