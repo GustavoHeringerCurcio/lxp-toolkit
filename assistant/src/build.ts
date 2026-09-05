@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { assist, dataDir, raw } from "./paths.js";
-import { computeStatus, daysLeft } from "./status.js";
+import { computeStatus, daysLeft, refreshLive } from "./status.js";
 import type { Exercise, PdfRef, QuizQ } from "./types.js";
 
 interface TreeItem {
@@ -159,5 +159,10 @@ export function loadExercises(): Exercise[] {
   const file = ASSISTANT_EXERCISES_FILE;
   if (!existsSync(file)) throw new Error(`Missing ${file}. Run 'npm run index' first.`);
   const data = JSON.parse(readFileSync(file, "utf-8")) as { exercises: Exercise[] };
+  for (const e of data.exercises) {
+    const { status, daysLeft: liveDays } = refreshLive(e);
+    e.status = status;
+    e.daysLeft = liveDays;
+  }
   return data.exercises;
 }

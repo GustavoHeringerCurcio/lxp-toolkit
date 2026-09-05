@@ -23,6 +23,11 @@ export function computeStatus(done: boolean, hasDeadline: boolean, deadlineAt: s
   return "open";
 }
 
+/** Recompute status + daysLeft against "now" so stored snapshots never go stale. */
+export function refreshLive(e: { done: boolean; hasDeadline: boolean; deadlineAt: string | null }): { status: ExerciseStatus; daysLeft: number | null } {
+  return { status: computeStatus(e.done, e.hasDeadline, e.deadlineAt), daysLeft: daysLeft(e.deadlineAt) };
+}
+
 export interface StatusChip {
   label: string;
   tone: "done" | "expired" | "due" | "soon" | "open" | "plain";
