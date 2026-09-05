@@ -45,13 +45,21 @@ export function typeChip(e: ExerciseView): string {
   return isTTY ? color.dim(t) : t;
 }
 
-/** Deterministic accent color per professor — same as the web app palette. */
-const ACCENTS = ["#14b8a6", "#d946ef", "#f97316", "#84cc16", "#8b5cf6", "#ec4899", "#06b6d4", "#eab308"];
+/** Deterministic accent color per professor — mirrors the web palette. */
+const BY_PROFESSOR: Record<string, string> = {
+  "Profa. Débora Amorim": "#f97316",
+  "Prof. Leonardo Dias": "#84cc16",
+  "Prof. Marcelo Passos": "#14b8a6",
+  "Prof. Osni Silva": "#8b5cf6",
+  "Prof. Rafael Iacillo": "#ec4899",
+};
+const FALLBACK = ["#f97316", "#84cc16", "#14b8a6", "#8b5cf6", "#ec4899", "#0ea5e9", "#eab308", "#c026d3"];
 export function accentFor(prof: string | null): string {
   if (!prof) return "#64748b";
+  if (BY_PROFESSOR[prof]) return BY_PROFESSOR[prof];
   let h = 0;
   for (const ch of prof) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return ACCENTS[h % ACCENTS.length];
+  return FALLBACK[h % FALLBACK.length];
 }
 
 export function contextLine(e: ExerciseView): string {
