@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "references": {
+    "portal-docs": {
+      "path": "agent-docs",
+      "description": "Knowledge base for the UniFOA / Grupoa LXP college portal: auth, API endpoints, data schemas, tooling. Read before portal tasks."
+    }
+  }
+}

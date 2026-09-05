@@ -1,0 +1,101 @@
+# Data schemas — the JSON shapes you'll parse
+
+These are the real shapes returned by the API. Raw examples live in `docs/raw/`.
+
+## Content item (normalized, in `docs/raw/content-tree.json`)
+
+Each leaf item in the scraped content tree looks like:
+
+```json
+{
+  "courseId": 5254272,
+  "courseName": "PROGRAMAÇÃO BACK-END (8793_T01_2026_2)",
+  "moduleId": 89611984, "moduleTitle": "Banco de Dados I - Profa. Débora Amorim",
+  "sectionId": 89611985, "sectionTitle": "Material Didático",
+  "itemId": 89611986, "itemTitle": "Apostila de Banco de Dados I",
+  "topicTypeId": 3, "categoryTypeId": 2,
+  "progressTypeId": 1, "isRecordProgress": false,
+  "kind": "pdf",                    // pdf | reading | quiz | file_upload | link | forum | other
+  "done": false, "viewed": false,
+  "expired": false,
+  "hasDeadline": false, "deadlineAt": null,
+  "hasCompletedAllAttempts": null,
+  "grade": null, "studentGrade": null,
+  "attachments": [{ "url": "https://static.plataforma.grupoa.education/.../uuid.pdf",
+                    "filename": "Apostila.pdf", "filesize": 834978 }],
+  "html": "<div>…rendered content…</div>",   // null for quiz & link kinds
+  "content": { … },                          // topic payload (below)
+  "context": { … },                          // full academic context object
+  "links": []                                // populated for link kind
+}
+```
+
+## Quiz content (`topicTypeId` 15/29/30/37)
+
+```json
+{ "quizTypeId": 1, "hasFeedback": false, "isForShuffle": false,
+  "instructions": "<p></p>", "hasRetries": false, "numberRetries": 1, "retryTypeId": 1,
+  "hasCompletedAllAttempts": false,
+  "questions": [ {
+      "id": 36049942, "questionTypeId": 1,
+      "enunciated": "<div class=\"question\">…HTML…</div>",
+      "feedbackTypeId": 2, "hasFileUpload": false, "grade": 0,
+      "options": [ { "id": 175978391, "text": "<div class=\"question-option\">…</div>" } ]
+  } ] }
+```
+
+## File-upload / task content (`topicTypeId` 8)
+
+```json
+{ "html": "<div>…instructions…<grupoaattachment file=\"…docx\" filename=\"…\" filesize=\"…\"/></div>",
+  "isExpectedAnswerVisible": false, "expectedAnswerAt": null,
+  "hasFileUpload": true, "hasRetries": false, "numberRetries": 1, "retryTypeId": 1,
+  "attempts": [], "hasCompletedAllAttempts": false,
+  "maxFilesLimit": 1, "isUnlimitedFilesEnabled": false }
+```
+
+## Links content (`topicTypeId` 7) — `content.items[]`
+
+```json
+{ "items": [ { "id": 69607828, "title": "VÍDEO 002",
+               "html": "<div>…</div>", "type": "video",
+               "url": "https://www.youtube.com/watch?v=…",
+               "icon": "mdi-play-circle-outline", "bookId": null } ] }
+```
+
+## Reading / PDF — `content.html`
+
+Contains custom tags to watch for:
+- `<grupoabook file="https://static…/{uuid}.pdf" filename="…" filesize="…">` → PDF reading content
+- `<grupoaattachment file="…" filename="…" filesize="…">` → embedded template files
+
+## Grades — `/v1/plataforma/grades/me/course/{id}`
+
+```json
+{ "finalGrade": { "value": null, "isVisible": null, "formula": "" },
+  "structure": [ {
+      "id": 2724241, "name": "AVD1", "sequence": 1, "value": null,
+      "children": [ {
+          "id": 5487142, "name": "DBE I - BIM 1 - Exercício 001",
+          "maxValue": 10, "value": null,
+          "isSubmited": false, "submitedAt": null,
+          "isRevised": false, "deadlineAt": "2026-03-26T22:00:00.000Z",
+          "topicTypeId": 8, "categoryTypeId": 5 } ] } ] }
+```
+
+## Calendar appointments — `/v1/plataforma/calendar/appointment`
+
+```json
+[ { "id": 92629211, "title": "BDI - Atividade 07",
+    "startAt": "2026-09-03 18:00:00", "endAt": "2026-09-03 20:00:00",
+    "appointmentCategoryId": 1, "entityType": "topic", "isCompleted": false,
+    "academicMain": [ { "academicMainId": 5254272, "academicMainTitle": "PROGRAMAÇÃO BACK-END …" } ] } ]
+```
+
+## LTI tools — `/v1/plataforma/content/lti/tool/list-by-alias/student`
+
+```json
+{ "results": [ { "id": 12971, "title": "Biblioteca Digital EAD",
+                 "url": "https://…/lti/launch.php", "icon": "rocket-launch",
+                 "isForOpenInNewTab": true, "ltiProviderId": 17045 } ] }
+```
