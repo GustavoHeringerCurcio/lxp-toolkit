@@ -28,8 +28,8 @@ docs/                ← human docs + full scraped data (big; read specific file
 └── grades-*.md, calendar.md, notices.md, messages.md, achievements.md, lti-tools.md …
 src/                ← TypeScript source (config, client, auth, session, network, content, actions, exercises)
 scripts/            ← runnable entry points (login, dump, dump-surfaces, crawl-routes, capture-api,
-                      agent, index, homework, exercises, serve-web, serve-docs)
-web/                ← Vite + React local dashboard (npm run web)
+                      agent, index, homework, exercises)
+assistant/          ← LXP Assistant: CLI + web app (npm run web inside assistant/)
 ```
 
 ## Golden rules (always true)

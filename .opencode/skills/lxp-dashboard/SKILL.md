@@ -26,5 +26,5 @@ When asked about homework / exercises / deadlines / course progress:
 ## Friendly outputs to offer
 
 - Terminal board: `npm run homework` (colorized). No TTY → still readable.
-- Web visualizer: `npm run web` (local app, see `web/`).
+- Web app: LXP Assistant — `npm run web` inside `assistant/`.
 - Plain summary: describe `nextUp`, then group open items by module.

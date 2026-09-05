@@ -25,8 +25,6 @@ cp .env.example .env    # then fill LXP_USERNAME (RA) and LXP_PASSWORD
 | `index` | `scripts/build-homework-index.ts` | build `docs/raw/homework-index.json` (topic-linked: upload ↔ section ↔ sibling content ↔ local files) |
 | `homework` | `scripts/homework.ts` | friendly terminal board of open homework (grouped by section, sorted by due date); `--fresh`, `--json` |
 | `exercises` | `scripts/exercises.ts` | read-only: `npm run exercises -- <itemId>` prints a quiz's questions or an upload's info |
-| `web` | `scripts/serve-web.ts` | build + serve the local web dashboard (`web/`, Vite+React) at `http://localhost:4173`, serving `docs/**` too |
-| `web:dev` | — | Vite HMR dev server (needs `npm run web:docs` for the `/docs` proxy) |
 | `typecheck` | — | `tsc --noEmit` (run after any code change) |
 
 ## Architecture (src/)
@@ -47,7 +45,7 @@ cp .env.example .env    # then fill LXP_USERNAME (RA) and LXP_PASSWORD
 
 `docs/raw/homework-index.json` (built by `npm run index`) links every open assignment to its
 section, sibling content, and local files. Read it instead of re-scraping. `npm run homework` is
-the friendly terminal board; `npm run web` is the browser dashboard (see `web/`).
+the friendly terminal board; the browser UI is the LXP Assistant (`npm run web` inside `assistant/`).
 
 
 ## The three gotchas that WILL bite you
