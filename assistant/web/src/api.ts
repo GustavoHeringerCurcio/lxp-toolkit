@@ -2,8 +2,18 @@ import type { ExercisesPayload } from "./types";
 
 export async function fetchExercises(): Promise<ExercisesPayload> {
   const res = await fetch("/api/exercises");
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return (await res.json()) as ExercisesPayload;
+  const text = await res.text();
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const body = JSON.parse(text) as { error?: string };
+      if (body?.error) detail = ` · ${body.error}`;
+    } catch {
+      // non-JSON error body (e.g. dev-server proxy page)
+    }
+    throw new Error(`GET /api/exercises → HTTP ${res.status}${detail}`);
+  }
+  return JSON.parse(text) as ExercisesPayload;
 }
 
 export interface AiConfigDto {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { CircleAlert, RefreshCw } from "lucide-react";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -64,12 +64,45 @@ export default function App() {
   if (err) {
     return (
       <div className="flex min-h-svh items-center justify-center p-6">
-        <div className="max-w-md rounded-lg border border-destructive/40 bg-destructive/10 p-5 text-sm text-destructive">
-          <div className="font-semibold">Não consegui carregar os dados.</div>
-          <div className="mt-1">{err}</div>
-          <div className="mt-2 text-muted-foreground">
-            Rode <code>npm run index</code> e depois <code>npm run web</code> dentro de assistant/.
+        <div
+          role="alert"
+          className="w-full max-w-md rounded-lg border border-destructive/40 bg-destructive/10 p-6 text-sm text-destructive"
+        >
+          <div className="flex items-center gap-2 font-semibold">
+            <CircleAlert className="size-5 shrink-0" />
+            <span>Não conseguimos carregar suas tarefas.</span>
           </div>
+          <p className="mt-2 leading-relaxed text-destructive/90">
+            O painel ainda não tem os dados prontos ou o serviço local não respondeu. Não é nada com a sua conta.
+          </p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={reload}>
+            <RefreshCw />
+            Tentar novamente
+          </Button>
+          <p className="mt-4 text-muted-foreground">
+            Se o problema continuar, avise quem configurou este painel — os passos de manutenção estão abaixo.
+          </p>
+          <details className="mt-3 rounded-md border border-destructive/20 bg-background/60 p-3 text-xs text-muted-foreground">
+            <summary className="cursor-pointer select-none font-medium text-muted-foreground hover:text-foreground">
+              Detalhes técnicos (para quem mantém)
+            </summary>
+            <pre className="mt-3 overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-destructive/80">{err}</pre>
+            <p className="mt-3 font-medium text-foreground">O que verificar</p>
+            <ul className="mt-1 list-disc space-y-1 pl-4">
+              <li>
+                Dentro de <code>assistant/</code>: rode <code>npm run index</code> e depois <code>npm run web</code>, e
+                abra esta página de novo.
+              </li>
+              <li>
+                Em modo dev, além do <code>npm run web:dev</code> (front em :5174), o backend precisa rodar com{" "}
+                <code>tsx server/server.ts</code> (em :4174).
+              </li>
+              <li>
+                Se os dados de origem não existirem, rode <code>npm run dump</code> na raiz do repositório e repita o{" "}
+                <code>npm run index</code> dentro de <code>assistant/</code>.
+              </li>
+            </ul>
+          </details>
         </div>
       </div>
     );

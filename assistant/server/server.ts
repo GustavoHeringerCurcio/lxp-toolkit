@@ -61,8 +61,12 @@ const server = createServer(async (req, res) => {
 
   // data for the app
   if (url === "/api/exercises") {
-    const views = enrich(loadExercises(), loadAnswers(), loadOverrides());
-    return json(res, 200, { generatedAt: new Date().toISOString(), exercises: views.filter((v) => !v.hidden) });
+    try {
+      const views = enrich(loadExercises(), loadAnswers(), loadOverrides());
+      return json(res, 200, { generatedAt: new Date().toISOString(), exercises: views.filter((v) => !v.hidden) });
+    } catch (err) {
+      return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+    }
   }
   if (url === "/api/config") {
     const cfg = loadAiConfig();
