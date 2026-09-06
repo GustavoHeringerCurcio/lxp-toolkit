@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Paperclip } from "lucide-react";
+import { Clock, ExternalLink, Paperclip } from "lucide-react";
 import { generateAnswer } from "@/api";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { fmtDeadline } from "@/lib/status";
 import type { AiConfigDto } from "@/api";
 import type { Exercise } from "@/types";
 import { AccChips } from "./prof-chip";
@@ -43,13 +44,20 @@ export function ActivityDetail({ e, cfg, onNote, onReload }: Props) {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <Card>
+      <Card className="relative overflow-hidden">
+        <span
+          className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-brand via-brand-2 to-teal"
+          aria-hidden
+        />
         <CardContent className="space-y-4 p-5">
           <div className="flex flex-wrap items-center gap-2">
             <TypeBadge kind={e.kind} />
             <StatusBadge e={e} />
             {e.deadlineAt && (
-              <span className="text-xs text-muted-foreground">prazo {e.deadlineAt.slice(0, 16)}</span>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="size-3" aria-hidden />
+                prazo {fmtDeadline(e.deadlineAt)}
+              </span>
             )}
             <span className="ml-auto" />
             <a
@@ -58,7 +66,8 @@ export function ActivityDetail({ e, cfg, onNote, onReload }: Props) {
               target="_blank"
               rel="noreferrer"
             >
-              abrir no portal ↗
+              abrir no portal
+              <ExternalLink className="size-3" aria-hidden />
             </a>
           </div>
 
@@ -98,7 +107,7 @@ export function ActivityDetail({ e, cfg, onNote, onReload }: Props) {
                     >
                       <Paperclip className="size-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">{f.name.replace(/^\d+_/, "")}</span>
-                      <span className="text-xs text-muted-foreground">abrir ↗</span>
+                      <span className="text-xs text-muted-foreground">abrir</span>
                     </a>
                   ))}
                 </div>
@@ -176,7 +185,7 @@ export function ActivityDetail({ e, cfg, onNote, onReload }: Props) {
                     copiar
                   </Button>
                   <a className={buttonVariants({ variant: "outline", size: "sm" })} href={`/api/export/${e.id}`}>
-                    baixar .md ↓
+                    baixar .md
                   </a>
                 </div>
               </>

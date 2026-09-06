@@ -37,3 +37,11 @@ export function countInfo(items: { status: Exercise["status"] }[]): { open: numb
     done: items.filter((i) => i.status === "done").length,
   };
 }
+
+const dateFmt = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" });
+const timeFmt = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+export function fmtDeadline(iso: string): string {
+  const d = new Date(iso);
+  return `${dateFmt.format(d)} · ${timeFmt.format(d)}`;
+}
