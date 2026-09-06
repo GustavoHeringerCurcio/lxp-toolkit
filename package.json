@@ -14,6 +14,7 @@
     "dump-surfaces": "tsx scripts/dump-surfaces.ts",
     "capture-api": "tsx scripts/capture-api.ts",
     "crawl-routes": "tsx scripts/crawl-routes.ts",
+    "submit-task": "tsx scripts/submit-task.ts",
     "agent": "tsx scripts/agent.ts",
     "exercises": "tsx scripts/exercises.ts",
     "homework": "tsx scripts/homework.ts",

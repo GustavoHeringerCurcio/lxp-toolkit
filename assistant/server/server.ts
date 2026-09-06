@@ -3,9 +3,16 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { ASSISTANT_DIR, dataDir, assist } from "../src/paths.js";
 import { loadExercises } from "../src/build.js";
-import { loadAiConfig, loadAnswers, loadOverrides, saveAnswers, saveOverrides } from "../src/config.js";
+import {
+  loadAiConfig,
+  loadAnswers,
+  loadOverrides,
+  saveAnswer,
+  saveOverrides,
+} from "../src/config.js";
 import { enrich } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
+import { launchUploadSubmit, lastSubmission, sendEnv } from "../src/send.js";
 
 const DIST = path.join(ASSISTANT_DIR, "web", "dist");
 const PORT = Number(process.env.PORT || 4174);
@@ -60,10 +67,10 @@ const server = createServer(async (req, res) => {
   const method = req.method ?? "GET";
 
   // data for the app
+  const allViews = () => enrich(loadExercises(), loadAnswers(), loadOverrides()).filter((v) => !v.hidden);
   if (url === "/api/exercises") {
     try {
-      const views = enrich(loadExercises(), loadAnswers(), loadOverrides());
-      return json(res, 200, { generatedAt: new Date().toISOString(), exercises: views.filter((v) => !v.hidden) });
+      return json(res, 200, { generatedAt: new Date().toISOString(), exercises: allViews() });
     } catch (err) {
       return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
     }
@@ -71,6 +78,36 @@ const server = createServer(async (req, res) => {
   if (url === "/api/config") {
     const cfg = loadAiConfig();
     return json(res, 200, { model: cfg.model, language: cfg.language, configPath: assist("config", "ai-config.json") });
+  }
+
+  // portal send support
+  if (url === "/api/send/config") {
+    const env = sendEnv();
+    return json(res, 200, { enabled: env.enabled, reason: env.reason });
+  }
+  if (url.startsWith("/api/send/preview")) {
+    const id = Number(new URL(req.url ?? "/", "http://local").searchParams.get("id"));
+    const view = allViews().find((x) => x.id === id);
+    if (!view) return json(res, 404, { error: `exercise ${id} not found` });
+    const canSubmit = view.kind === "upload" && view.status !== "done";
+    return json(res, 200, {
+      ok: canSubmit,
+      reason: !canSubmit
+        ? view.status === "done"
+          ? "Esta atividade já está concluída."
+          : "Só é possível enviar por aqui tarefas do tipo arquivo (upload). Questionários precisam ser respondidos no portal."
+        : "",
+      kind: view.kind,
+      title: view.title,
+      courseName: view.courseName,
+      status: view.status,
+      hasAnswer: Boolean(view.answer?.trim()),
+    });
+  }
+  if (url.startsWith("/api/send/")) {
+    const id = Number(url.split("/")[3]);
+    const last = lastSubmission(id);
+    return json(res, 200, { submission: last ?? null });
   }
 
   if (method === "POST") {
@@ -83,18 +120,44 @@ const server = createServer(async (req, res) => {
       saveOverrides(overrides);
       return json(res, 200, { ok: true });
     }
+    if (url === "/api/answer/manual") {
+      const b = await readBody(req);
+      const id = Number(b.id);
+      const answer = String(b.answer ?? "").trim();
+      if (!id || !answer) return json(res, 400, { error: "answer required" });
+      saveAnswer(id, answer, "manual");
+      return json(res, 200, { ok: true, updatedAt: new Date().toISOString() });
+    }
     if (url === "/api/answer") {
       const b = await readBody(req);
       const id = Number(b.id);
-      const view = enrich(loadExercises(), loadAnswers(), loadOverrides()).find((x) => x.id === id);
+      const view = allViews().find((x) => x.id === id);
       if (!view) return json(res, 404, { error: `exercise ${id} not found` });
       try {
         const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
         const answer = await generateAnswer(cfg, view, view.notes);
-        const answers = loadAnswers();
-        answers[String(id)] = { answer, updatedAt: new Date().toISOString() };
-        saveAnswers(answers);
-        return json(res, 200, { answer, updatedAt: answers[String(id)].updatedAt });
+        saveAnswer(id, answer, "ai");
+        return json(res, 200, { answer, updatedAt: new Date().toISOString() });
+      } catch (err) {
+        return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    if (url === "/api/send") {
+      const b = await readBody(req);
+      const id = Number(b.id);
+      const answer = String(b.answer ?? "");
+      const view = allViews().find((x) => x.id === id);
+      if (!view) return json(res, 404, { error: `exercise ${id} not found` });
+      if (view.status === "done") return json(res, 400, { error: "Esta atividade já está concluída." });
+      if (view.kind !== "upload")
+        return json(res, 400, { error: "Só é possível enviar por aqui tarefas do tipo arquivo (upload)." });
+      if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de enviar." });
+      const env = sendEnv();
+      if (!env.enabled) return json(res, 503, { error: env.reason });
+      saveAnswer(id, answer, "manual");
+      try {
+        const submission = launchUploadSubmit(view, answer, "md");
+        return json(res, 200, { ok: true, submission: { status: submission.status, detail: submission.detail, at: submission.at } });
       } catch (err) {
         return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
       }

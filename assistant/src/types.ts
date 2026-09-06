@@ -60,4 +60,12 @@ export interface OverridesEntry {
 }
 
 export type Overrides = Record<string, OverridesEntry>;
-export type Answers = Record<string, { answer: string; updatedAt: string }>;
+export type Answers = Record<string, { answer: string; updatedAt: string; source?: "ai" | "manual" }>;
+
+export interface SubmissionEntry {
+  exerciseId: number;
+  at: string;
+  status: "running" | "ok" | "unknown" | "failed";
+  detail: string;
+}
+export type Submissions = Record<string, SubmissionEntry[]>;

@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { assist } from "./paths.js";
-import type { AiConfig, Answers, Overrides } from "./types.js";
+import type { AiConfig, Answers, Overrides, Submissions } from "./types.js";
 
 const DEFAULT_AI_CONFIG: AiConfig = {
   provider: "openai",
@@ -65,4 +65,25 @@ export function saveAnswers(answers: Answers): void {
 export function saveOverrides(overrides: Overrides): void {
   mkdirSync(assist("config"), { recursive: true });
   writeFileSync(assist("config", "overrides.json"), JSON.stringify(overrides, null, 2), "utf-8");
+}
+
+export function loadSubmissions(): Submissions {
+  const file = assist("data", "submissions.json");
+  if (!existsSync(file)) return {};
+  try {
+    return JSON.parse(readFileSync(file, "utf-8")) as Submissions;
+  } catch {
+    return {};
+  }
+}
+
+export function saveSubmissions(submissions: Submissions): void {
+  mkdirSync(assist("data"), { recursive: true });
+  writeFileSync(assist("data", "submissions.json"), JSON.stringify(submissions, null, 2), "utf-8");
+}
+
+export function saveAnswer(id: number | string, answer: string, source: "ai" | "manual"): void {
+  const answers = loadAnswers();
+  answers[String(id)] = { answer, updatedAt: new Date().toISOString(), source };
+  saveAnswers(answers);
 }
