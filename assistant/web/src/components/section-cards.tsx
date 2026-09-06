@@ -1,3 +1,4 @@
+import { Target } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Exercise } from "@/types";
 import { StatusBadge, TypeBadge } from "./status-badges";
@@ -7,12 +8,12 @@ export function NextCard({ next }: { next: Exercise | null }) {
   return (
     <Card className="border-primary/30 bg-gradient-to-br from-primary/15 to-transparent">
       <CardContent className="flex items-center gap-4 p-4">
-        <div className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-lg text-primary-foreground">
-          🎯
+        <div className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+          <Target className="size-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Próxima</div>
-          <div className="truncate font-semibold">{next.title}</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground font-heading">Próxima</div>
+          <div className="truncate font-heading font-semibold">{next.title}</div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <StatusBadge e={next} />

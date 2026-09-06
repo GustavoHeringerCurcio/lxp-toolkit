@@ -1,19 +1,20 @@
+import { ListChecks, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Exercise } from "@/types";
 import { deadlineInfo, TONE_CLS } from "@/lib/status";
 
 export function TypeBadge({ kind, className }: { kind: Exercise["kind"]; className?: string }) {
+  const quiz = kind === "quiz";
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
-        kind === "quiz"
-          ? "border-violet-400/20 bg-violet-500/15 text-violet-300"
-          : "border-sky-400/20 bg-sky-500/15 text-sky-300",
+        quiz ? "border-teal/25 bg-teal/10 text-teal" : "border-border bg-muted/50 text-muted-foreground",
         className,
       )}
     >
-      {kind === "quiz" ? "❓ Quiz" : "📤 Tarefa"}
+      {quiz ? <ListChecks className="size-3" /> : <Upload className="size-3" />}
+      {quiz ? "Quiz" : "Tarefa"}
     </span>
   );
 }

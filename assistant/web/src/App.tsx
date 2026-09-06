@@ -116,7 +116,7 @@ export default function App() {
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-5" />
           <div className="flex-1">
-            <div className="text-sm font-semibold">Minhas tarefas</div>
+            <div className="font-heading text-sm font-semibold">Minhas tarefas</div>
             <div className="text-[11px] text-muted-foreground">
               {counts.open} abertas · {counts.expired} atrasadas · {counts.done} concluídas
             </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Paperclip } from "lucide-react";
 import { generateAnswer } from "@/api";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,7 +63,7 @@ export function ActivityDetail({ e, cfg, onNote, onReload }: Props) {
           </div>
 
           <div>
-            <h2 className="text-xl font-semibold leading-snug">{e.title}</h2>
+            <h2 className="font-heading text-xl font-semibold leading-snug">{e.title}</h2>
             <AccChips professor={e.professor} moduleName={e.moduleName} className="mt-2" />
             {e.sectionTitle && <p className="mt-1 text-xs text-muted-foreground">{e.sectionTitle}</p>}
           </div>
@@ -95,7 +96,7 @@ export function ActivityDetail({ e, cfg, onNote, onReload }: Props) {
                       rel="noreferrer"
                       className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
                     >
-                      <span className="text-base">📎</span>
+                      <Paperclip className="size-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">{f.name.replace(/^\d+_/, "")}</span>
                       <span className="text-xs text-muted-foreground">abrir ↗</span>
                     </a>
@@ -115,7 +116,7 @@ export function ActivityDetail({ e, cfg, onNote, onReload }: Props) {
                 <div className="space-y-2">
                   {e.questions.map((q, qi) => (
                     <div key={q.id} className="rounded-md border border-border bg-muted/25 p-3">
-                      <div className="mb-1 inline-flex size-5 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary">
+                      <div className="mb-1 inline-flex size-5 items-center justify-center rounded-full bg-brand/20 text-[11px] font-bold text-brand">
                         {qi + 1}
                       </div>
                       <p className="text-sm leading-relaxed">{q.text}</p>

@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleAlert, Clock3, ListChecks, RefreshCw } from "lucide-react";
+import { CheckCircle2, CircleAlert, Clock3, GraduationCap, ListChecks, RefreshCw } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -39,9 +39,9 @@ export function AppSidebar({ courseName, counts, scope, onScope, professors }: P
       <SidebarHeader>
         <div className="flex items-center gap-2 px-1">
           <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
-            🎓
+            <GraduationCap className="size-4" />
           </div>
-          <div className="truncate text-sm font-semibold">LXP Assistant</div>
+          <div className="truncate font-heading text-sm font-semibold">LXP Assistant</div>
         </div>
       </SidebarHeader>
       <SidebarContent>
