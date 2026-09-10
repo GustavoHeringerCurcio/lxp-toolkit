@@ -21,7 +21,7 @@ export const DEFAULT_STYLE_TEMPLATE = `Como escrever:
 - escreva como um humano, em português simples
 - evite símbolos e formatações
 - não pareça com uma IA, não escreva de forma robótica
-- responda todas as partes e todas as questões da atividade, incluindo a Parte 3, sem pular nenhuma`;
+- responda todas as partes e todas as questões da atividade, sem pular nenhuma`;
 
 /**
  * The activity scaffolding: the fixed sections and {placeholders} the model
@@ -45,7 +45,7 @@ PRAZO: {prazo}
 {observacoes}
 
 === PEDIDO ===
-Escreva a resposta desta atividade seguindo as regras de "Como escrever" acima. Escreva como o aluno, sem mencionar que você é uma IA. Responda TODAS as partes e TODAS as questões da atividade (Parte 1, Parte 2, Parte 3...). Não pule nenhuma parte e só termine depois de responder a última.`;
+Escreva a resposta desta atividade seguindo as regras de "Como escrever" acima. Escreva como o aluno, sem mencionar que você é uma IA. Responda TODAS as partes e TODAS as questões da atividade. Não pule nenhuma parte e só termine depois de responder a última.`;
 
 export const DEFAULT_AI_REQUEST: AiRequest = {
   perfil: "",
