@@ -103,8 +103,20 @@ const server = createServer(async (req, res) => {
         temperature: cfg.temperature,
         configPath: assist("config", "ai-config.json"),
         ai_request_default: cfg.ai_request_default ?? defaultAiRequestJson(),
+        ai_templates: cfg.ai_templates ?? {},
         profile: loadProfile(),
       });
+    }
+    if (url === "/api/ai-templates" && method === "GET") {
+      return json(res, 200, { templates: loadAiConfig().ai_templates ?? {} });
+    }
+    if (url === "/api/ai-templates" && method === "DELETE") {
+      const name = new URL(req.url ?? "/", "http://local").searchParams.get("name") ?? "";
+      const cfg = loadAiConfig();
+      const templates = { ...(cfg.ai_templates ?? {}) };
+      delete templates[name];
+      saveAiConfig({ ...cfg, ai_templates: templates });
+      return json(res, 200, { ok: true, templates });
     }
     if (url === "/api/profile" && method === "GET") {
       return json(res, 200, loadProfile());
@@ -203,10 +215,20 @@ const server = createServer(async (req, res) => {
       if (url === "/api/ai-default") {
         const b = await readBody(req);
         const raw = String(b.raw ?? "");
-        parseAiRequest(raw); // validate
+        parseAiRequest(raw); // validate (accepts JSON or plain text)
         const cfg = loadAiConfig();
         saveAiConfig({ ...cfg, ai_request_default: raw });
         return json(res, 200, { ok: true });
+      }
+      if (url === "/api/ai-templates") {
+        const b = await readBody(req);
+        const name = String(b.name ?? "").trim();
+        const text = String(b.text ?? "").trim();
+        if (!name || !text) return json(res, 400, { error: "nome e texto são obrigatórios" });
+        const cfg = loadAiConfig();
+        const templates = { ...(cfg.ai_templates ?? {}), [name]: text };
+        saveAiConfig({ ...cfg, ai_templates: templates });
+        return json(res, 200, { ok: true, templates });
       }
       if (url === "/api/answer/manual") {
         const b = await readBody(req);

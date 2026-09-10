@@ -50,6 +50,24 @@ export async function saveAiDefault(raw: string): Promise<void> {
   await post("/api/ai-default", { raw });
 }
 
+export async function fetchAiTemplates(): Promise<Record<string, string>> {
+  const res = await req<{ templates?: Record<string, string> }>("/api/ai-templates");
+  return res.templates ?? {};
+}
+
+export async function saveAiTemplate(name: string, text: string): Promise<Record<string, string>> {
+  const res = (await post("/api/ai-templates", { name, text })) as { templates?: Record<string, string> };
+  return res.templates ?? {};
+}
+
+export async function deleteAiTemplate(name: string): Promise<Record<string, string>> {
+  const res = await req<{ templates?: Record<string, string> }>(
+    `/api/ai-templates?name=${encodeURIComponent(name)}`,
+    { method: "DELETE" },
+  );
+  return res.templates ?? {};
+}
+
 export async function fetchAnswerState(id: number): Promise<AnswerState> {
   return req<AnswerState>(`/api/answer/${id}`);
 }

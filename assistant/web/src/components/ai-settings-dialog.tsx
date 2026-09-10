@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactElement } from "react";
 import { Check, Loader2, Save, UserRound } from "lucide-react";
 import { saveAiDefault, saveProfile } from "@/api";
 import { useAppData } from "@/lib/app-state";
-import { rawToEditableText, renderRequestBlock, textToAiRequest } from "@/lib/prompt-preview";
+import { rawToEditableText, renderRequestBlock, textToAiRequest, DEFAULT_PROMPT_TEXT } from "@/lib/prompt-preview";
 import {
   Sheet,
   SheetContent,
@@ -18,14 +18,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import type { AiProfile } from "@/types";
-
-const DEFAULT_TEXT =
-  "Quem sou: sou o aluno(a) {nome} (matrícula {matricula}).\n" +
-  "Como escrever:\n" +
-  "- responda como um aluno de faculdade\n" +
-  "- escreva como um humano, em português simples\n" +
-  "- evite símbolos e formatações\n" +
-  "- não pareça com uma i.a., não escreva de forma robótica";
 
 function PlaceholderChip({ token, onClick }: { token: string; onClick: () => void }) {
   return (
@@ -56,10 +48,15 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
     if (!open) return;
     setNome(profile.nome ?? "");
     setMatricula(profile.matricula ?? "");
-    setDefaultText(rawToEditableText(cfg?.ai_request_default ?? "") || DEFAULT_TEXT);
-    setMsg(null);
-    setErr(null);
+    setDefaultText(rawToEditableText(cfg?.ai_request_default ?? "") || DEFAULT_PROMPT_TEXT);
   }, [open, profile.nome, profile.matricula, cfg?.ai_request_default]);
+
+  useEffect(() => {
+    if (open) {
+      setMsg(null);
+      setErr(null);
+    }
+  }, [open]);
 
   const insertPlaceholder = (which: "nome" | "matricula") => {
     const token = which === "nome" ? "{nome}" : "{matricula}";

@@ -1,32 +1,35 @@
 import { useEffect, useState } from "react";
-import { Check, Eye, Loader2, RotateCcw, Save, Sparkles, Wand2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { saveAiRequest } from "@/api";
+import { BookmarkPlus, Check, Eye, Loader2, RotateCcw, Save, Sparkles, Wand2, X } from "lucide-react";
+import { deleteAiTemplate, saveAiDefault, saveAiTemplate } from "@/api";
 import { useAppData } from "@/lib/app-state";
-import { rawToEditableText, renderPromptPreview, textToAiRequest } from "@/lib/prompt-preview";
+import { DEFAULT_PROMPT_TEXT, rawToEditableText, renderPromptPreview, textToAiRequest } from "@/lib/prompt-preview";
 import type { Exercise } from "@/types";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 
 export function AiRequestPanel({ e }: { e: Exercise }) {
-  const { cfg, patchExercise } = useAppData();
+  const { cfg, patchConfig } = useAppData();
   const profile = cfg?.profile ?? { nome: "", matricula: "" };
-  const [text, setText] = useState(() => rawToEditableText(e.aiRequestJson));
+  const [text, setText] = useState(() => rawToEditableText(cfg?.ai_request_default ?? "") || DEFAULT_PROMPT_TEXT);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [tplBusy, setTplBusy] = useState(false);
 
   useEffect(() => {
-    setText(rawToEditableText(e.aiRequestJson));
-    setMsg(null);
-    setErr(null);
-  }, [e.id, e.aiRequestJson]);
+    setText(rawToEditableText(cfg?.ai_request_default ?? "") || DEFAULT_PROMPT_TEXT);
+  }, [cfg?.ai_request_default]);
+
+  const templates = cfg?.ai_templates ?? {};
+  const templateNames = Object.keys(templates);
 
   const moduleLabel = e.moduleTitle + (e.sectionTitle ? ` — ${e.sectionTitle}` : "");
 
-  const save = async () => {
+  const saveGlobal = async () => {
     setBusy(true);
     setMsg(null);
     setErr(null);
@@ -35,10 +38,9 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
         setErr("Escreva o pedido antes de salvar.");
         return;
       }
-      const res = await saveAiRequest(e.id, text);
-      patchExercise(e.id, { aiRequestJson: res.aiRequestJson, hasAiOverride: res.hasAiOverride });
-      setText(rawToEditableText(res.aiRequestJson));
-      setMsg(res.hasAiOverride ? "Pedido personalizado salvo para esta atividade." : "Usando o pedido padrão.");
+      await saveAiDefault(text);
+      patchConfig({ ai_request_default: text });
+      setMsg("Salvo para todas as atividades.");
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
     } finally {
@@ -46,19 +48,47 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
     }
   };
 
-  const restoreDefault = async () => {
-    setBusy(true);
-    setErr(null);
+  const restoreDefault = () => {
+    setText(DEFAULT_PROMPT_TEXT);
     setMsg(null);
+    setErr(null);
+  };
+
+  const saveAsTemplate = async () => {
+    const name = templateName.trim();
+    setTplBusy(true);
+    setMsg(null);
+    setErr(null);
     try {
-      const res = await saveAiRequest(e.id, null);
-      patchExercise(e.id, { aiRequestJson: res.aiRequestJson, hasAiOverride: false });
-      setText(rawToEditableText(res.aiRequestJson));
-      setMsg("Personalização removida — voltou ao padrão global.");
+      if (!name) {
+        setErr("Dê um nome ao template.");
+        return;
+      }
+      if (!text.trim()) {
+        setErr("Escreva o pedido antes de salvar o template.");
+        return;
+      }
+      const next = await saveAiTemplate(name, text);
+      patchConfig({ ai_templates: next });
+      setTemplateName("");
+      setMsg(`Template "${name}" salvo.`);
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
     } finally {
-      setBusy(false);
+      setTplBusy(false);
+    }
+  };
+
+  const removeTemplate = async (name: string) => {
+    setTplBusy(true);
+    setErr(null);
+    try {
+      const next = await deleteAiTemplate(name);
+      patchConfig({ ai_templates: next });
+    } catch (x) {
+      setErr(x instanceof Error ? x.message : String(x));
+    } finally {
+      setTplBusy(false);
     }
   };
 
@@ -82,16 +112,8 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Wand2 className="size-4 shrink-0 text-brand" aria-hidden />
           <h3 className="font-heading text-sm font-semibold">O que a IA recebe</h3>
-          <span
-            className={cn(
-              "rounded-full border px-2 py-0.5 text-[10px] font-medium",
-              e.hasAiOverride
-                ? "border-brand/30 bg-brand/10 text-brand"
-                : "border-border bg-muted/50 text-muted-foreground",
-            )}
-            title={e.hasAiOverride ? "Personalizado para esta atividade" : "Padrão global"}
-          >
-            {e.hasAiOverride ? "personalizado" : "padrão"}
+          <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            vale para todas as atividades
           </span>
         </div>
         <Button variant="ghost" size="sm" onClick={() => setShowPreview((v) => !v)} aria-pressed={showPreview}>
@@ -102,11 +124,43 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
 
       <div className="space-y-3 p-4">
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Escreva aqui, em texto normal, o que a IA deve saber antes de ler o enunciado. Você pode usar{" "}
+          Escreva aqui, em texto normal, o que a IA deve saber antes de ler o enunciado. Isso vale para{" "}
+          <span className="font-medium text-foreground/80">todas as atividades</span>. Você pode usar{" "}
           <code className="rounded bg-muted px-1 font-mono text-[11px] text-brand">{"{nome}"}</code> e{" "}
           <code className="rounded bg-muted px-1 font-mono text-[11px] text-brand">{"{matricula}"}</code> para citar
-          você — eles são preenchidos pelo seu perfil (não precisa repetir a cada atividade).
+          você — eles são preenchidos pelo seu perfil.
         </p>
+
+        {templateNames.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-medium text-muted-foreground">Templates:</span>
+            {templateNames.map((name) => (
+              <span
+                key={name}
+                className="inline-flex items-center overflow-hidden rounded-full border border-border bg-muted/40 text-xs"
+              >
+                <button
+                  type="button"
+                  onClick={() => setText(templates[name])}
+                  className="px-2.5 py-0.5 text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground"
+                  title="usar este template"
+                >
+                  {name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void removeTemplate(name)}
+                  disabled={tplBusy}
+                  className="border-l border-border px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                  title="remover template"
+                  aria-label={`remover template ${name}`}
+                >
+                  <X className="size-3" aria-hidden />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         <Textarea
           value={text}
@@ -121,20 +175,36 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
         />
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={save} disabled={busy || !text.trim()}>
+          <Button size="sm" onClick={saveGlobal} disabled={busy || !text.trim()}>
             {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-            {e.hasAiOverride ? "Salvar alterações" : "Personalizar para esta atividade"}
+            Salvar para todas as atividades
           </Button>
-          {e.hasAiOverride && (
-            <Button variant="outline" size="sm" onClick={restoreDefault} disabled={busy}>
-              <RotateCcw aria-hidden />
-              Restaurar padrão
-            </Button>
-          )}
+          <Button variant="outline" size="sm" onClick={restoreDefault} disabled={busy}>
+            <RotateCcw aria-hidden />
+            Restaurar padrão
+          </Button>
           <span className="ml-auto flex items-center gap-1.5">
             <Sparkles className="size-3.5 text-muted-foreground" aria-hidden />
             <span className="text-[11px] text-muted-foreground">modelo {cfg?.model}</span>
           </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-muted/20 p-2.5">
+          <BookmarkPlus className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <Input
+            value={templateName}
+            onChange={(ev) => setTemplateName(ev.target.value)}
+            placeholder="nome do template (ex.: objetivo, dissertação)"
+            aria-label="nome do template"
+            className="h-8 min-w-40 flex-1 text-sm"
+            onKeyDown={(ev) => {
+              if (ev.key === "Enter") void saveAsTemplate();
+            }}
+          />
+          <Button variant="outline" size="sm" onClick={saveAsTemplate} disabled={tplBusy || !text.trim()}>
+            {tplBusy ? <Loader2 className="animate-spin" aria-hidden /> : <BookmarkPlus aria-hidden />}
+            Salvar como template
+          </Button>
         </div>
 
         {msg && (

@@ -70,8 +70,10 @@ export interface AiConfig {
   language: string;
   system_prompt: string;
   max_output_tokens?: number;
-  /** JSON string of the default per-exercise AiRequest (seeded when no override). */
+  /** JSON string or plain text of the default AI request (used when no override). */
   ai_request_default?: string;
+  /** Named prompt templates: display name -> full plain-text request. */
+  ai_templates?: Record<string, string>;
 }
 
 export interface OverridesEntry {

@@ -14,6 +14,9 @@ const FALLBACK_INSTRUCOES = [
   "não pareça com uma i.a., não escreva de forma robótica",
 ];
 
+/** Friendly plain-text version of the built-in default request. */
+export const DEFAULT_PROMPT_TEXT = ["Como escrever:", ...FALLBACK_INSTRUCOES.map((i) => `- ${i}`)].join("\n");
+
 /**
  * Parse a stored AiRequest for the editor. Accepts legacy JSON or a plain-text
  * prompt; plain text is wrapped in `prompt`. Returns null only when empty.
