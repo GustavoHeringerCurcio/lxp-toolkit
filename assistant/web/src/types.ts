@@ -20,6 +20,11 @@ export interface PdfRef {
   remoteUrl: string;
 }
 
+export interface RemoteFile {
+  filename: string | null;
+  url: string;
+}
+
 export interface QuizQ {
   id: number;
   text: string;
@@ -43,7 +48,7 @@ export interface Exercise {
   deadlineAt: string | null;
   daysLeft: number | null;
   files: PdfRef[];
-  remoteFiles: { filename: string | null; url: string }[];
+  remoteFiles: RemoteFile[];
   instructionsText: string;
   questions: QuizQ[];
   answer: string | null;

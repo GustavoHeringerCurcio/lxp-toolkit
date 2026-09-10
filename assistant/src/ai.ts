@@ -10,19 +10,16 @@ function client(): OpenAI {
 }
 
 /**
- * Compose the user message: a "request block" rendered from the exercise's
- * AiRequest (who the student is + how to write + extra context), followed by
- * the activity content itself.
+ * Compose the user message: the activity content itself. The student's style
+ * rules ("O que a IA recebe") are injected into the system message instead, so
+ * they take precedence over the structural instructions.
  */
 async function buildUserContent(
   cfg: AiConfig,
   e: Exercise,
-  requestBlock: string,
   notes: string,
 ): Promise<string> {
   const parts: string[] = [];
-
-  if (requestBlock.trim()) parts.push(`=== COMO VOCÊ DEVE ESCREVER ===\n${requestBlock}`);
 
   parts.push(`ATIVIDADE: ${e.title}`);
   parts.push(`TIPO: ${e.kind === "upload" ? "tarefa com envio de arquivo" : "questionário/quiz"}`);
@@ -66,7 +63,7 @@ async function buildUserContent(
 
   const quiz = e.kind === "quiz";
   parts.push(
-    `\n=== SOLICITAÇÃO ===\nElabore a resposta para essa ${quiz ? "lista de questões, indicando a alternativa correta de cada uma e justificando brevemente" : "atividade, seguindo exatamente o que o enunciado pede"}. Siga o estilo descrito em "COMO VOCÊ DEVE ESCREVER" acima — escreva como o próprio aluno, sem citar que é IA.`,
+    `\n=== SOLICITAÇÃO ===\nElabore a resposta para essa ${quiz ? "lista de questões" : "atividade"}, seguindo o enunciado e, acima de tudo, as REGRAS DO ALUNO. Escreva como o próprio aluno, sem citar que é IA.`,
   );
   return parts.join("\n");
 }
@@ -83,8 +80,14 @@ export async function generateAnswer(
   opts: GenerateOpts = {},
   notes = "",
 ): Promise<string> {
-  const system = cfg.system_prompt.replaceAll("{language}", cfg.language);
-  const user = await buildUserContent(cfg, e, requestBlock, notes);
+  const base = cfg.system_prompt.replaceAll("{language}", cfg.language);
+  const rules = requestBlock.trim();
+  // Inject the student's rules into the system message so they take priority
+  // over the structural instructions (which otherwise dominate the model).
+  const system = rules
+    ? `${base}\n\n=== REGRAS DO ALUNO (PRIORIDADE MÁXIMA) ===\n${rules}\n\nAs REGRAS DO ALUNO acima têm prioridade sobre as instruções estruturais sempre que houver conflito.`
+    : base;
+  const user = await buildUserContent(cfg, e, notes);
 
   const stream = await client().chat.completions.create({
     model: cfg.model,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookmarkPlus, Check, Eye, Loader2, RotateCcw, Save, Sparkles, Wand2, X } from "lucide-react";
+import { Bookmark, BookmarkPlus, Check, Eye, Loader2, RotateCcw, Save, Sparkles, Wand2, X } from "lucide-react";
 import { deleteAiTemplate, saveAiDefault, saveAiTemplate } from "@/api";
 import { useAppData } from "@/lib/app-state";
 import { DEFAULT_PROMPT_TEXT, rawToEditableText, renderPromptPreview, textToAiRequest } from "@/lib/prompt-preview";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 
-export function AiRequestPanel({ e }: { e: Exercise }) {
+export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => void }) {
   const { cfg, patchConfig } = useAppData();
   const profile = cfg?.profile ?? { nome: "", matricula: "" };
   const [text, setText] = useState(() => rawToEditableText(cfg?.ai_request_default ?? "") || DEFAULT_PROMPT_TEXT);
@@ -17,6 +17,7 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [tplBusy, setTplBusy] = useState(false);
 
@@ -40,7 +41,8 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
       }
       await saveAiDefault(text);
       patchConfig({ ai_request_default: text });
-      setMsg("Salvo para todas as atividades.");
+      setMsg("Salvo. Gerando nova resposta…");
+      onSaved?.();
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
     } finally {
@@ -92,7 +94,6 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
     }
   };
 
-  const personaMissing = !profile.nome.trim() || !profile.matricula.trim();
   const previewText = showPreview
     ? renderPromptPreview({
         kind: e.kind,
@@ -113,9 +114,24 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
           <Wand2 className="size-4 shrink-0 text-brand" aria-hidden />
           <h3 className="font-heading text-sm font-semibold">O que a IA recebe</h3>
           <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            vale para todas as atividades
+            todas as atividades
           </span>
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowTemplates((v) => !v)}
+          aria-pressed={showTemplates}
+          title="templates salvos"
+        >
+          <Bookmark aria-hidden />
+          Templates
+          {templateNames.length > 0 && (
+            <span className="rounded-full bg-brand/15 px-1.5 text-[10px] font-semibold text-brand">
+              {templateNames.length}
+            </span>
+          )}
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => setShowPreview((v) => !v)} aria-pressed={showPreview}>
           <Eye aria-hidden />
           {showPreview ? "esconder prévia" : "ver prévia"}
@@ -123,61 +139,22 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
       </div>
 
       <div className="space-y-3 p-4">
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          Escreva aqui, em texto normal, o que a IA deve saber antes de ler o enunciado. Isso vale para{" "}
-          <span className="font-medium text-foreground/80">todas as atividades</span>. Você pode usar{" "}
-          <code className="rounded bg-muted px-1 font-mono text-[11px] text-brand">{"{nome}"}</code> e{" "}
-          <code className="rounded bg-muted px-1 font-mono text-[11px] text-brand">{"{matricula}"}</code> para citar
-          você — eles são preenchidos pelo seu perfil.
-        </p>
-
-        {templateNames.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground">Templates:</span>
-            {templateNames.map((name) => (
-              <span
-                key={name}
-                className="inline-flex items-center overflow-hidden rounded-full border border-border bg-muted/40 text-xs"
-              >
-                <button
-                  type="button"
-                  onClick={() => setText(templates[name])}
-                  className="px-2.5 py-0.5 text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground"
-                  title="usar este template"
-                >
-                  {name}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void removeTemplate(name)}
-                  disabled={tplBusy}
-                  className="border-l border-border px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                  title="remover template"
-                  aria-label={`remover template ${name}`}
-                >
-                  <X className="size-3" aria-hidden />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
         <Textarea
           value={text}
           onChange={(ev) => {
             setText(ev.target.value);
             setMsg(null);
           }}
-          rows={10}
-          placeholder="Ex.: responda como um aluno de faculdade, em português simples, sem parecer uma IA."
+          rows={8}
+          placeholder="Escreva como a IA deve responder. Use {nome} e {matricula} para citar você."
           aria-label="Pedido enviado para a IA"
-          className="min-h-48 text-sm leading-relaxed"
+          className="min-h-40 text-sm leading-relaxed"
         />
 
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={saveGlobal} disabled={busy || !text.trim()}>
             {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-            Salvar para todas as atividades
+            Salvar
           </Button>
           <Button variant="outline" size="sm" onClick={restoreDefault} disabled={busy}>
             <RotateCcw aria-hidden />
@@ -189,24 +166,6 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-muted/20 p-2.5">
-          <BookmarkPlus className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-          <Input
-            value={templateName}
-            onChange={(ev) => setTemplateName(ev.target.value)}
-            placeholder="nome do template (ex.: objetivo, dissertação)"
-            aria-label="nome do template"
-            className="h-8 min-w-40 flex-1 text-sm"
-            onKeyDown={(ev) => {
-              if (ev.key === "Enter") void saveAsTemplate();
-            }}
-          />
-          <Button variant="outline" size="sm" onClick={saveAsTemplate} disabled={tplBusy || !text.trim()}>
-            {tplBusy ? <Loader2 className="animate-spin" aria-hidden /> : <BookmarkPlus aria-hidden />}
-            Salvar como template
-          </Button>
-        </div>
-
         {msg && (
           <p className="flex items-center gap-1.5 rounded-md border border-ok/30 bg-ok/10 px-2.5 py-1.5 text-xs text-ok">
             <Check className="size-3.5" aria-hidden /> {msg}
@@ -214,11 +173,63 @@ export function AiRequestPanel({ e }: { e: Exercise }) {
         )}
         {err && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">{err}</p>}
 
-        {personaMissing && (
-          <p className="text-[11px] text-muted-foreground">
-            Dica: sem nome/matrícula preenchidos, os marcadores ficam vazios. Configure em{" "}
-            <span className="text-brand">Perfil & IA</span> no menu lateral.
-          </p>
+        {showTemplates && (
+          <div className="space-y-2.5 rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Templates salvos</p>
+            {templateNames.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {templateNames.map((name) => (
+                  <span
+                    key={name}
+                    className="group inline-flex items-center gap-1 rounded-full border border-border bg-card py-0.5 pl-2.5 pr-1 text-xs transition-colors hover:border-brand/40"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setText(templates[name]);
+                        setMsg(null);
+                        setErr(null);
+                      }}
+                      className="max-w-40 truncate text-foreground/80 transition-colors group-hover:text-brand"
+                      title="usar este template"
+                    >
+                      {name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void removeTemplate(name)}
+                      disabled={tplBusy}
+                      className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                      title="remover template"
+                      aria-label={`remover template ${name}`}
+                    >
+                      <X className="size-3" aria-hidden />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Nenhum template ainda. Salve o texto atual com um nome para reutilizar depois.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Input
+                value={templateName}
+                onChange={(ev) => setTemplateName(ev.target.value)}
+                placeholder="nome do template (ex.: objetivo, dissertação)"
+                aria-label="nome do template"
+                className="h-8 min-w-40 flex-1 text-sm"
+                onKeyDown={(ev) => {
+                  if (ev.key === "Enter") void saveAsTemplate();
+                }}
+              />
+              <Button variant="outline" size="sm" onClick={saveAsTemplate} disabled={tplBusy || !text.trim()}>
+                {tplBusy ? <Loader2 className="animate-spin" aria-hidden /> : <BookmarkPlus aria-hidden />}
+                Salvar como template
+              </Button>
+            </div>
+          </div>
         )}
 
         {showPreview && (

@@ -34,6 +34,7 @@ import {
 import { useAppData } from "@/lib/app-state";
 import { fmtDeadline } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { isPdf, remoteFileName } from "@/lib/files";
 import type { AnswerState, Exercise } from "@/types";
 import { BackLink } from "@/components/app-sidebar";
 import { AccChips } from "@/components/prof-chip";
@@ -53,7 +54,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-function AnswerPanel({ e, onRefresh, autoGenerate }: { e: Exercise; onRefresh: () => void; autoGenerate?: boolean }) {
+function AnswerPanel({
+  e,
+  onRefresh,
+  autoGenerate,
+  regenToken,
+}: {
+  e: Exercise;
+  onRefresh: () => void;
+  autoGenerate?: boolean;
+  regenToken?: number;
+}) {
   const [draft, setDraft] = useState(e.answer ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -94,6 +105,14 @@ function AnswerPanel({ e, onRefresh, autoGenerate }: { e: Exercise; onRefresh: (
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoGenerate, e.id]);
+
+  const lastRegen = useRef(regenToken ?? 0);
+  useEffect(() => {
+    if (regenToken == null || regenToken === lastRegen.current) return;
+    lastRegen.current = regenToken;
+    if (!busyRef.current) void generate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regenToken]);
 
   useEffect(() => {
     return () => {
@@ -422,6 +441,7 @@ export function ExercisePage() {
   const { items, loading, error, reload, refresh } = useAppData();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
+  const [regenToken, setRegenToken] = useState(0);
 
   const exerciseId = Number(id);
   const e = items.find((x) => x.id === exerciseId) ?? null;
@@ -508,25 +528,45 @@ export function ExercisePage() {
             </section>
           )}
 
-          {e.files.length > 0 && (
+          {e.remoteFiles.length > 0 && (
             <section className="rounded-xl border border-border bg-card">
               <h2 className="border-b border-border/60 px-4 py-3 font-heading text-sm font-semibold">
-                Arquivos ({e.files.length})
+                Arquivos ({e.remoteFiles.length})
               </h2>
-              <div className="flex flex-col gap-1.5 p-4">
-                {e.files.map((f) => (
-                  <a
-                    key={f.name}
-                    href={`/docs/${f.relPath.replace(/^docs\//, "")}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-                  >
-                    <Paperclip className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate">{f.name.replace(/^\d+_/, "")}</span>
-                    <span className="text-xs text-muted-foreground">abrir</span>
-                  </a>
-                ))}
+              <div className="flex flex-col gap-3 p-4">
+                {e.remoteFiles.map((f) => {
+                  const name = remoteFileName(f);
+                  return isPdf(f) ? (
+                    <div key={f.url} className="overflow-hidden rounded-md border border-border bg-muted/40">
+                      <div className="flex items-center gap-2 border-b border-border/60 px-2.5 py-1.5 text-sm">
+                        <Paperclip className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate">{name}</span>
+                        <a
+                          href={f.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex shrink-0 items-center gap-1 text-xs text-brand underline-offset-4 hover:underline"
+                        >
+                          abrir
+                          <ExternalLink className="size-3" aria-hidden />
+                        </a>
+                      </div>
+                      <iframe src={f.url} title={name} loading="lazy" className="h-[28rem] w-full bg-white" />
+                    </div>
+                  ) : (
+                    <a
+                      key={f.url}
+                      href={f.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <Paperclip className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{name}</span>
+                      <span className="text-xs text-muted-foreground">abrir</span>
+                    </a>
+                  );
+                })}
               </div>
             </section>
           )}
@@ -557,12 +597,12 @@ export function ExercisePage() {
             </section>
           )}
 
-          <AiRequestPanel e={e} />
+          <AiRequestPanel e={e} onSaved={() => setRegenToken((t) => t + 1)} />
         </div>
 
         {/* right column: answer workbench */}
         <div className="min-w-0 xl:sticky xl:top-[4.5rem] xl:h-[calc(100vh-6rem)]">
-          <AnswerPanel key={e.id} e={e} onRefresh={onRefresh} autoGenerate={wantsAuto} />
+          <AnswerPanel key={e.id} e={e} onRefresh={onRefresh} autoGenerate={wantsAuto} regenToken={regenToken} />
         </div>
       </div>
     </div>

@@ -26,11 +26,12 @@ import { Button } from "@/components/ui/button";
 export function ActivityCard({ e }: { e: Exercise }) {
   const navigate = useNavigate();
   const quiz = e.kind === "quiz";
+  const fileCount = e.remoteFiles.length || e.files.length;
   const meta =
     quiz && e.questions.length
       ? `${e.questions.length} questão${e.questions.length > 1 ? "es" : ""}`
-      : !quiz && e.files.length
-        ? `${e.files.length} arquivo${e.files.length > 1 ? "s" : ""}`
+      : !quiz && fileCount
+        ? `${fileCount} arquivo${fileCount > 1 ? "s" : ""}`
         : "";
   const lateish = !e.done && e.status === "expired";
   const dateTone = lateish ? "text-late" : !e.done && e.daysLeft != null && e.daysLeft <= 3 ? "text-soon" : "text-muted-foreground";

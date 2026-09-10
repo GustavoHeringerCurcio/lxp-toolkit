@@ -53,13 +53,14 @@ export function StatCards({
 
 export function NextCard({ next, onClick }: { next: Exercise | null; onClick?: () => void }) {
   if (!next) return null;
+  const fileCount = next.remoteFiles.length || next.files.length;
   const meta =
     next.kind === "quiz"
       ? next.questions.length
         ? `${next.questions.length} questão${next.questions.length > 1 ? "es" : ""}`
         : ""
-      : next.files.length
-        ? `${next.files.length} arquivo${next.files.length > 1 ? "s" : ""}`
+      : fileCount
+        ? `${fileCount} arquivo${fileCount > 1 ? "s" : ""}`
         : "";
   const rootCls = "overflow-hidden border-primary/30 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent";
   const content = (
