@@ -35,7 +35,7 @@ Scraped + reverse-engineered state of the **UniFOA / Grupoa LXP** platform
 
 - **Terminal board:** `npm run homework` → open assignments/quizzes grouped by section, sorted by
   due date (`npm run homework -- --fresh` rebuilds the index first).
-- **LXP Assistant** (automation + AI product, lives in `assistant/`): CLI + web app with an ordered
+- **LXP Homework** (automation + AI product, lives in `assistant/`): CLI + web app with an ordered
   exercise list, green/red badges and **gpt-4o-mini answers in pt-BR**. See `assistant/README.md`.
 
 ## Facts worth remembering

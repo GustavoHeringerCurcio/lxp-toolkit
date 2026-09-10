@@ -3,7 +3,7 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ASSISTANT_DIR, assist } from "./paths.js";
 import { loadSubmissions, saveSubmissions } from "./config.js";
-import type { SubmissionEntry } from "./types.js";
+import type { QuizSelection, SubmissionEntry } from "./types.js";
 
 /**
  * LXP submission transport: a gated browser-runner in the ROOT study repo
@@ -63,8 +63,67 @@ export function launchUploadSubmit(view: { id: number; courseId: number; title: 
   const entry: SubmissionEntry = { exerciseId: view.id, at: new Date().toISOString(), status: "running", detail: "aguardando login no portal…" };
   pushSubmission(entry);
 
-  const child = spawn(tsxBin(env.rootDir), [path.join(env.rootDir, "scripts", "submit-task.ts"), "--req", reqFile, "--result", resFile], {
-    cwd: env.rootDir,
+  spawnRunner(env.rootDir, reqFile, resFile, entry);
+
+  return entry;
+}
+
+interface QuizQuestion {
+  id: number;
+  text: string;
+  options: string[];
+}
+
+/**
+ * Writes the request file and spawns the root runner for a quiz task. Each
+ * selection is enriched with the question and option text so the runner can
+ * locate the right radio/option on the page.
+ */
+export function launchQuizSubmit(
+  view: { id: number; courseId: number; title: string; questions: QuizQuestion[] },
+  selections: QuizSelection[],
+): SubmissionEntry {
+  const env = sendEnv();
+  if (!env.enabled || !env.rootDir) {
+    throw new Error(env.reason || "runner não configurado");
+  }
+
+  const at = Date.now();
+  const dir = assist("data", "send");
+  mkdirSync(dir, { recursive: true });
+  const reqFile = path.join(dir, `req-${view.id}-${at}.json`);
+  const resFile = path.join(dir, `res-${view.id}-${at}.json`);
+
+  const byId = new Map(view.questions.map((q) => [q.id, q]));
+  const items = selections.map((s) => {
+    const q = byId.get(s.questionId);
+    return {
+      questionId: s.questionId,
+      optionIndex: s.optionIndex,
+      letter: s.letter,
+      questionText: q?.text ?? "",
+      optionText: q?.options[s.optionIndex] ?? "",
+    };
+  });
+
+  writeFileSync(
+    reqFile,
+    JSON.stringify({ action: "quiz", courseId: view.courseId, itemId: view.id, selections: items }, null, 2),
+    "utf-8",
+  );
+
+  const entry: SubmissionEntry = { exerciseId: view.id, at: new Date().toISOString(), status: "running", detail: "aguardando login no portal…" };
+  pushSubmission(entry);
+
+  spawnRunner(env.rootDir, reqFile, resFile, entry);
+
+  return entry;
+}
+
+/** Spawn the root submit runner and mirror its result into the submission entry. */
+function spawnRunner(rootDir: string, reqFile: string, resFile: string, entry: SubmissionEntry): void {
+  const child = spawn(tsxBin(rootDir), [path.join(rootDir, "scripts", "submit-task.ts"), "--req", reqFile, "--result", resFile], {
+    cwd: rootDir,
     env: process.env,
     stdio: "ignore",
     windowsHide: true,
@@ -92,8 +151,6 @@ export function launchUploadSubmit(view: { id: number; courseId: number; title: 
     }
     pushSubmission(entry);
   });
-
-  return entry;
 }
 
 export function lastSubmission(exerciseId: number): SubmissionEntry | null {

@@ -9,6 +9,7 @@ import type {
   AnswerSource,
   Answers,
   Overrides,
+  QuizSelection,
   Submissions,
 } from "./types.js";
 
@@ -16,12 +17,15 @@ import type {
  * The style rules the student edits on the activity screen ("Como escrever").
  * Kept separate from the activity scaffolding so the UI stays simple.
  */
-export const DEFAULT_STYLE_TEMPLATE = `Como escrever:
-- responda como um aluno de faculdade
-- escreva como um humano, em português simples
-- evite símbolos e formatações
-- não pareça com uma IA, não escreva de forma robótica
-- responda todas as partes e todas as questões da atividade, sem pular nenhuma`;
+export const DEFAULT_STYLE_TEMPLATE = `Instruções de escrita:
+- Você é o aluno entregando a atividade. Escreva em primeira pessoa, como estudante.
+- Nunca mencione que é uma IA e nunca use linguagem de assistente.
+- Responda todas as partes e todas as questões da atividade, sem pular nenhuma.
+- Comece direto nas respostas. Não escreva introdução, saudação, despedida, agradecimento nem frases como "espero que isso ajude", "se precisar estou à disposição", "claro" ou "aqui está".
+- Não comente a atividade nem ofereça ajuda extra. Termine na última resposta.
+- Escreva em português simples e natural, sem parecer robótico.
+- Evite símbolos, emojis e formatações (negrito, títulos decorativos).
+- Nas questões objetivas, responda só com a letra e o número, sem justificar.`;
 
 /**
  * The activity scaffolding: the fixed sections and {placeholders} the model
@@ -45,7 +49,7 @@ PRAZO: {prazo}
 {observacoes}
 
 === PEDIDO ===
-Escreva a resposta desta atividade seguindo as regras de "Como escrever" acima. Escreva como o aluno, sem mencionar que você é uma IA. Responda TODAS as partes e TODAS as questões da atividade. Não pule nenhuma parte e só termine depois de responder a última.`;
+Responda a atividade inteira como o aluno, seguindo as regras de escrita acima. Entregue só as respostas, sem introdução nem despedida. Não mencione que é uma IA.`;
 
 export const DEFAULT_AI_REQUEST: AiRequest = {
   perfil: "",
@@ -166,6 +170,7 @@ function normalizeAnswers(answers: Answers): Answers {
       answer: v.answer,
       updatedAt: v.updatedAt,
       source: v.source,
+      selections: Array.isArray(v.selections) ? v.selections : [],
       history: Array.isArray(v.history) ? v.history : [],
     };
   }
@@ -187,23 +192,33 @@ export function saveAnswerVersion(
   answer: string,
   source: AnswerSource,
   updatedAt: string = new Date().toISOString(),
+  selections: QuizSelection[] = [],
 ): AnswerRecord {
   const key = String(id);
   const answers = normalizeAnswers(loadAnswers());
   const prev = answers[key];
   const history: AnswerEntry[] = [];
   if (prev) {
-    const same = prev.answer === answer;
+    const same =
+      prev.answer === answer &&
+      JSON.stringify(prev.selections ?? []) === JSON.stringify(selections);
     history.push(...prev.history);
-    if (!same) history.push({ answer: prev.answer, updatedAt: prev.updatedAt, source: prev.source });
+    if (!same) {
+      history.push({
+        answer: prev.answer,
+        updatedAt: prev.updatedAt,
+        source: prev.source,
+        selections: prev.selections ?? [],
+      });
+    }
     if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
-    if (same && prev.answer === answer) {
-      answers[key] = { ...prev, updatedAt, source };
+    if (same) {
+      answers[key] = { ...prev, updatedAt, source, selections };
       saveAnswers(answers);
       return answers[key];
     }
   }
-  const rec: AnswerRecord = { answer, updatedAt, source, history };
+  const rec: AnswerRecord = { answer, updatedAt, source, selections, history };
   answers[key] = rec;
   saveAnswers(answers);
   return rec;
@@ -220,12 +235,18 @@ export function restoreAnswerVersion(id: number | string, index: number): Answer
   const key = String(id);
   const history = [...rec.history];
   history.splice(index, 1);
-  history.push({ answer: rec.answer, updatedAt: rec.updatedAt, source: rec.source });
+  history.push({
+    answer: rec.answer,
+    updatedAt: rec.updatedAt,
+    source: rec.source,
+    selections: rec.selections ?? [],
+  });
   if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
   const restored: AnswerRecord = {
     answer: target.answer,
     updatedAt: target.updatedAt,
     source: target.source,
+    selections: target.selections ?? [],
     history,
   };
   answers[key] = restored;
@@ -242,6 +263,7 @@ export function clearAnswerHistory(id: number | string): AnswerRecord {
     answer: cur?.answer ?? "",
     updatedAt: cur?.updatedAt ?? new Date().toISOString(),
     source: cur?.source,
+    selections: cur?.selections ?? [],
     history: [],
   };
   answers[key] = rec;

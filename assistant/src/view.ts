@@ -1,10 +1,12 @@
-import type { AiRequest, Exercise, Answers, Overrides } from "./types.js";
+import type { AiRequest, Exercise, Answers, Overrides, QuizSelection } from "./types.js";
 import { loadAiConfig } from "./config.js";
 import { parseAiRequest } from "./prompt.js";
 
 export interface ExerciseView extends Exercise {
   answer: string | null;
   answerSource: "ai" | "manual" | null;
+  /** Chosen options for quiz answers (empty for uploads). */
+  selections: QuizSelection[];
   notes: string;
   promptOverride: string | null;
   hidden: boolean;
@@ -56,6 +58,7 @@ export function enrich(exercises: Exercise[], answers: Answers, overrides: Overr
       ...e,
       answer: a?.answer ?? null,
       answerSource: a?.source ?? null,
+      selections: a?.selections ?? [],
       notes: o.notes ?? "",
       promptOverride: o.promptOverride ?? null,
       hidden: o.hide === true,

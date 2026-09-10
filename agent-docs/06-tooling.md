@@ -45,7 +45,7 @@ cp .env.example .env    # then fill LXP_USERNAME (RA) and LXP_PASSWORD
 
 `docs/raw/homework-index.json` (built by `npm run index`) links every open assignment to its
 section, sibling content, and local files. Read it instead of re-scraping. `npm run homework` is
-the friendly terminal board; the browser UI is the LXP Assistant (`npm run web` inside `assistant/`).
+the friendly terminal board; the browser UI is the LXP Homework (`npm run web` inside `assistant/`).
 
 
 ## The three gotchas that WILL bite you

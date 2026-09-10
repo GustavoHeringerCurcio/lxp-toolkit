@@ -72,6 +72,7 @@ function AnswerPanel({
   const [state, setState] = useState<AnswerState | null>(null);
   const [sendCfg, setSendCfg] = useState<SendConfigDto | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
+  const [sendAfterGenerate, setSendAfterGenerate] = useState(false);
   const [agree, setAgree] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
@@ -96,7 +97,10 @@ function AnswerPanel({
         if (st.current?.answer && !busyRef.current) setDraft(st.current.answer);
       })
       .catch(() => undefined);
-  }, [e.id, e.answer]);
+    // Reset only when the activity changes: a refresh after generating/sending
+    // must not wipe the draft or the submission status.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [e.id]);
 
   const didAuto = useRef(false);
   useEffect(() => {
@@ -126,7 +130,7 @@ function AnswerPanel({
     setBusy(v);
   };
 
-  const generate = async () => {
+  const generate = async (): Promise<string | null> => {
     setBusySync(true);
     setErr(null);
     setDraft("");
@@ -141,8 +145,10 @@ function AnswerPanel({
       });
       setState(st);
       onRefresh();
+      return live.value || st.current?.answer || null;
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
+      return null;
     } finally {
       setBusySync(false);
     }
@@ -200,13 +206,15 @@ function AnswerPanel({
   const sortedHistory = [...history].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   const current = state?.current;
 
-  const confirmSend = async () => {
+  const confirmSend = async (answerOverride?: string) => {
+    const answer = (answerOverride ?? draft).trim();
+    if (!answer) return;
     setSending(true);
     setSendErr(null);
     cancelRef.current = false;
     setSub({ status: "running", detail: "Abrindo sessão no portal…", at: new Date().toISOString() });
     try {
-      const started = await sendAnswerToPortal(e.id, draft);
+      const started = await sendAnswerToPortal(e.id, answer);
       setSub(started);
       const deadline = Date.now() + 150_000;
       while (Date.now() < deadline && !cancelRef.current) {
@@ -228,8 +236,17 @@ function AnswerPanel({
     }
   };
 
+  const generateAndSend = async () => {
+    setSendErr(null);
+    const answer = await generate();
+    if (!answer?.trim()) return;
+    setDraft(answer);
+    await confirmSend(answer);
+  };
+
   const isUpload = e.kind === "upload";
-  const canSend = isUpload && e.status !== "done" && Boolean(sendCfg?.enabled) && Boolean(draft.trim()) && !sending;
+  const canSend = e.status !== "done" && Boolean(sendCfg?.enabled) && Boolean(draft.trim()) && !sending;
+  const canGenerateAndSend = e.status !== "done" && Boolean(sendCfg?.enabled) && !busy && !sending;
 
   return (
     <CollapsibleCard
@@ -316,13 +333,26 @@ function AnswerPanel({
             </a>
           )}
 
-          {isUpload ? (
+          <div className="ml-auto flex items-center gap-2">
             <Button
               variant="default"
               size="sm"
-              className="ml-auto"
               onClick={() => {
                 setSendErr(null);
+                setSendAfterGenerate(true);
+                setSendOpen(true);
+              }}
+              disabled={!canGenerateAndSend}
+            >
+              <Sparkles aria-hidden />
+              Gerar e enviar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSendErr(null);
+                setSendAfterGenerate(false);
                 setSendOpen((v) => !v);
               }}
               disabled={!canSend}
@@ -330,11 +360,7 @@ function AnswerPanel({
               <Send aria-hidden />
               Enviar no portal
             </Button>
-          ) : (
-            <span className="ml-auto text-xs text-muted-foreground">
-              Questionário: responda no portal — aqui você gera e salva o texto.
-            </span>
-          )}
+          </div>
         </div>
       }
     >
@@ -344,7 +370,7 @@ function AnswerPanel({
           placeholder={
             isUpload
               ? "Escreva a resposta para entregar — ou gere com a IA e revise antes de enviar."
-              : "Gere aqui o texto com as respostas do questionário e copie para o portal."
+              : "Gere as respostas do questionário — a IA marca as alternativas ao enviar."
           }
           rows={6}
           className="min-h-36 field-sizing-fixed leading-relaxed"
@@ -352,21 +378,32 @@ function AnswerPanel({
 
         {err && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</p>}
 
-        {isUpload && sendCfg && !sendCfg.enabled && (
+        {sendCfg && !sendCfg.enabled && (
           <p className="text-xs text-muted-foreground">{sendCfg.reason}</p>
         )}
-        {isUpload && e.status === "done" && (
+        {e.status === "done" && (
           <p className="text-xs text-muted-foreground">Esta atividade já foi concluída — envio bloqueado.</p>
         )}
 
-        {isUpload && sendOpen && (
+        {sendOpen && (
           <div className="rounded-lg border border-brand/30 bg-brand/10 p-3.5 text-sm">
             <div className="flex items-start gap-2 font-semibold text-foreground">
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden />
-              <span>Você está prestes a enviar para o portal de verdade.</span>
+              <span>
+                {sendAfterGenerate
+                  ? "Você está prestes a gerar uma resposta e enviar para o portal de verdade."
+                  : "Você está prestes a enviar para o portal de verdade."}
+              </span>
             </div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-foreground/90">
-              <li>Sua conta LXP abre e o texto acima é anexado como arquivo e entregue.</li>
+              {sendAfterGenerate && (
+                <li>A IA vai gerar a resposta agora e enviá-la em seguida, sem parar para revisão.</li>
+              )}
+              <li>
+                {isUpload
+                  ? "Sua conta LXP abre e o texto é anexado como arquivo e entregue."
+                  : "Sua conta LXP abre, as alternativas são marcadas e o questionário é enviado."}
+              </li>
               <li>A ação não é reversível e pode consumir uma tentativa.</li>
               <li>Confira o texto e o prazo antes de confirmar.</li>
             </ul>
@@ -383,12 +420,23 @@ function AnswerPanel({
               <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{sendErr}</p>
             )}
             <div className="mt-3 flex items-center justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setSendOpen(false)} disabled={sending}>
+              <Button variant="ghost" size="sm" onClick={() => setSendOpen(false)} disabled={sending || busy}>
                 Cancelar
               </Button>
-              <Button variant="default" size="sm" onClick={confirmSend} disabled={!agree || sending || !draft.trim()}>
-                {sending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
-                {sending ? "Enviando… (login no portal)" : "Confirmar e enviar"}
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => void (sendAfterGenerate ? generateAndSend() : confirmSend())}
+                disabled={!agree || sending || busy || (!sendAfterGenerate && !draft.trim())}
+              >
+                {sending || busy ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
+                {sending
+                  ? "Enviando… (login no portal)"
+                  : busy
+                    ? "Gerando…"
+                    : sendAfterGenerate
+                      ? "Gerar e enviar"
+                      : "Confirmar e enviar"}
               </Button>
             </div>
           </div>

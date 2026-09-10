@@ -38,6 +38,13 @@ export interface QuizQ {
   options: string[];
 }
 
+/** One chosen option for a quiz question (optionIndex is 0-based). */
+export interface QuizSelection {
+  questionId: number;
+  optionIndex: number;
+  letter: string;
+}
+
 export interface Exercise {
   id: number;
   title: string;
@@ -104,6 +111,8 @@ export interface AnswerEntry {
   answer: string;
   updatedAt: string;
   source?: AnswerSource;
+  /** Quiz answer selections (empty for upload tasks). */
+  selections?: QuizSelection[];
 }
 
 export interface AnswerRecord extends AnswerEntry {

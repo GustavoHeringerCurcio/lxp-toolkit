@@ -6,11 +6,11 @@ import { extractPdfText } from "../src/pdf.js";
 import { generateAnswer } from "../src/ai.js";
 import { exportAnswer } from "../src/export.js";
 import { assist } from "../src/paths.js";
-import { parseAiRequest } from "../src/prompt.js";
+import { parseAiRequest, parseQuizSelections } from "../src/prompt.js";
 import { isTTY, color, typeChip, deadlineChip, deadlineLabel, contextLine, icon } from "./render.js";
 
 function usage(): void {
-  console.log(`LXP Assistant — organize your exercises + AI answers
+  console.log(`LXP Homework — organize your exercises + AI answers
 
 Commands:
   npm run assistant -- index               rebuild data/exercises.json from the scraped tree
@@ -108,7 +108,8 @@ async function answerCmd(id: number, modelOverride?: string): Promise<void> {
     onDelta: (d) => process.stdout.write(d),
   });
   console.log(`\n`);
-  saveAnswerVersion(id, text, "ai");
+  const selections = v.kind === "quiz" ? parseQuizSelections(text, v.questions) : [];
+  saveAnswerVersion(id, text, "ai", undefined, selections);
   const out = exportAnswer(v, text);
   console.log(color.dim(`saved → ${out.md}`));
 }

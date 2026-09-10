@@ -6,28 +6,36 @@ import { createSession, closeSession } from "../src/session.js";
 import { config, logger } from "../src/config.js";
 
 /**
- * Gated browser-runner that submits one file-upload answer to the LXP portal.
+ * Gated browser-runner that submits one answer to the LXP portal.
  *
  * The LXP submit API was never captured and AWS WAF fronts writes, so we drive
- * the real SPA: fresh login → $nuxt route to the task → attach a file built from
- * the answer text → click the real submit → report.
+ * the real SPA: fresh login → $nuxt route to the task → answer it (attach a file
+ * for uploads, select options for quizzes) → click the real submit → report.
  *
  * Usage:
  *   tsx scripts/submit-task.ts --req <request.json> --result <result.json> [--headful]
  *
- * Request JSON:
+ * Upload request JSON:
  *   { "action": "upload", "courseId": number, "itemId": number, "answer": string, "ext"?: "md"|"txt" }
+ *
+ * Quiz request JSON:
+ *   { "action": "quiz", "courseId": number, "itemId": number,
+ *     "selections": [{ questionId, optionIndex, letter, questionText, optionText }] }
  *
  * Result JSON:
  *   { "ok": boolean, "status": "ok"|"unknown"|"error", "detail": string, "at": string }
  */
-interface SubmitRequest {
-  action: "upload";
-  courseId: number;
-  itemId: number;
-  answer: string;
-  ext?: "md" | "txt";
+interface QuizItem {
+  questionId: number;
+  optionIndex: number;
+  letter: string;
+  questionText: string;
+  optionText: string;
 }
+
+type SubmitRequest =
+  | { action: "upload"; courseId: number; itemId: number; answer: string; ext?: "md" | "txt" }
+  | { action: "quiz"; courseId: number; itemId: number; selections: QuizItem[] };
 
 interface SubmitResult {
   ok: boolean;
@@ -44,6 +52,15 @@ function flagValue(args: string[], name: string): string | undefined {
 function snippet(text: string, max = 400): string {
   const clean = text.replace(/\s+/g, " ").trim();
   return clean.length > max ? `${clean.slice(0, max)}…` : clean;
+}
+
+function normalize(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 async function clientNav(page: Page, pathName: string): Promise<void> {
@@ -90,7 +107,7 @@ async function findSubmit(page: Page): Promise<Locator | null> {
   if ((await typed.count().catch(() => 0)) > 0) return typed;
   const texted = page
     .locator("button, [role='button']")
-    .filter({ hasText: /entregar|enviar|finalizar|concluir|submeter/i })
+    .filter({ hasText: /entregar|enviar|finalizar|concluir|submeter|responder|salvar/i })
     .filter({ visible: true })
     .first();
   if ((await texted.count().catch(() => 0)) > 0) return texted;
@@ -117,6 +134,68 @@ async function detectSuccess(page: Page): Promise<{ ok: boolean; snippet: string
   return { ok: success, snippet: snippet(body, 500) };
 }
 
+/** Click one quiz option: find the question container, then the matching option. */
+async function clickQuizOption(page: Page, sel: QuizItem): Promise<boolean> {
+  const qNeedle = normalize(sel.questionText).slice(0, 40);
+  const oNeedle = normalize(sel.optionText).slice(0, 40);
+  if (!qNeedle) return false;
+
+  const containers = page.locator(
+    "fieldset, li, [class*='question' i], [class*='questao' i], [class*='enunciated' i], [class*='answer' i], [data-question-id]",
+  );
+  const count = await containers.count().catch(() => 0);
+
+  for (let i = 0; i < count; i++) {
+    const c = containers.nth(i);
+    const text = normalize(await c.innerText().catch(() => ""));
+    if (!text.includes(qNeedle)) continue;
+
+    // 1) Option by text (label / button / clickable).
+    if (oNeedle) {
+      const byText = c
+        .locator("label, button, [role='radio'], [role='button'], [class*='option' i], [class*='alternativa' i]")
+        .filter({ hasText: oNeedle })
+        .filter({ visible: true })
+        .first();
+      if ((await byText.count().catch(() => 0)) > 0) {
+        await byText.click({ timeout: 2000 }).catch(() => {});
+        return true;
+      }
+    }
+
+    // 2) Radio input by index.
+    const radios = c.locator("input[type='radio']");
+    if ((await radios.count().catch(() => 0)) > sel.optionIndex) {
+      await radios.nth(sel.optionIndex).check({ timeout: 2000 }).catch(async () => {
+        await radios.nth(sel.optionIndex).click({ timeout: 2000 }).catch(() => {});
+      });
+      return true;
+    }
+
+    // 3) Any clickable option by index.
+    const options = c.locator("label, [role='radio'], [role='button'], [class*='option' i], [class*='alternativa' i], li");
+    if ((await options.count().catch(() => 0)) > sel.optionIndex) {
+      await options.nth(sel.optionIndex).click({ timeout: 2000 }).catch(() => {});
+      return true;
+    }
+  }
+  return false;
+}
+
+async function answerQuiz(
+  page: Page,
+  selections: QuizItem[],
+): Promise<{ done: number; total: number; notes: string[] }> {
+  const notes: string[] = [];
+  let done = 0;
+  for (const sel of selections) {
+    const ok = await clickQuizOption(page, sel).catch(() => false);
+    if (ok) done++;
+    else notes.push(`Q${sel.questionId}: alternativa "${sel.optionText.slice(0, 40)}" não encontrada`);
+  }
+  return { done, total: selections.length, notes };
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const reqPath = flagValue(args, "--req");
@@ -141,8 +220,8 @@ async function main(): Promise<void> {
   } catch (err) {
     return fail(`cannot read request file: ${err instanceof Error ? err.message : String(err)}`);
   }
-  if (req.action !== "upload") return fail("only action 'upload' is supported for now");
-  if (!req.answer || !req.answer.trim()) return fail("request has no answer text");
+  if (req.action === "upload" && (!req.answer || !req.answer.trim())) return fail("request has no answer text");
+  if (req.action === "quiz" && (!req.selections || req.selections.length === 0)) return fail("request has no selections");
 
   const session = await createSession({ headful }).catch((err) => {
     fail(`login failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -152,9 +231,44 @@ async function main(): Promise<void> {
   try {
     const { page } = session;
     const route = `/course/${req.courseId}/content/${req.itemId}`;
-    logger.info({ route }, "navigating to task");
+    logger.info({ route, action: req.action }, "navigating to task");
     await clientNav(page, route);
     await page.waitForTimeout(8_000);
+
+    if (req.action === "quiz") {
+      const outcome = await answerQuiz(page, req.selections);
+      logger.info(outcome, "quiz options selected");
+      if (outcome.done === 0) {
+        const candidates = await candidateTexts(page).catch(() => []);
+        return fail(`nenhuma alternativa marcada. ${outcome.notes.join(" | ")}. Botões: ${candidates.join(" | ")}`);
+      }
+      const submit = await findSubmit(page);
+      if (!submit) {
+        const candidates = await candidateTexts(page).catch(() => []);
+        return fail(`no submit button found. Buttons/labels seen: ${candidates.join(" | ")}`);
+      }
+      await submit.click();
+      await confirmDialog(page);
+      const detection = await detectSuccess(page);
+      if (detection.ok) {
+        result = {
+          ok: true,
+          status: "ok",
+          detail: `${outcome.done}/${outcome.total} marcadas. ${snippet(detection.snippet, 200)}`,
+          at: new Date().toISOString(),
+        };
+      } else {
+        result = {
+          ok: false,
+          status: "unknown",
+          detail: `submit clicado mas sucesso não confirmado (${outcome.done}/${outcome.total} marcadas). Page: ${snippet(detection.snippet, 300)}`,
+          at: new Date().toISOString(),
+        };
+      }
+      writeResult(resultPath, result);
+      console.log(`submit-task done [${result.status}]`);
+      process.exit(0);
+    }
 
     // Build the answer file from the text and attach it.
     const ext = req.ext ?? "md";
@@ -194,7 +308,7 @@ async function main(): Promise<void> {
     }
     writeResult(resultPath, result);
     console.log(`submit-task done [${result.status}]`);
-    process.exit(result.status === "ok" ? 0 : 0);
+    process.exit(0);
   } finally {
     await closeSession(session).catch(() => {});
   }

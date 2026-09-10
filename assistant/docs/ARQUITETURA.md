@@ -1,0 +1,86 @@
+# Arquitetura
+
+## Visão geral
+
+```
+                 (raiz do repositório)                        (assistant/)
+ portal  ──dump──►  docs/courses/**, docs/raw/**  ──index──►  data/exercises.json
+                                                                │
+                                                  OpenAI ◄──── ai.ts ◄── prompt.ts
+                                                                │
+                                                                ▼
+                                                        data/answers.json
+                                                                │
+                                  scripts/submit-task.ts ◄── send.ts
+                                     (Playwright)               │
+                                        │                        ▼
+                                        └── portal ◄──── data/submissions.json
+```
+
+## Camadas
+
+### Raiz (leitura e escrita no portal)
+
+- `src/session.ts` — `createSession()` faz login fresco no Lyceum e devolve
+  `{ browser, context, page, client, auth }`.
+- `src/auth.ts` / `src/client.ts` — login e cliente autenticado da API LXP.
+- `scripts/dump-content.ts` (`npm run dump`) — raspa o conteúdo do curso para `docs/`.
+- `scripts/submit-task.ts` — runner de envio. Recebe `--req <json>` e `--result <json>`.
+  Hoje só trata `action: "upload"`: navega via `$nuxt.$router.push`, anexa o arquivo
+  montado a partir do texto, clica em enviar e detecta o sucesso.
+
+### assistant/ (produto)
+
+- `src/build.ts` + `src/load.ts` — transformam o `docs/` raspado em
+  `data/exercises.json` (uploads e quizzes, com prazo, arquivos e questões).
+- `src/view.ts` — enriquece cada atividade com resposta salva, override e o template
+  efetivo de IA.
+- `src/prompt.ts` — monta a única mensagem enviada ao modelo.
+- `src/ai.ts` — chama a OpenAI (`chat.completions`, streaming) e devolve o texto.
+- `src/config.ts` — lê/grava config, respostas (com histórico), overrides e envios.
+- `src/send.ts` — grava o request JSON, dá `spawn` no `scripts/submit-task.ts` da raiz
+  e acompanha o resultado. É a única ponte entre o app e a escrita no portal.
+- `src/export.ts` — exporta a resposta para `out/`.
+- `server/server.ts` — API HTTP (exercícios, respostas, geração com streaming, envio,
+  preview de arquivos) e serve o build do web na porta 4174.
+- `web/` — interface React (painel, atividade, ajustes).
+- `cli/main.ts` — comandos de terminal.
+
+## Dados
+
+- `config/ai-config.json` — modelo, temperatura, tokens e o prompt.
+- `config/profile.json` — nome e matrícula (entram no começo da resposta).
+- `config/overrides.json` — por atividade: nota, ocultar, prompt próprio.
+- `data/exercises.json` — lista normalizada (gerada pelo index).
+- `data/answers.json` — resposta atual + histórico (máx. 20 versões).
+- `data/submissions.json` — histórico de envios e status.
+
+## Envio (write side)
+
+O token do LXP é de uso único e a AWS WAF protege os POST/PUT, então toda escrita passa
+por um navegador real:
+
+1. `src/send.ts` escreve `data/send/req-<id>-<ts>.json` e chama
+   `tsx scripts/submit-task.ts --req … --result …`.
+2. O runner faz login fresco, navega até a atividade, anexa o arquivo (upload) ou marca
+   as alternativas (quiz) e clica em enviar.
+3. O resultado vira `data/send/res-<id>-<ts>.json` e é registrado em
+   `data/submissions.json`.
+
+### Quiz
+
+Para questionários a IA gera no formato `Q<id>: <letra>`. O servidor extrai as
+alternativas (`parseQuizSelections` em `src/prompt.ts`) e guarda em `data/answers.json`
+(campo `selections`). No envio, `launchQuizSubmit` manda `action: "quiz"` com as
+seleções (id, índice, letra, texto da questão e da alternativa) e o runner marca cada
+alternativa e clica em enviar.
+
+O endpoint/DOM de envio de quiz nunca foi capturado (ver `../../docs/gaps.md` §1). Os
+seletores em `scripts/submit-task.ts` (`clickQuizOption`) são heurísticos; para deixar
+100% confiável:
+
+```bash
+# na raiz, sessão supervisionada
+npm run capture-api -- --url https://unifoa2.grupoa.education/plataforma/course/<curso>/content/<quiz> --headful
+# responder um quiz de verdade e encerrar para dump das chamadas
+```

@@ -1,4 +1,4 @@
-import type { AiProfile, AiRequest, Exercise } from "./types.js";
+import type { AiProfile, AiRequest, Exercise, QuizQ, QuizSelection } from "./types.js";
 import { DEFAULT_AI_REQUEST } from "./config.js";
 import { extractFileText } from "./pdf.js";
 
@@ -168,5 +168,52 @@ export async function buildMessages(
   const activity = activityTemplate.trim();
   const template = [header, style, activity].filter((s) => s.trim()).join("\n\n");
   const vars = await buildPromptVars(e, profile, notes);
-  return [{ role: "user", content: renderTemplate(template, vars) }];
+  let content = renderTemplate(template, vars);
+  if (e.kind === "quiz" && e.questions.length) {
+    content +=
+      `\n\nFormato da resposta: uma linha por questão, no formato "Q<id>: <letra>", sem texto extra.` +
+      ` Exemplo: Q${e.questions[0].id}: B`;
+  }
+  return [{ role: "user", content }];
+}
+
+/**
+ * Extract quiz selections from a generated answer. Primary format is
+ * `Q<id>: <letra>`; if no id matches, falls back to ordered `1. B` lines mapped
+ * to the questions in order.
+ */
+export function parseQuizSelections(text: string, questions: QuizQ[]): QuizSelection[] {
+  const byId = new Map(questions.map((q) => [q.id, q]));
+  const found = new Map<number, number>();
+
+  const idRe = /Q\s*(\d+)\s*[:=\-.)\]]*\s*\(?([a-jA-J])\)?/g;
+  let m: RegExpExecArray | null;
+  while ((m = idRe.exec(text)) !== null) {
+    const id = Number(m[1]);
+    const q = byId.get(id);
+    if (!q) continue;
+    const idx = m[2].toLowerCase().charCodeAt(0) - 97;
+    if (idx >= 0 && idx < q.options.length) found.set(id, idx);
+  }
+
+  if (found.size === 0) {
+    const lineRe = /^\s*\d+\s*[.):\-]\s*\(?([a-jA-J])\)?/gm;
+    let lm: RegExpExecArray | null;
+    let order = 0;
+    while ((lm = lineRe.exec(text)) !== null && order < questions.length) {
+      const q = questions[order];
+      const idx = lm[1].toLowerCase().charCodeAt(0) - 97;
+      if (idx >= 0 && idx < q.options.length) {
+        found.set(q.id, idx);
+        order++;
+      }
+    }
+  }
+
+  return questions
+    .filter((q) => found.has(q.id))
+    .map((q) => {
+      const optionIndex = found.get(q.id) as number;
+      return { questionId: q.id, optionIndex, letter: String.fromCharCode(97 + optionIndex) };
+    });
 }

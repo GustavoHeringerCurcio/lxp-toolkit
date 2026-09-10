@@ -1,4 +1,4 @@
-# LXP Assistant — Design System (Grupoa crimson skin)
+# LXP Homework — Design System (Grupoa crimson skin)
 
 Design specification for `assistant/web/` (the assistant's React dashboard, `npm run web` from
 `assistant/`). This is the **skin**: brand, tokens, typography, icons, and component spec.

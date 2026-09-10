@@ -20,8 +20,8 @@ import {
 } from "../src/config.js";
 import { enrich } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
-import { parseAiRequest } from "../src/prompt.js";
-import { launchUploadSubmit, lastSubmission, sendEnv } from "../src/send.js";
+import { parseAiRequest, parseQuizSelections } from "../src/prompt.js";
+import { launchUploadSubmit, launchQuizSubmit, lastSubmission, sendEnv } from "../src/send.js";
 import { officeToPdf, previewCacheDir } from "../src/office.js";
 
 const DIST = path.join(ASSISTANT_DIR, "web", "dist");
@@ -293,13 +293,13 @@ const server = createServer(async (req, res) => {
     if (url.startsWith("/api/send/preview")) {
       const id = Number(new URL(req.url ?? "/", "http://local").searchParams.get("id"));
       const view = findView(id);
-      const canSubmit = view.kind === "upload" && view.status !== "done";
+      const canSubmit = (view.kind === "upload" || view.kind === "quiz") && view.status !== "done";
       return json(res, 200, {
         ok: canSubmit,
         reason: !canSubmit
           ? view.status === "done"
             ? "Esta atividade já está concluída."
-            : "Só é possível enviar por aqui tarefas do tipo arquivo (upload). Questionários precisam ser respondidos no portal."
+            : "Não é possível enviar esta atividade por aqui."
           : "",
         kind: view.kind,
         title: view.title,
@@ -407,7 +407,9 @@ const server = createServer(async (req, res) => {
         const id = Number(b.id);
         const answer = String(b.answer ?? "").trim();
         if (!id || !answer) return json(res, 400, { error: "answer required" });
-        const rec = saveAnswerVersion(id, answer, "manual");
+        const view = findView(id);
+        const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
+        const rec = saveAnswerVersion(id, answer, "manual", undefined, selections);
         return json(res, 200, { ok: true, current: rec, history: rec.history, updatedAt: rec.updatedAt });
       }
       if (url === "/api/answer") {
@@ -416,7 +418,8 @@ const server = createServer(async (req, res) => {
         const view = findView(id);
         const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
         const answer = await generateAnswer(cfg, view, view.aiRequestJson, loadProfile());
-        const rec = saveAnswerVersion(id, answer, "ai");
+        const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
+        const rec = saveAnswerVersion(id, answer, "ai", undefined, selections);
         return json(res, 200, { answer, current: rec, history: rec.history, updatedAt: rec.updatedAt });
       }
       if (url === "/api/answer/stream") {
@@ -446,7 +449,8 @@ const server = createServer(async (req, res) => {
               }
             },
           });
-          const rec = saveAnswerVersion(id, answer, "ai");
+          const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
+          const rec = saveAnswerVersion(id, answer, "ai", undefined, selections);
           sendEvent({ type: "done", answer, current: rec, history: rec.history });
           res.end();
         } catch (err) {
@@ -462,14 +466,18 @@ const server = createServer(async (req, res) => {
         const answer = String(b.answer ?? "");
         const view = findView(id);
         if (view.status === "done") return json(res, 400, { error: "Esta atividade já está concluída." });
-        if (view.kind !== "upload")
-          return json(res, 400, { error: "Só é possível enviar por aqui tarefas do tipo arquivo (upload)." });
         if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de enviar." });
         const env = sendEnv();
         if (!env.enabled) return json(res, 503, { error: env.reason });
-        saveAnswerVersion(id, answer, "manual");
+        const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
+        if (view.kind === "quiz" && selections.length === 0)
+          return json(res, 400, { error: "Não foi possível identificar as alternativas escolhidas na resposta." });
+        saveAnswerVersion(id, answer, "manual", undefined, selections);
         try {
-          const submission = launchUploadSubmit(view, answer, "md");
+          const submission =
+            view.kind === "quiz"
+              ? launchQuizSubmit(view, selections)
+              : launchUploadSubmit(view, answer, "md");
           return json(res, 200, { ok: true, submission: { status: submission.status, detail: submission.detail, at: submission.at } });
         } catch (err) {
           return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
@@ -514,7 +522,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n🎓 LXP Assistant → http://localhost:${PORT}`);
+  console.log(`\n🎓 LXP Homework → http://localhost:${PORT}`);
   console.log(`   data: ${dataDir()}`);
   console.log(`   ai config: ${assist("config", "ai-config.json")}\n`);
 });

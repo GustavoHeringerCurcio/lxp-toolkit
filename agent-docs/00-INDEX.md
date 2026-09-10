@@ -29,7 +29,7 @@ docs/                ← human docs + full scraped data (big; read specific file
 src/                ← TypeScript source (config, client, auth, session, network, content, actions, exercises)
 scripts/            ← runnable entry points (login, dump, dump-surfaces, crawl-routes, capture-api,
                       agent, index, homework, exercises)
-assistant/          ← LXP Assistant: CLI + web app (npm run web inside assistant/)
+assistant/          ← LXP Homework: CLI + web app (npm run web inside assistant/)
 ```
 
 ## Golden rules (always true)

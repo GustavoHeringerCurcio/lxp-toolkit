@@ -11,7 +11,7 @@ study offline, and adds friendly dashboards + AI study help on top.
 
 - 📚 **Read everything offline** — every reading, slide, exercise and quiz saved as `.md` files.
 - ✅ **See what's due** — a terminal board of your open homework, sorted by deadline.
-- 🤖 **Get answer drafts** — the LXP Assistant generates natural pt-BR answers with a cheap AI
+- 🤖 **Get answer drafts** — the LXP Homework generates natural pt-BR answers with a cheap AI
   model (you still decide what to actually submit).
 
 ## Quick start (first time)
@@ -49,7 +49,7 @@ Deeper reverse-engineering tools for studying how the site works: `crawl-routes`
 ## Friendly dashboards
 
 - **Terminal:** `npm run homework` → open homework grouped by section, sorted by due date.
-- **Browser (LXP Assistant):** in `assistant/`, run `npm run web` → dashboard at
+- **Browser (LXP Homework):** in `assistant/`, run `npm run web` → dashboard at
   `http://localhost:4174` with done/expired badges and an AI answer panel. Or stay in the terminal
   with `npm run assistant -- list`. See `assistant/README.md`.
 

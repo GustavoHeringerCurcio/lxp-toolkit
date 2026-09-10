@@ -65,7 +65,7 @@ export function AppSidebar() {
           <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-2 text-white shadow-md shadow-brand/20">
             <GraduationCap className="size-4" />
           </div>
-          <div className="truncate font-heading text-sm font-semibold">LXP Assistant</div>
+          <div className="truncate font-heading text-sm font-semibold">LXP Homework</div>
         </NavLink>
       </SidebarHeader>
       <SidebarContent>

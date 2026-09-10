@@ -31,6 +31,12 @@ export interface QuizQ {
   options: string[];
 }
 
+export interface QuizSelection {
+  questionId: number;
+  optionIndex: number;
+  letter: string;
+}
+
 export interface Exercise {
   id: number;
   title: string;
@@ -53,6 +59,7 @@ export interface Exercise {
   questions: QuizQ[];
   answer: string | null;
   answerSource: AnswerSource | null;
+  selections: QuizSelection[];
   notes: string;
   aiRequest: AiRequest;
   hasAiOverride: boolean;
@@ -68,6 +75,7 @@ export interface AnswerEntry {
   answer: string;
   updatedAt: string;
   source: AnswerSource;
+  selections?: QuizSelection[];
 }
 
 export interface AnswerState {

@@ -1,4 +1,4 @@
-# LXP Assistant — Crimson skin: refactor plan (ordered)
+# LXP Homework — Crimson skin: refactor plan (ordered)
 
 Apply the Grupoa crimson skin from [`DESIGN.md`](DESIGN.md) to `assistant/web/`. Adapted from the
 deleted legacy `web/PLAN.md` — the assistant already has the full shadcn/Base-UI + Tailwind v4 +

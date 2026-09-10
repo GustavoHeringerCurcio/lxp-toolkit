@@ -1,6 +1,6 @@
-# Send answers from the LXP Assistant web app — plan
+# Send answers from the LXP Homework web app — plan
 
-Goal: from `assistant/web` (the LXP Assistant), one click sends a generated answer into the real
+Goal: from `assistant/web` (the LXP Homework), one click sends a generated answer into the real
 portal — quiz answer selection or file-upload submission — then refreshes the task status.
 
 This is a **portal write** feature. It mutates the student's academic record, so it is gated behind

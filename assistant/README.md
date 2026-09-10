@@ -1,4 +1,4 @@
-# 🎓 LXP Assistant
+# 🎓 LXP Homework
 
 Friendly views of your LXP exercises + **AI-generated answers** using a cheap model
 (`gpt-4o-mini` by default). It reads the scraped data produced by the study repo (root of this
@@ -81,5 +81,11 @@ override) with its placeholders replaced. Available placeholders: `{nome}`, `{ma
 `{observacoes}`. `{nome}` / `{matricula}` come from `config/profile.json`; the rest come from the
 activity (instructions, PDF text or quiz questions). Every
 generation saves a **new version** (history kept in `data/answers.json`); you can restore any of
-them before sending. Copy / download it and submit what you'll stand behind — auto-submit
-endpoints are not wired by default.
+them before sending. **Gerar e enviar** generates and submits in one step (upload and quiz) via a
+real browser runner; a confirmation dialog is always shown before anything reaches the portal.
+
+## Documentação
+
+- [docs/README.md](./docs/README.md) — objetivo e fluxo ponta a ponta.
+- [docs/PROMPT.md](./docs/PROMPT.md) — regras de escrita enviadas ao modelo.
+- [docs/ARQUITETURA.md](./docs/ARQUITETURA.md) — como as peças se conectam.
