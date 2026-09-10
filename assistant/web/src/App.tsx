@@ -1,11 +1,12 @@
 import { useLocation, Route, Routes } from "react-router-dom";
-import { RefreshCw, Settings2 } from "lucide-react";
+import { Settings2 } from "lucide-react";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { AppProviders, useAppData } from "@/lib/app-state";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AiSettingsDialog } from "@/components/ai-settings-dialog";
+import { ContentRefreshBanner, ContentRefreshButton, useContentRefresh } from "@/components/content-refresh";
 import { DashboardPage } from "@/pages/dashboard";
 import { ExercisePage } from "@/pages/exercise";
 import { SettingsPage } from "@/pages/settings";
@@ -14,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 function Shell() {
   const { items, cfg, error, reload, loading } = useAppData();
+  const refresh = useContentRefresh(reload);
   const location = useLocation();
   const detailId = location.pathname.startsWith("/tarefa/")
     ? Number(location.pathname.split("/")[2])
@@ -64,10 +66,9 @@ function Shell() {
               </Button>
             }
           />
-          <Button variant="ghost" size="icon" title="atualizar" aria-label="atualizar" onClick={reload}>
-            <RefreshCw />
-          </Button>
+          <ContentRefreshButton state={refresh.state} onStart={refresh.start} />
         </header>
+        <ContentRefreshBanner state={refresh.state} />
 
         {loading && items.length === 0 ? (
           <div className="p-4">

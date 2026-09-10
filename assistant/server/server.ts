@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -25,6 +26,69 @@ import { officeToPdf, previewCacheDir } from "../src/office.js";
 
 const DIST = path.join(ASSISTANT_DIR, "web", "dist");
 const PORT = Number(process.env.PORT || 4174);
+const REPO_ROOT = path.resolve(ASSISTANT_DIR, "..");
+
+interface RefreshState {
+  running: boolean;
+  step: string;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  log: string;
+}
+
+const refresh: RefreshState = {
+  running: false,
+  step: "",
+  error: null,
+  startedAt: null,
+  finishedAt: null,
+  log: "",
+};
+
+const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
+
+function appendRefreshLog(chunk: string): void {
+  refresh.log = (refresh.log + chunk).slice(-8000);
+}
+
+/** Run one pipeline step, capturing its output into the shared refresh state. */
+function runStep(args: string[], cwd: string, label: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    refresh.step = label;
+    appendRefreshLog(`\n$ npm ${args.join(" ")}\n`);
+    const child = spawn(NPM, args, { cwd, env: process.env });
+    child.stdout?.on("data", (d: Buffer) => appendRefreshLog(d.toString()));
+    child.stderr?.on("data", (d: Buffer) => appendRefreshLog(d.toString()));
+    child.on("error", (err) => reject(err));
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${label}: o comando saiu com código ${code}`));
+    });
+  });
+}
+
+/** Scrape fresh content from the portal, then rebuild the assistant's list. */
+async function runContentRefresh(): Promise<void> {
+  if (refresh.running) return;
+  refresh.running = true;
+  refresh.step = "Iniciando…";
+  refresh.error = null;
+  refresh.log = "";
+  refresh.startedAt = new Date().toISOString();
+  refresh.finishedAt = null;
+  try {
+    await runStep(["run", "dump"], REPO_ROOT, "Buscando conteúdo novo no portal");
+    await runStep(["run", "index"], ASSISTANT_DIR, "Montando a lista de atividades");
+    refresh.step = "Concluído";
+  } catch (err) {
+    refresh.error = err instanceof Error ? err.message : String(err);
+    refresh.step = "Falhou";
+  } finally {
+    refresh.running = false;
+    refresh.finishedAt = new Date().toISOString();
+  }
+}
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -172,6 +236,16 @@ const server = createServer(async (req, res) => {
         profile: loadProfile(),
       });
     }
+    if (url === "/api/refresh/status") {
+      return json(res, 200, {
+        running: refresh.running,
+        step: refresh.step,
+        error: refresh.error,
+        startedAt: refresh.startedAt,
+        finishedAt: refresh.finishedAt,
+        log: refresh.log,
+      });
+    }
     if (url === "/api/ai-templates" && method === "GET") {
       return json(res, 200, { templates: loadAiConfig().ai_templates ?? {} });
     }
@@ -291,6 +365,11 @@ const server = createServer(async (req, res) => {
         const cfg = loadAiConfig();
         saveAiConfig({ ...cfg, activity_template: raw });
         return json(res, 200, { ok: true });
+      }
+      if (url === "/api/refresh") {
+        if (refresh.running) return json(res, 200, { running: true });
+        void runContentRefresh();
+        return json(res, 200, { started: true });
       }
       if (url === "/api/ai-config") {
         const b = await readBody(req);

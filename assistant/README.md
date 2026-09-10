@@ -57,6 +57,8 @@ npm run web        # builds + serves → http://localhost:4174
   questions, an **"O que a IA recebe"** editor — a textarea with the style rules ("Como escrever")
   sent to the model, with a live preview of the full message — and an **answer workbench** that
   streams the AI answer and keeps a **version history** (regenerate keeps previous drafts).
+- **Atualizar** (header) scrapes fresh portal content (`npm run dump` in the study repo) and
+  rebuilds the list (`npm run index`), showing progress and reloading when done.
 - **Perfil** (menu / header) sets your name/matrícula.
 - **IA Ajustes** (`/ajustes`) sets the activity scaffolding (sections + placeholders), the model,
   the temperature and the max output tokens.

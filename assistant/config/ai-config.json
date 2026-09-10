@@ -1,9 +1,9 @@
 {
   "provider": "openai",
   "model": "gpt-4o-mini",
-  "temperature": 0.7,
-  "max_output_tokens": 2400,
-  "message_template": "Como escrever:\n- responda como um aluno de faculdade\n- escreva como um humano, em português simples\n- evite símbolos e formatações\n- não pareça com uma IA, não escreva de forma robótica\n- para questões objetivas apenas responda com a letra e numero da reposta.\n\ndo not:\nnao escreva explicação para questoes de alternativas, apenas a resposta.",
-  "activity_template": "ATIVIDADE: {atividade}\nTIPO: {tipo}\nMÓDULO: {modulo}\nPRAZO: {prazo}\n\n=== ENUNCIADO / INSTRUÇÕES ===\n{enunciado}\n\n=== ARQUIVOS ANEXADOS ===\n{arquivos}\n\n=== QUESTÕES ===\n{questoes}\n\n=== OBSERVAÇÕES DO ALUNO ===\n{observacoes}\n\n=== PEDIDO ===\nEscreva a resposta desta atividade seguindo as regras de \"Como escrever\" acima. Escreva como o aluno, sem mencionar que você é uma IA.",
+  "temperature": 0.4,
+  "max_output_tokens": 4000,
+  "message_template": "Como escrever:\n- responda como um aluno de faculdade\n- escreva como um humano, em português simples\n- evite símbolos e formatações\n- não pareça com uma IA, não escreva de forma robótica\n- para questões objetivas apenas responda com a letra e numero da reposta.\n- responda todas as partes e todas as questões da atividade, incluindo a Parte 3, sem pular nenhuma\n\ndo not:\nnao escreva explicação para questoes de alternativas, apenas a resposta.",
+  "activity_template": "ATIVIDADE: {atividade}\nTIPO: {tipo}\nMÓDULO: {modulo}\nPRAZO: {prazo}\n\n=== ENUNCIADO / INSTRUÇÕES ===\n{enunciado}\n\n=== ARQUIVOS ANEXADOS ===\n{arquivos}\n\n=== QUESTÕES ===\n{questoes}\n\n=== OBSERVAÇÕES DO ALUNO ===\n{observacoes}\n\n=== PEDIDO ===\nEscreva a resposta desta atividade seguindo as regras de \"Como escrever\" acima. Escreva como o aluno, sem mencionar que você é uma IA. Responda TODAS as partes e TODAS as questões da atividade (Parte 1, Parte 2, Parte 3...). Não pule nenhuma parte e só termine depois de responder a última.\n\nAo começo da atividade adicione:\nNome: {nome}\nMatrícula: {matricula}",
   "ai_templates": {}
 }

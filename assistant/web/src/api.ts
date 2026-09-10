@@ -88,6 +88,24 @@ export async function deleteAiTemplate(name: string): Promise<Record<string, str
   return res.templates ?? {};
 }
 
+export interface RefreshStatus {
+  running: boolean;
+  step: string;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  log?: string;
+}
+
+/** Ask the server to scrape fresh portal content and rebuild the list. */
+export async function startContentRefresh(): Promise<void> {
+  await post("/api/refresh", {});
+}
+
+export async function fetchRefreshStatus(): Promise<RefreshStatus> {
+  return req<RefreshStatus>("/api/refresh/status");
+}
+
 export async function fetchAnswerState(id: number): Promise<AnswerState> {
   return req<AnswerState>(`/api/answer/${id}`);
 }

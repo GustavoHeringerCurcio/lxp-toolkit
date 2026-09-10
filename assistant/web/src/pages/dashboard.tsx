@@ -131,7 +131,7 @@ export function DashboardPage() {
           title={items.length === 0 ? "Nenhuma atividade" : "Nada por aqui"}
           detail={
             items.length === 0
-              ? "Nenhuma atividade encontrada. Rode `npm run index` dentro de assistant/ e atualize."
+              ? "Nenhuma atividade encontrada. Clique em \"Atualizar\" no topo para buscar seu conteúdo."
               : moduleFilter
                 ? `Não há atividades ${SCOPE_LABEL[scope].toLowerCase()} neste módulo.`
                 : `Não há atividades ${SCOPE_LABEL[scope].toLowerCase()}.`
