@@ -167,6 +167,7 @@ const server = createServer(async (req, res) => {
         temperature: cfg.temperature,
         configPath: assist("config", "ai-config.json"),
         message_template: cfg.message_template,
+        activity_template: cfg.activity_template,
         ai_templates: cfg.ai_templates ?? {},
         profile: loadProfile(),
       });
@@ -282,6 +283,13 @@ const server = createServer(async (req, res) => {
         parseAiRequest(raw); // validate (accepts JSON or plain text)
         const cfg = loadAiConfig();
         saveAiConfig({ ...cfg, message_template: raw });
+        return json(res, 200, { ok: true });
+      }
+      if (url === "/api/activity-template") {
+        const b = await readBody(req);
+        const raw = String(b.raw ?? "");
+        const cfg = loadAiConfig();
+        saveAiConfig({ ...cfg, activity_template: raw });
         return json(res, 200, { ok: true });
       }
       if (url === "/api/ai-config") {

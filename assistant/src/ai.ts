@@ -26,7 +26,7 @@ export async function generateAnswer(
   opts: GenerateOpts = {},
   notes = "",
 ): Promise<string> {
-  const messages = await buildMessages(e, requestRaw, profile, notes);
+  const messages = await buildMessages(e, requestRaw, profile, notes, cfg.activity_template);
 
   const stream = await client().chat.completions.create({
     model: cfg.model,

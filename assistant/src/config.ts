@@ -13,17 +13,20 @@ import type {
 } from "./types.js";
 
 /**
- * The default message sent to the model. It is one single message: the style
- * rules AND the activity content, with {placeholders} filled in at generation
- * time. The user sees and can edit this whole thing — nothing is hidden.
+ * The style rules the student edits on the activity screen ("Como escrever").
+ * Kept separate from the activity scaffolding so the UI stays simple.
  */
-export const DEFAULT_MESSAGE_TEMPLATE = `Como escrever:
+export const DEFAULT_STYLE_TEMPLATE = `Como escrever:
 - responda como um aluno de faculdade
 - escreva como um humano, em português simples
 - evite símbolos e formatações
-- não pareça com uma IA, não escreva de forma robótica
+- não pareça com uma IA, não escreva de forma robótica`;
 
-ATIVIDADE: {atividade}
+/**
+ * The activity scaffolding: the fixed sections and {placeholders} the model
+ * receives after the style rules. Edited only in "IA Ajustes".
+ */
+export const DEFAULT_ACTIVITY_TEMPLATE = `ATIVIDADE: {atividade}
 TIPO: {tipo}
 MÓDULO: {modulo}
 PRAZO: {prazo}
@@ -52,11 +55,11 @@ export const DEFAULT_AI_REQUEST: AiRequest = {
     "não pareça com uma IA, não escreva de forma robótica",
   ],
   contexto: "",
-  prompt: DEFAULT_MESSAGE_TEMPLATE,
+  prompt: DEFAULT_STYLE_TEMPLATE,
 };
 
 export function defaultAiRequestJson(): string {
-  return DEFAULT_MESSAGE_TEMPLATE;
+  return DEFAULT_STYLE_TEMPLATE;
 }
 
 const DEFAULT_AI_CONFIG: AiConfig = {
@@ -64,7 +67,8 @@ const DEFAULT_AI_CONFIG: AiConfig = {
   model: "gpt-4o-mini",
   temperature: 0.7,
   max_output_tokens: 2400,
-  message_template: DEFAULT_MESSAGE_TEMPLATE,
+  message_template: DEFAULT_STYLE_TEMPLATE,
+  activity_template: DEFAULT_ACTIVITY_TEMPLATE,
   ai_templates: {},
 };
 
@@ -83,11 +87,23 @@ export function loadAiConfig(): AiConfig {
   if (!existsSync(file)) return DEFAULT_AI_CONFIG;
   try {
     const raw = JSON.parse(readFileSync(file, "utf-8")) as Partial<AiConfig>;
+    let messageTemplate =
+      raw.message_template ?? raw.ai_request_default ?? DEFAULT_AI_CONFIG.message_template;
+    let activityTemplate = raw.activity_template ?? DEFAULT_AI_CONFIG.activity_template;
+    // Migrate legacy configs where the whole message (style + scaffolding) lived
+    // in message_template: split the activity sections out into activity_template.
+    if (!raw.activity_template && messageTemplate.includes("{enunciado}")) {
+      const idx = messageTemplate.search(/^ATIVIDADE:/m);
+      if (idx >= 0) {
+        activityTemplate = messageTemplate.slice(idx).trim();
+        messageTemplate = messageTemplate.slice(0, idx).trim();
+      }
+    }
     return {
       ...DEFAULT_AI_CONFIG,
       ...raw,
-      message_template:
-        raw.message_template ?? raw.ai_request_default ?? DEFAULT_AI_CONFIG.message_template,
+      message_template: messageTemplate,
+      activity_template: activityTemplate,
     };
   } catch {
     return DEFAULT_AI_CONFIG;

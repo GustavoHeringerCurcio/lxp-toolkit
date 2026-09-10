@@ -139,18 +139,34 @@ export interface ChatMessage {
 }
 
 /**
- * Build the exact messages sent to the model. The stored request is the message
- * template; the activity content is substituted into its placeholders. There is
- * no system message and nothing else is injected.
+ * Identity header placed at the top of every message, built from the profile.
+ * Only the fields that are filled in are included.
+ */
+export function buildIdentityHeader(profile: AiProfile): string {
+  const lines: string[] = [];
+  if (profile.nome?.trim()) lines.push(`Nome: ${profile.nome.trim()}`);
+  if (profile.matricula?.trim()) lines.push(`Matrícula: ${profile.matricula.trim()}`);
+  return lines.join("\n");
+}
+
+/**
+ * Build the exact messages sent to the model. The style rules come from the
+ * stored request and the activity scaffolding from `activityTemplate`; the
+ * activity content is substituted into the placeholders. There is no system
+ * message and nothing else is injected.
  */
 export async function buildMessages(
   e: Exercise,
   requestRaw: string,
   profile: AiProfile,
   notes = "",
+  activityTemplate = "",
 ): Promise<ChatMessage[]> {
   const req = parseAiRequest(requestRaw);
-  const template = renderRequestBlock(req, profile);
+  const header = buildIdentityHeader(profile);
+  const style = renderRequestBlock(req, profile).trim();
+  const activity = activityTemplate.trim();
+  const template = [header, style, activity].filter((s) => s.trim()).join("\n\n");
   const vars = await buildPromptVars(e, profile, notes);
   return [{ role: "user", content: renderTemplate(template, vars) }];
 }

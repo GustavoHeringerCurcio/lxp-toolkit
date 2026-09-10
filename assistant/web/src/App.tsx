@@ -43,7 +43,7 @@ function Shell() {
           <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-5" />
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <div className="truncate font-heading text-sm font-semibold">
-              {inSettings ? "Ajustes" : detailId ? "Atividade" : "Minhas tarefas"}
+              {inSettings ? "IA Ajustes" : detailId ? "Atividade" : "Minhas tarefas"}
             </div>
             {detailTitle && (
               <>

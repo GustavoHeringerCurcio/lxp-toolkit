@@ -13,6 +13,12 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error(`${init?.method ?? "GET"} ${path} → HTTP ${res.status}${detail}`);
   }
+  const contentType = res.headers.get("content-type") ?? "";
+  if (text && !contentType.includes("application/json")) {
+    throw new Error(
+      `${init?.method ?? "GET"} ${path} → resposta não-JSON. O servidor parece desatualizado: reinicie-o e tente de novo.`,
+    );
+  }
   return text ? (JSON.parse(text) as T) : ({} as T);
 }
 
@@ -48,6 +54,10 @@ export async function saveAiRequest(id: number, raw: string | null): Promise<AiR
 
 export async function saveMessageTemplate(raw: string): Promise<void> {
   await post("/api/message-template", { raw });
+}
+
+export async function saveActivityTemplate(raw: string): Promise<void> {
+  await post("/api/activity-template", { raw });
 }
 
 export interface AiConfigSavePatch {

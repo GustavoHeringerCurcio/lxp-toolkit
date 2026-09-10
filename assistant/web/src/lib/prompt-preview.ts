@@ -1,16 +1,20 @@
 import type { AiProfile, Exercise } from "@/types";
 
 /**
- * Default message sent to the model. Must match `DEFAULT_MESSAGE_TEMPLATE` in
+ * Default style rules ("Como escrever"). Must match `DEFAULT_STYLE_TEMPLATE` in
  * assistant/src/config.ts so the preview and the real request stay in sync.
  */
-export const DEFAULT_MESSAGE_TEMPLATE = `Como escrever:
+export const DEFAULT_STYLE_TEMPLATE = `Como escrever:
 - responda como um aluno de faculdade
 - escreva como um humano, em português simples
 - evite símbolos e formatações
-- não pareça com uma IA, não escreva de forma robótica
+- não pareça com uma IA, não escreva de forma robótica`;
 
-ATIVIDADE: {atividade}
+/**
+ * Default activity scaffolding. Must match `DEFAULT_ACTIVITY_TEMPLATE` in
+ * assistant/src/config.ts so the preview and the real request stay in sync.
+ */
+export const DEFAULT_ACTIVITY_TEMPLATE = `ATIVIDADE: {atividade}
 TIPO: {tipo}
 MÓDULO: {modulo}
 PRAZO: {prazo}
@@ -29,6 +33,22 @@ PRAZO: {prazo}
 
 === PEDIDO ===
 Escreva a resposta desta atividade seguindo as regras de "Como escrever" acima. Escreva como o aluno, sem mencionar que você é uma IA.`;
+
+/** Identity header placed at the top of every message, built from the profile. */
+export function buildIdentityHeader(profile: AiProfile): string {
+  const lines: string[] = [];
+  if (profile.nome?.trim()) lines.push(`Nome: ${profile.nome.trim()}`);
+  if (profile.matricula?.trim()) lines.push(`Matrícula: ${profile.matricula.trim()}`);
+  return lines.join("\n");
+}
+
+/** Join the identity header, style rules and activity scaffolding into one message. */
+export function composeMessage(style: string, activityTemplate: string, profile: AiProfile): string {
+  const header = buildIdentityHeader(profile).trim();
+  const s = style.trim();
+  const a = activityTemplate.trim();
+  return [header, s, a].filter(Boolean).join("\n\n");
+}
 
 export const PLACEHOLDERS = [
   "{nome}",
@@ -115,6 +135,11 @@ export function buildVars(e: Exercise, profile: AiProfile, notes = ""): PromptVa
 }
 
 /** The exact message the model will receive for this exercise (PDF bodies omitted). */
-export function renderPreviewMessage(template: string, e: Exercise, profile: AiProfile): string {
-  return renderTemplate(template, buildVars(e, profile));
+export function renderPreviewMessage(
+  style: string,
+  activityTemplate: string,
+  e: Exercise,
+  profile: AiProfile,
+): string {
+  return renderTemplate(composeMessage(style, activityTemplate, profile), buildVars(e, profile));
 }

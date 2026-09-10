@@ -54,11 +54,12 @@ npm run web        # builds + serves → http://localhost:4174
 - **List** ordered by deadline with badges (green done / red expired / amber due soon). Each card
   has a quick-action menu (Gerar com IA, abrir no portal, copiar link, baixar resposta).
 - **Activity detail** (`/tarefa/:id`): instructions, files (PDFs open via `/docs/…`), quiz
-  questions, an **"O que a IA recebe"** editor — one textarea holding the whole message sent to the
-  model, with click-to-insert placeholders and a live preview — and an **answer workbench** that
+  questions, an **"O que a IA recebe"** editor — a textarea with the style rules ("Como escrever")
+  sent to the model, with a live preview of the full message — and an **answer workbench** that
   streams the AI answer and keeps a **version history** (regenerate keeps previous drafts).
 - **Perfil** (menu / header) sets your name/matrícula.
-- **Ajustes** (`/ajustes`) sets the model, temperature and max output tokens.
+- **IA Ajustes** (`/ajustes`) sets the activity scaffolding (sections + placeholders), the model,
+  the temperature and the max output tokens.
 
 ## Data model
 

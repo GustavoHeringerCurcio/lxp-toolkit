@@ -81,6 +81,7 @@ export interface AiConfigDto {
   max_output_tokens?: number;
   temperature?: number;
   message_template: string;
+  activity_template: string;
   ai_templates?: Record<string, string>;
   profile: AiProfile;
 }

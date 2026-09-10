@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Bookmark, BookmarkPlus, Check, Eye, Loader2, RotateCcw, Save, SlidersHorizontal, Sparkles, Wand2, X } from "lucide-react";
 import { deleteAiTemplate, saveAiTemplate, saveMessageTemplate } from "@/api";
 import { useAppData } from "@/lib/app-state";
-import { DEFAULT_MESSAGE_TEMPLATE, PLACEHOLDERS, renderPreviewMessage } from "@/lib/prompt-preview";
+import { DEFAULT_ACTIVITY_TEMPLATE, DEFAULT_STYLE_TEMPLATE, renderPreviewMessage } from "@/lib/prompt-preview";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import type { Exercise } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => void }) {
   const { cfg, patchConfig } = useAppData();
   const profile = cfg?.profile ?? { nome: "", matricula: "" };
-  const [text, setText] = useState(() => cfg?.message_template || DEFAULT_MESSAGE_TEMPLATE);
+  const [text, setText] = useState(() => cfg?.message_template || DEFAULT_STYLE_TEMPLATE);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -21,23 +21,14 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
   const [showTemplates, setShowTemplates] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [tplBusy, setTplBusy] = useState(false);
-  const [sel, setSel] = useState({ start: 0, end: 0 });
   const [showAdvanced, setShowAdvanced] = useLocalStorage("lxp.tarefa.ai.more-options", false);
 
   useEffect(() => {
-    setText(cfg?.message_template || DEFAULT_MESSAGE_TEMPLATE);
+    setText(cfg?.message_template || DEFAULT_STYLE_TEMPLATE);
   }, [cfg?.message_template]);
 
   const templates = cfg?.ai_templates ?? {};
   const templateNames = Object.keys(templates);
-
-  const insertPlaceholder = (token: string) => {
-    const start = Math.min(sel.start, text.length);
-    const end = Math.min(sel.end, text.length);
-    const next = `${text.slice(0, start)}${token}${text.slice(end)}`;
-    setText(next);
-    setSel({ start: start + token.length, end: start + token.length });
-  };
 
   const saveGlobal = async () => {
     setBusy(true);
@@ -60,7 +51,7 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
   };
 
   const restoreDefault = () => {
-    setText(DEFAULT_MESSAGE_TEMPLATE);
+    setText(DEFAULT_STYLE_TEMPLATE);
     setMsg(null);
     setErr(null);
   };
@@ -103,7 +94,9 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
     }
   };
 
-  const previewText = showPreview ? renderPreviewMessage(text, e, profile) : "";
+  const previewText = showPreview
+    ? renderPreviewMessage(text, cfg?.activity_template ?? DEFAULT_ACTIVITY_TEMPLATE, e, profile)
+    : "";
 
   return (
     <CollapsibleCard
@@ -121,15 +114,11 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
           value={text}
           onChange={(ev) => {
             setText(ev.target.value);
-            setSel({ start: ev.target.selectionStart ?? ev.target.value.length, end: ev.target.selectionEnd ?? ev.target.value.length });
             setMsg(null);
           }}
-          onSelect={(ev) => setSel({ start: ev.currentTarget.selectionStart ?? 0, end: ev.currentTarget.selectionEnd ?? 0 })}
-          onClick={(ev) => setSel({ start: ev.currentTarget.selectionStart ?? 0, end: ev.currentTarget.selectionEnd ?? 0 })}
-          onKeyUp={(ev) => setSel({ start: ev.currentTarget.selectionStart ?? 0, end: ev.currentTarget.selectionEnd ?? 0 })}
           rows={6}
           placeholder="Diga à IA como escrever a resposta desta atividade…"
-          aria-label="Prompt enviado para a IA"
+          aria-label="Como a IA deve escrever a resposta"
           className="min-h-28 leading-relaxed"
         />
 
@@ -158,23 +147,9 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
         {showAdvanced && (
           <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
             <p className="text-xs text-muted-foreground">
-              Esta é a mensagem inteira enviada ao modelo. Os marcadores abaixo são substituídos pelo conteúdo da
-              atividade no momento do envio.
+              Estas são as regras de estilo enviadas no início da mensagem. A estrutura da atividade (enunciado,
+              arquivos, questões) é montada em IA Ajustes.
             </p>
-
-            <div className="flex flex-wrap items-center gap-1.5">
-              {PLACEHOLDERS.map((token) => (
-                <button
-                  key={token}
-                  type="button"
-                  onClick={() => insertPlaceholder(token)}
-                  className="rounded border border-brand/30 bg-brand/10 px-1.5 py-0.5 font-mono text-[11px] text-brand transition-colors hover:bg-brand/20"
-                  title="inserir marcador na posição do cursor"
-                >
-                  {token}
-                </button>
-              ))}
-            </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={restoreDefault} disabled={busy}>

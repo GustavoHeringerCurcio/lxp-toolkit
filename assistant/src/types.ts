@@ -69,11 +69,15 @@ export interface AiConfig {
   temperature: number;
   max_output_tokens?: number;
   /**
-   * The entire message sent to the model, as a single `user` message. Supports
-   * {placeholders} that are filled with the activity content at generation time.
-   * This is the single source of truth — nothing else is injected.
+   * The style rules ("Como escrever") edited on the activity screen. Combined
+   * with `activity_template` to form the single `user` message sent to the model.
    */
   message_template: string;
+  /**
+   * The activity scaffolding (sections + {placeholders}) appended after the style
+   * rules. Edited only in "IA Ajustes".
+   */
+  activity_template: string;
   /** Named message templates: display name -> full plain-text message. */
   ai_templates?: Record<string, string>;
   /** @deprecated ignored; kept only so old config files load without errors. */

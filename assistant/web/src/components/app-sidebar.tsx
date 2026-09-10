@@ -127,12 +127,12 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location.pathname === "/ajustes"}
-                  tooltip="Ajustes"
+                  tooltip="IA Ajustes"
                   onClick={() => navigate("/ajustes")}
                   className="group-data-[collapsible=icon]:!px-2"
                 >
                   <SlidersHorizontal />
-                  <span>Ajustes</span>
+                  <span>IA Ajustes</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
