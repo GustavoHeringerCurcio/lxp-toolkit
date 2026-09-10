@@ -14,26 +14,65 @@ const FALLBACK_INSTRUCOES = [
   "não pareça com uma i.a., não escreva de forma robótica",
 ];
 
-/** Parse a raw AiRequest JSON for the editor; returns null when invalid. */
+/**
+ * Parse a stored AiRequest for the editor. Accepts legacy JSON or a plain-text
+ * prompt; plain text is wrapped in `prompt`. Returns null only when empty.
+ */
 export function tryParseAiRequest(raw: string): AiRequest | null {
+  if (!raw || !raw.trim()) return null;
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (!parsed || Array.isArray(parsed)) return null;
-    const str = (v: unknown): string => (typeof v === "string" ? v : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : "");
-    const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map((i) => str(i)).filter(Boolean) : []);
-    const instrucoes = arr(parsed.instrucoes);
-    return {
-      perfil: str(parsed.perfil),
-      instrucoes: instrucoes.length ? instrucoes : [...FALLBACK_INSTRUCOES],
-      contexto: str(parsed.contexto),
-    };
+    parsed = JSON.parse(raw);
   } catch {
-    return null;
+    return { perfil: "", instrucoes: [], contexto: "", prompt: raw.trim() };
   }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { perfil: "", instrucoes: [], contexto: "", prompt: raw.trim() };
+  }
+  const o = parsed as Record<string, unknown>;
+  const str = (v: unknown): string => (typeof v === "string" ? v : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : "");
+  const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map((i) => str(i)).filter(Boolean) : []);
+  const instrucoes = arr(o.instrucoes);
+  const prompt = str(o.prompt).trim();
+  return {
+    perfil: str(o.perfil),
+    instrucoes: instrucoes.length ? instrucoes : [...FALLBACK_INSTRUCOES],
+    contexto: str(o.contexto),
+    ...(prompt ? { prompt } : {}),
+  };
+}
+
+/**
+ * Render an AiRequest into the editable, human-friendly text shown in the UI.
+ * Placeholders are intentionally left unresolved so `{nome}`/`{matricula}`
+ * stay visible and keep working.
+ */
+export function aiRequestToText(req: AiRequest): string {
+  if (req.prompt?.trim()) return req.prompt;
+  const lines: string[] = [];
+  if (req.perfil.trim()) lines.push(`Quem sou: ${req.perfil.trim()}`);
+  if (req.instrucoes.length) {
+    lines.push("Como escrever:");
+    for (const ins of req.instrucoes) lines.push(`- ${ins}`);
+  }
+  if (req.contexto.trim()) lines.push(`Contexto extra:\n${req.contexto.trim()}`);
+  return lines.join("\n");
+}
+
+/** Convert any stored raw AiRequest (JSON or plain text) into editable text. */
+export function rawToEditableText(raw: string): string {
+  const parsed = tryParseAiRequest(raw);
+  return parsed ? aiRequestToText(parsed) : "";
+}
+
+/** Wrap free-form editor text into an AiRequest for previews. */
+export function textToAiRequest(text: string): AiRequest {
+  return { perfil: "", instrucoes: [], contexto: "", prompt: text };
 }
 
 /** Render the AiRequest "aluno" block exactly like the server does. */
 export function renderRequestBlock(req: AiRequest, profile: AiProfile): string {
+  if (req.prompt?.trim()) return resolvePlaceholders(req.prompt, profile);
   const lines: string[] = [];
   const perfil = resolvePlaceholders(req.perfil, profile);
   if (perfil) lines.push(`Quem sou: ${perfil}`);

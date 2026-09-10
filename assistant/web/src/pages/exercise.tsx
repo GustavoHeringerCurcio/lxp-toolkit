@@ -212,7 +212,7 @@ function AnswerPanel({ e, onRefresh, autoGenerate }: { e: Exercise; onRefresh: (
   const canSend = isUpload && e.status !== "done" && Boolean(sendCfg?.enabled) && Boolean(draft.trim()) && !sending;
 
   return (
-    <section className="rounded-xl border border-border bg-card">
+    <section className="rounded-xl border border-border bg-card xl:flex xl:h-full xl:min-h-0 xl:flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-4 py-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Sparkles className="size-4 shrink-0 text-brand" aria-hidden />
@@ -272,7 +272,7 @@ function AnswerPanel({ e, onRefresh, autoGenerate }: { e: Exercise; onRefresh: (
         )}
       </div>
 
-      <div className="space-y-3 p-4">
+      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto p-4">
         <Textarea
           value={draft}
           onChange={(ev) => setDraft(ev.target.value)}
@@ -281,52 +281,11 @@ function AnswerPanel({ e, onRefresh, autoGenerate }: { e: Exercise; onRefresh: (
               ? "Escreva a resposta para entregar — ou gere com a IA e revise antes de enviar."
               : "Gere aqui o texto com as respostas do questionário e copie para o portal."
           }
-          rows={12}
-          className="min-h-56 leading-relaxed"
+          rows={6}
+          className="min-h-36 field-sizing-fixed leading-relaxed"
         />
 
         {err && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</p>}
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={generate} disabled={busy}>
-            {busy ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
-            {busy ? "Gerando…" : current ? "Regenerar (nova versão)" : "Gerar com IA"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={save} disabled={busy || !draft.trim()}>
-            {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-            Salvar resposta
-          </Button>
-          <Button variant="ghost" size="sm" onClick={copy} disabled={!draft.trim()}>
-            <Copy aria-hidden />
-            copiar
-          </Button>
-          {current?.answer && (
-            <a className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/api/export/${e.id}`}>
-              <Download aria-hidden />
-              .md
-            </a>
-          )}
-
-          {isUpload ? (
-            <Button
-              variant="default"
-              size="sm"
-              className="ml-auto"
-              onClick={() => {
-                setSendErr(null);
-                setSendOpen((v) => !v);
-              }}
-              disabled={!canSend}
-            >
-              <Send aria-hidden />
-              Enviar no portal
-            </Button>
-          ) : (
-            <span className="ml-auto text-xs text-muted-foreground">
-              Questionário: responda no portal — aqui você gera e salva o texto.
-            </span>
-          )}
-        </div>
 
         {isUpload && sendCfg && !sendCfg.enabled && (
           <p className="text-xs text-muted-foreground">{sendCfg.reason}</p>
@@ -395,6 +354,47 @@ function AnswerPanel({ e, onRefresh, autoGenerate }: { e: Exercise; onRefresh: (
               <p className="mt-0.5 break-words text-xs text-muted-foreground">{sub.detail}</p>
             </div>
           </div>
+        )}
+      </div>
+
+      <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-border/60 bg-card px-4 py-3">
+        <Button size="sm" onClick={generate} disabled={busy}>
+          {busy ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+          {busy ? "Gerando…" : current ? "Regenerar (nova versão)" : "Gerar com IA"}
+        </Button>
+        <Button variant="outline" size="sm" onClick={save} disabled={busy || !draft.trim()}>
+          {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
+          Salvar resposta
+        </Button>
+        <Button variant="ghost" size="sm" onClick={copy} disabled={!draft.trim()}>
+          <Copy aria-hidden />
+          copiar
+        </Button>
+        {current?.answer && (
+          <a className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/api/export/${e.id}`}>
+            <Download aria-hidden />
+            .md
+          </a>
+        )}
+
+        {isUpload ? (
+          <Button
+            variant="default"
+            size="sm"
+            className="ml-auto"
+            onClick={() => {
+              setSendErr(null);
+              setSendOpen((v) => !v);
+            }}
+            disabled={!canSend}
+          >
+            <Send aria-hidden />
+            Enviar no portal
+          </Button>
+        ) : (
+          <span className="ml-auto text-xs text-muted-foreground">
+            Questionário: responda no portal — aqui você gera e salva o texto.
+          </span>
         )}
       </div>
     </section>
@@ -561,7 +561,7 @@ export function ExercisePage() {
         </div>
 
         {/* right column: answer workbench */}
-        <div className="xl:sticky xl:top-[4.5rem] xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto min-w-0">
+        <div className="min-w-0 xl:sticky xl:top-[4.5rem] xl:h-[calc(100vh-6rem)]">
           <AnswerPanel key={e.id} e={e} onRefresh={onRefresh} autoGenerate={wantsAuto} />
         </div>
       </div>

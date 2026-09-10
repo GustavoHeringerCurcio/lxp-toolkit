@@ -10,6 +10,8 @@ export interface AiRequest {
   perfil: string;
   instrucoes: string[];
   contexto: string;
+  /** Full plain-text request block. Takes precedence over the structured fields. */
+  prompt?: string;
 }
 
 export interface PdfRef {

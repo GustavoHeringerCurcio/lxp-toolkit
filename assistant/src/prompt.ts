@@ -13,25 +13,32 @@ export function isPlaceholder(value: string): boolean {
   return value.includes("{");
 }
 
-/** Validate/parse a user-edited JSON string into an AiRequest (never throws). */
+/**
+ * Parse a stored AiRequest. Accepts either the legacy/default JSON object or a
+ * plain-text prompt. A JSON string that is not an object (or is invalid) is
+ * treated as free-form prompt text. Never throws.
+ */
 export function parseAiRequest(raw: string): AiRequest {
   if (!raw || !raw.trim()) return { ...DEFAULT_AI_REQUEST, contexto: "", perfil: "" };
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error("JSON inválido — revise o conteúdo antes de salvar.");
+    return { perfil: "", instrucoes: [], contexto: "", prompt: raw.trim() };
   }
-  if (Array.isArray(parsed)) throw new Error("O JSON deve ser um objeto, não um array.");
-  if (typeof parsed !== "object" || parsed === null) throw new Error("O JSON deve ser um objeto.");
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { perfil: "", instrucoes: [], contexto: "", prompt: raw.trim() };
+  }
   const o = parsed as Record<string, unknown>;
   const str = (v: unknown): string => (typeof v === "string" ? v : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : "");
   const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map((i) => str(i)).filter(Boolean) : []);
   const instrucoes = arr(o.instrucoes);
+  const prompt = str(o.prompt).trim();
   return {
     perfil: str(o.perfil),
     instrucoes: instrucoes.length ? instrucoes : [...DEFAULT_AI_REQUEST.instrucoes],
     contexto: str(o.contexto),
+    ...(prompt ? { prompt } : {}),
   };
 }
 
@@ -40,6 +47,7 @@ export function parseAiRequest(raw: string): AiRequest {
  * to the exercise content in the user message. Placeholders are resolved.
  */
 export function renderRequestBlock(req: AiRequest, profile: AiProfile): string {
+  if (req.prompt?.trim()) return resolvePlaceholders(req.prompt, profile);
   const lines: string[] = [];
   const perfil = resolvePlaceholders(req.perfil, profile);
   if (perfil) lines.push(`Quem sou: ${perfil}`);

@@ -1,9 +1,8 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { Check, Loader2, Save, UserRound } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { saveAiDefault, saveProfile } from "@/api";
 import { useAppData } from "@/lib/app-state";
-import { tryParseAiRequest, resolvePlaceholders } from "@/lib/prompt-preview";
+import { rawToEditableText, renderRequestBlock, textToAiRequest } from "@/lib/prompt-preview";
 import {
   Sheet,
   SheetContent,
@@ -20,20 +19,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import type { AiProfile } from "@/types";
 
-const DEFAULT_DRAFT = JSON.stringify(
-  {
-    perfil: "",
-    instrucoes: [
-      "responda como um aluno de faculdade",
-      "escreva como um humano, em português simples",
-      "evite símbolos e formatações",
-      "não pareça com uma i.a., não escreva de forma robótica",
-    ],
-    contexto: "",
-  },
-  null,
-  2,
-);
+const DEFAULT_TEXT =
+  "Quem sou: sou o aluno(a) {nome} (matrícula {matricula}).\n" +
+  "Como escrever:\n" +
+  "- responda como um aluno de faculdade\n" +
+  "- escreva como um humano, em português simples\n" +
+  "- evite símbolos e formatações\n" +
+  "- não pareça com uma i.a., não escreva de forma robótica";
 
 function PlaceholderChip({ token, onClick }: { token: string; onClick: () => void }) {
   return (
@@ -55,7 +47,7 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
   const [open, setOpen] = useState(false);
   const [nome, setNome] = useState("");
   const [matricula, setMatricula] = useState("");
-  const [defaultJson, setDefaultJson] = useState("");
+  const [defaultText, setDefaultText] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -64,25 +56,14 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
     if (!open) return;
     setNome(profile.nome ?? "");
     setMatricula(profile.matricula ?? "");
-    setDefaultJson(cfg?.ai_request_default ?? DEFAULT_DRAFT);
+    setDefaultText(rawToEditableText(cfg?.ai_request_default ?? "") || DEFAULT_TEXT);
     setMsg(null);
     setErr(null);
   }, [open, profile.nome, profile.matricula, cfg?.ai_request_default]);
 
   const insertPlaceholder = (which: "nome" | "matricula") => {
     const token = which === "nome" ? "{nome}" : "{matricula}";
-    setDefaultJson((prev) => {
-      try {
-        const parsed = JSON.parse(prev) as Record<string, unknown>;
-        if (typeof parsed.perfil === "string") {
-          parsed.perfil = parsed.perfil + (parsed.perfil ? " · " : "") + token;
-          return JSON.stringify(parsed, null, 2);
-        }
-      } catch {
-        /* keep raw */
-      }
-      return prev;
-    });
+    setDefaultText((prev) => `${prev}${prev.endsWith("\n") || !prev ? "" : " "}${token}`);
   };
 
   const saveAll = async () => {
@@ -90,15 +71,14 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
     setMsg(null);
     setErr(null);
     try {
-      const parsed = tryParseAiRequest(defaultJson);
-      if (!parsed) {
-        setErr("O JSON padrão está inválido — corrija antes de salvar.");
+      if (!defaultText.trim()) {
+        setErr("Escreva o pedido padrão antes de salvar.");
         return;
       }
       const p: AiProfile = { nome: nome.trim(), matricula: matricula.trim() };
       await saveProfile(p);
-      await saveAiDefault(defaultJson);
-      patchConfig({ profile: p, ai_request_default: defaultJson });
+      await saveAiDefault(defaultText);
+      patchConfig({ profile: p, ai_request_default: defaultText });
       setMsg("Perfil e padrão de IA salvos.");
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
@@ -107,8 +87,7 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
     }
   };
 
-  const parsed = tryParseAiRequest(defaultJson);
-  const preview = parsed ? resolvePlaceholders(parsed.perfil, { nome, matricula }) : "";
+  const preview = renderRequestBlock(textToAiRequest(defaultText), { nome, matricula });
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -121,7 +100,7 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
           </SheetTitle>
           <SheetDescription>
             Seu nome/matrícula alimentam os marcadores <code className="font-mono">{"{nome}"}</code> e{" "}
-            <code className="font-mono">{"{matricula}"}</code>. O JSON abaixo é o pedido padrão para novas respostas.
+            <code className="font-mono">{"{matricula}"}</code>. O texto abaixo é o pedido padrão para novas respostas.
           </SheetDescription>
         </SheetHeader>
 
@@ -152,7 +131,7 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <Label htmlFor="ai-default" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Pedido padrão (JSON)
+                Pedido padrão
               </Label>
               <div className="flex items-center gap-1">
                 <PlaceholderChip token="{nome}" onClick={() => insertPlaceholder("nome")} />
@@ -161,24 +140,16 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
             </div>
             <Textarea
               id="ai-default"
-              value={defaultJson}
-              onChange={(e) => setDefaultJson(e.target.value)}
-              rows={13}
-              spellCheck={false}
-              className={cn(
-                "font-mono text-xs leading-relaxed",
-                parsed === null && "border-destructive/60 focus-visible:border-destructive",
-              )}
+              value={defaultText}
+              onChange={(e) => setDefaultText(e.target.value)}
+              rows={10}
+              placeholder="Ex.: responda como um aluno de faculdade, em português simples, sem parecer uma IA."
+              className="min-h-44 text-sm leading-relaxed"
             />
-            {parsed === null ? (
-              <p className="text-xs text-destructive">JSON inválido.</p>
-            ) : (
-              parsed.instrucoes.length > 0 && (
-                <p className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">Prévia do que a IA recebe:</span>{" "}
-                  {preview || parsed.instrucoes[0]}
-                </p>
-              )
+            {preview && (
+              <p className="rounded-md bg-muted/40 p-2 text-xs whitespace-pre-wrap text-muted-foreground">
+                <span className="font-semibold text-foreground">Prévia do que a IA recebe:</span> {preview}
+              </p>
             )}
             {cfg?.model && (
               <p className="text-[11px] text-muted-foreground">Modelo atual: {cfg.model} · língua {cfg.language}</p>

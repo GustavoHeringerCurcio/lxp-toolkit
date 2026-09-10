@@ -8,14 +8,18 @@ export interface AiProfile {
 }
 
 /**
- * Per-exercise / global AI request. Edited as raw JSON in the UI but validated
- * against this shape server-side. `perfil` and `instrucoes` receive the same
- * {nome}/{matricula} placeholder substitution as the rest of the prompt.
+ * Per-exercise / global AI request. May be stored as JSON (legacy/default) or,
+ * more recently, as a single free-form text block in `prompt`. `perfil`,
+ * `instrucoes`, `contexto` and `prompt` all receive the same {nome}/{matricula}
+ * placeholder substitution as the rest of the prompt. When `prompt` is set it
+ * is used verbatim as the "aluno" block and the structured fields are ignored.
  */
 export interface AiRequest {
   perfil: string;
   instrucoes: string[];
   contexto: string;
+  /** Full plain-text request block. Takes precedence over the structured fields. */
+  prompt?: string;
 }
 
 export interface PdfRef {

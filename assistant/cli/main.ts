@@ -121,7 +121,12 @@ function noteCmd(id: number, text: string): void {
   entry.notes = text;
   if (typeof entry.aiRequest === "string") {
     const req = parseAiRequest(entry.aiRequest);
-    entry.aiRequest = JSON.stringify({ ...req, contexto: text }, null, 2);
+    // A free-form prompt takes precedence, so appending contexto would be ignored.
+    if (req.prompt?.trim()) {
+      entry.aiRequest = `${req.prompt.trim()}\n\n${text}`;
+    } else {
+      entry.aiRequest = JSON.stringify({ ...req, contexto: text }, null, 2);
+    }
   }
   overrides[String(id)] = entry;
   saveOverrides(overrides);

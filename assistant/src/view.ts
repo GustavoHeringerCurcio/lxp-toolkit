@@ -42,6 +42,7 @@ export function effectiveAiRequestJson(exercises: { id: number }[], overrides: O
         perfil: defaultParsed.perfil,
         contexto: legacy,
         instrucoes: defaultParsed.instrucoes,
+        prompt: undefined,
       };
       map[key] = JSON.stringify(seeded, null, 2);
       continue;
