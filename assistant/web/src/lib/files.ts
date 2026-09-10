@@ -26,3 +26,15 @@ export function remoteFileExt(f: RemoteFile): string {
 export function isPdf(f: RemoteFile): boolean {
   return remoteFileExt(f) === "pdf";
 }
+
+const OFFICE_EXTS = new Set(["ppt", "pptx", "xls", "xlsx", "doc", "docx", "odt", "ods", "odp", "rtf", "csv"]);
+
+/** True for files the server can convert to PDF for inline preview. */
+export function isOffice(f: RemoteFile): boolean {
+  return OFFICE_EXTS.has(remoteFileExt(f));
+}
+
+/** Inline preview URL: PDFs render directly, Office files are converted server-side. */
+export function previewUrl(f: RemoteFile): string {
+  return isPdf(f) ? f.url : `/api/preview?url=${encodeURIComponent(f.url)}`;
+}

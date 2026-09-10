@@ -1,4 +1,5 @@
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { ASSISTANT_DIR, dataDir, assist } from "../src/paths.js";
@@ -20,6 +21,7 @@ import { enrich } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
 import { parseAiRequest } from "../src/prompt.js";
 import { launchUploadSubmit, lastSubmission, sendEnv } from "../src/send.js";
+import { officeToPdf, previewCacheDir } from "../src/office.js";
 
 const DIST = path.join(ASSISTANT_DIR, "web", "dist");
 const PORT = Number(process.env.PORT || 4174);
@@ -34,7 +36,14 @@ const MIME: Record<string, string> = {
   ".ico": "image/x-icon",
   ".pdf": "application/pdf",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".doc": "application/msword",
   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".xls": "application/vnd.ms-excel",
+  ".odt": "application/vnd.oasis.opendocument.text",
+  ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+  ".odp": "application/vnd.oasis.opendocument.presentation",
   ".zip": "application/zip",
   ".md": "text/markdown; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
@@ -69,6 +78,63 @@ function readBody(req: import("node:http").IncomingMessage): Promise<Record<stri
   });
 }
 
+/** Hosts allowed as preview sources (public LXP static CDN). Prevents SSRF. */
+const PREVIEW_ALLOWED_HOSTS = new Set(["static.plataforma.grupoa.education"]);
+const PREVIEW_MAX_BYTES = 40 * 1024 * 1024;
+
+/**
+ * Convert a remote Office/OpenDocument attachment to PDF (cached) and stream it
+ * inline so the browser can render it like any other PDF.
+ */
+async function servePreview(res: import("node:http").ServerResponse, rawUrl: string, headOnly = false): Promise<void> {
+  let target: URL;
+  try {
+    target = new URL(rawUrl);
+  } catch {
+    return json(res, 400, { error: "url inválida" });
+  }
+  if (target.protocol !== "https:" || !PREVIEW_ALLOWED_HOSTS.has(target.hostname)) {
+    return json(res, 403, { error: "host de origem não permitido" });
+  }
+
+  const cache = previewCacheDir();
+  const srcDir = path.join(cache, "src");
+  const ext = path.extname(target.pathname).replace(/^\./, "").toLowerCase();
+  const key = createHash("sha256").update(target.href).digest("hex");
+  const srcFile = path.join(srcDir, `${key}${ext ? `.${ext}` : ""}`);
+
+  try {
+    if (!existsSync(srcFile)) {
+      const r = await fetch(target.href);
+      if (!r.ok) return json(res, 502, { error: `download falhou (HTTP ${r.status})` });
+      const declared = Number(r.headers.get("content-length") ?? 0);
+      if (declared > PREVIEW_MAX_BYTES) return json(res, 413, { error: "arquivo grande demais" });
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > PREVIEW_MAX_BYTES) return json(res, 413, { error: "arquivo grande demais" });
+      mkdirSync(srcDir, { recursive: true });
+      writeFileSync(srcFile, buf);
+    }
+
+    const pdf = await officeToPdf(srcFile, cache);
+    if (!pdf) return json(res, 422, { error: "não foi possível converter o arquivo" });
+
+    const name = path.basename(target.pathname) || "preview";
+    res.writeHead(200, {
+      "content-type": "application/pdf",
+      "content-length": statSync(pdf).size,
+      "content-disposition": `inline; filename="${name.replace(/\.[a-z0-9]+$/i, ".pdf")}"`,
+      "cache-control": "private, max-age=3600",
+    });
+    if (headOnly) {
+      res.end();
+      return;
+    }
+    createReadStream(pdf).pipe(res);
+  } catch (err) {
+    return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 /** Look up an enriched, non-hidden exercise view or throw a clear error. */
 function findView(id: number) {
   const view = enrich(loadExercises(), loadAnswers(), loadOverrides()).find((x) => x.id === id && !x.hidden);
@@ -87,6 +153,11 @@ const server = createServer(async (req, res) => {
   try {
     if (url === "/api/exercises") {
       return json(res, 200, { generatedAt: new Date().toISOString(), exercises: allViews() });
+    }
+    if (url === "/api/preview" && (method === "GET" || method === "HEAD")) {
+      const src = new URL(req.url ?? "/", "http://local").searchParams.get("url") ?? "";
+      if (!src) return json(res, 400, { error: "url obrigatória" });
+      return await servePreview(res, src, method === "HEAD");
     }
     if (url === "/api/config") {
       const cfg = loadAiConfig();

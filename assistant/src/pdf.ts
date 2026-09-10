@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { isOfficeFile, officeToPdf } from "./office.js";
 
 /**
  * Extract text from a PDF file (works for text-based PDFs).
@@ -14,4 +15,17 @@ export async function extractPdfText(absPath: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Extract text from an attached file. PDFs are parsed directly; Office /
+ * OpenDocument files are converted to PDF with LibreOffice first (cached).
+ * Returns null when nothing extractable is available.
+ */
+export async function extractFileText(absPath: string): Promise<string | null> {
+  if (isOfficeFile(absPath)) {
+    const pdf = await officeToPdf(absPath);
+    return pdf ? extractPdfText(pdf) : null;
+  }
+  return extractPdfText(absPath);
 }

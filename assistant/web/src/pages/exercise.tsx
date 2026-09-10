@@ -34,8 +34,8 @@ import {
 import { useAppData } from "@/lib/app-state";
 import { fmtDeadline } from "@/lib/status";
 import { cn } from "@/lib/utils";
-import { isPdf, remoteFileName } from "@/lib/files";
-import type { AnswerState, Exercise } from "@/types";
+import { isOffice, previewUrl, remoteFileName } from "@/lib/files";
+import type { AnswerState, Exercise, RemoteFile } from "@/types";
 import { BackLink } from "@/components/app-sidebar";
 import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
 import { AccChips } from "@/components/prof-chip";
@@ -424,6 +424,68 @@ function AnswerPanel({
   );
 }
 
+function FilePreview({ file }: { file: RemoteFile }) {
+  const name = remoteFileName(file);
+  const office = isOffice(file);
+  const [state, setState] = useState<"loading" | "ready" | "error">(office ? "loading" : "ready");
+
+  useEffect(() => {
+    if (!office) return;
+    let cancelled = false;
+    fetch(previewUrl(file), { method: "HEAD" })
+      .then((r) => {
+        if (!cancelled) setState(r.ok ? "ready" : "error");
+      })
+      .catch(() => {
+        if (!cancelled) setState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [file, office]);
+
+  if (office && state === "error") {
+    return (
+      <a
+        href={file.url}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+      >
+        <Paperclip className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate">{name}</span>
+        <span className="text-xs text-muted-foreground">pré-visualização indisponível · abrir</span>
+      </a>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-md border border-border bg-muted/40">
+      <div className="flex items-center gap-2 border-b border-border/60 px-2.5 py-1.5 text-sm">
+        <Paperclip className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate">{name}</span>
+        <a
+          href={file.url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex shrink-0 items-center gap-1 text-xs text-brand underline-offset-4 hover:underline"
+        >
+          abrir
+          <ExternalLink className="size-3" aria-hidden />
+        </a>
+      </div>
+      {office && state === "loading" ? (
+        <div className="flex h-[28rem] w-full items-center justify-center gap-2 bg-white text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+          convertendo arquivo…
+        </div>
+      ) : (
+        <iframe src={previewUrl(file)} title={name} loading="lazy" className="h-[28rem] w-full bg-white" />
+      )}
+    </div>
+  );
+}
+
 function DetailSkeleton() {
   return (
     <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
@@ -540,39 +602,9 @@ export function ExercisePage() {
               badge={<span className="text-xs font-normal text-muted-foreground">({e.remoteFiles.length})</span>}
               bodyClassName="flex flex-col gap-3 p-4"
             >
-              {e.remoteFiles.map((f) => {
-                const name = remoteFileName(f);
-                return isPdf(f) ? (
-                  <div key={f.url} className="overflow-hidden rounded-md border border-border bg-muted/40">
-                    <div className="flex items-center gap-2 border-b border-border/60 px-2.5 py-1.5 text-sm">
-                      <Paperclip className="size-4 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">{name}</span>
-                      <a
-                        href={f.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex shrink-0 items-center gap-1 text-xs text-brand underline-offset-4 hover:underline"
-                      >
-                        abrir
-                        <ExternalLink className="size-3" aria-hidden />
-                      </a>
-                    </div>
-                    <iframe src={f.url} title={name} loading="lazy" className="h-[28rem] w-full bg-white" />
-                  </div>
-                ) : (
-                  <a
-                    key={f.url}
-                    href={f.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-                  >
-                    <Paperclip className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate">{name}</span>
-                    <span className="text-xs text-muted-foreground">abrir</span>
-                  </a>
-                );
-              })}
+              {e.remoteFiles.map((f) => (
+                <FilePreview key={f.url} file={f} />
+              ))}
             </CollapsibleCard>
           )}
 

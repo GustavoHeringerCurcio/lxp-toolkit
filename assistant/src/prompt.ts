@@ -1,6 +1,6 @@
 import type { AiProfile, AiRequest, Exercise } from "./types.js";
 import { DEFAULT_AI_REQUEST } from "./config.js";
-import { extractPdfText } from "./pdf.js";
+import { extractFileText } from "./pdf.js";
 
 export function isPlaceholder(value: string): boolean {
   return value.includes("{");
@@ -95,12 +95,12 @@ export async function buildPromptVars(e: Exercise, profile: AiProfile, notes = "
     const chunks: string[] = [];
     for (const f of e.files) {
       chunks.push(`--- Arquivo: ${f.name} ---`);
-      const text = await extractPdfText(f.absPath);
+      const text = await extractFileText(f.absPath);
       if (text) {
         const max = 30_000;
         chunks.push(text.length > max ? text.slice(0, max) + "\n…[truncado]" : text);
       } else {
-        chunks.push("(PDF sem texto extraível — provavelmente imagem/escaneado; veja o arquivo).");
+        chunks.push("(Arquivo sem texto extraível — provavelmente imagem/escaneado ou conversão indisponível; veja o arquivo).");
       }
     }
     if (e.remoteFiles.length) {

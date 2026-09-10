@@ -271,7 +271,7 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
                 </pre>
                 {e.kind === "upload" && e.files.length > 0 && (
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    O texto dos PDFs é extraído no servidor e inserido em {"{arquivos}"} no momento do envio.
+                    O texto dos PDFs e arquivos Office é extraído no servidor e inserido em {"{arquivos}"} no momento do envio.
                   </p>
                 )}
               </div>
