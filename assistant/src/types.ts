@@ -67,13 +67,21 @@ export interface AiConfig {
   provider: "openai";
   model: string;
   temperature: number;
-  language: string;
-  system_prompt: string;
   max_output_tokens?: number;
-  /** JSON string or plain text of the default AI request (used when no override). */
-  ai_request_default?: string;
-  /** Named prompt templates: display name -> full plain-text request. */
+  /**
+   * The entire message sent to the model, as a single `user` message. Supports
+   * {placeholders} that are filled with the activity content at generation time.
+   * This is the single source of truth — nothing else is injected.
+   */
+  message_template: string;
+  /** Named message templates: display name -> full plain-text message. */
   ai_templates?: Record<string, string>;
+  /** @deprecated ignored; kept only so old config files load without errors. */
+  language?: string;
+  /** @deprecated ignored; kept only so old config files load without errors. */
+  system_prompt?: string;
+  /** @deprecated renamed to message_template; read as a fallback. */
+  ai_request_default?: string;
 }
 
 export interface OverridesEntry {

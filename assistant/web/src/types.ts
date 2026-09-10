@@ -77,11 +77,10 @@ export interface AnswerState {
 
 export interface AiConfigDto {
   model: string;
-  language: string;
   configPath: string;
   max_output_tokens?: number;
   temperature?: number;
-  ai_request_default: string;
+  message_template: string;
   ai_templates?: Record<string, string>;
   profile: AiProfile;
 }

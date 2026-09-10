@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "LXP homework assistant — ordered exercise views + AI (pt-BR) answer generation over the scraped LXP data.",
+  "description": "LXP homework assistant — ordered exercise views + transparent AI answer generation over the scraped LXP data.",
   "engines": {
     "node": ">=22"
   },

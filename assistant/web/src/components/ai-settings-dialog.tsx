@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactElement } from "react";
-import { Check, Loader2, Save, UserRound } from "lucide-react";
-import { saveAiDefault, saveProfile } from "@/api";
+import { useNavigate } from "react-router-dom";
+import { Check, Loader2, Save, SlidersHorizontal, UserRound } from "lucide-react";
+import { saveProfile } from "@/api";
 import { useAppData } from "@/lib/app-state";
-import { rawToEditableText, renderRequestBlock, textToAiRequest, DEFAULT_PROMPT_TEXT } from "@/lib/prompt-preview";
 import {
   Sheet,
   SheetContent,
@@ -15,31 +15,17 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import type { AiProfile } from "@/types";
 
-function PlaceholderChip({ token, onClick }: { token: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded border border-brand/30 bg-brand/10 px-1.5 py-0.5 font-mono text-[11px] text-brand transition-colors hover:bg-brand/20"
-      title="inserir marcador no texto"
-    >
-      {token}
-    </button>
-  );
-}
-
 export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
-  const { cfg, patchConfig, refresh } = useAppData();
+  const { cfg, patchConfig } = useAppData();
   const profile = cfg?.profile ?? { nome: "", matricula: "" };
+  const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
   const [nome, setNome] = useState("");
   const [matricula, setMatricula] = useState("");
-  const [defaultText, setDefaultText] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -48,8 +34,7 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
     if (!open) return;
     setNome(profile.nome ?? "");
     setMatricula(profile.matricula ?? "");
-    setDefaultText(rawToEditableText(cfg?.ai_request_default ?? "") || DEFAULT_PROMPT_TEXT);
-  }, [open, profile.nome, profile.matricula, cfg?.ai_request_default]);
+  }, [open, profile.nome, profile.matricula]);
 
   useEffect(() => {
     if (open) {
@@ -58,33 +43,21 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
     }
   }, [open]);
 
-  const insertPlaceholder = (which: "nome" | "matricula") => {
-    const token = which === "nome" ? "{nome}" : "{matricula}";
-    setDefaultText((prev) => `${prev}${prev.endsWith("\n") || !prev ? "" : " "}${token}`);
-  };
-
   const saveAll = async () => {
     setBusy(true);
     setMsg(null);
     setErr(null);
     try {
-      if (!defaultText.trim()) {
-        setErr("Escreva o pedido padrão antes de salvar.");
-        return;
-      }
       const p: AiProfile = { nome: nome.trim(), matricula: matricula.trim() };
       await saveProfile(p);
-      await saveAiDefault(defaultText);
-      patchConfig({ profile: p, ai_request_default: defaultText });
-      setMsg("Perfil e padrão de IA salvos.");
+      patchConfig({ profile: p });
+      setMsg("Perfil salvo.");
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
     } finally {
       setBusy(false);
     }
   };
-
-  const preview = renderRequestBlock(textToAiRequest(defaultText), { nome, matricula });
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -93,71 +66,57 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <UserRound className="size-4 text-brand" aria-hidden />
-            Perfil & configuração de IA
+            Perfil
           </SheetTitle>
           <SheetDescription>
             Seu nome/matrícula alimentam os marcadores <code className="font-mono">{"{nome}"}</code> e{" "}
-            <code className="font-mono">{"{matricula}"}</code>. O texto abaixo é o pedido padrão para novas respostas.
+            <code className="font-mono">{"{matricula}"}</code> na mensagem enviada à IA.
           </SheetDescription>
         </SheetHeader>
 
         <div className="space-y-5">
-          <div className="space-y-2">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="ai-nome">Nome</Label>
-                <Input id="ai-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Seu nome" />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="ai-matricula">Matrícula</Label>
-                <Input
-                  id="ai-matricula"
-                  value={matricula}
-                  onChange={(e) => setMatricula(e.target.value)}
-                  placeholder="Ex.: 2023XXXXX"
-                />
-              </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="ai-nome">Nome</Label>
+              <Input id="ai-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Seu nome" />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Pronto: a IA saberá quem é você. Também dá para escrever o nome/matrícula à mão em cada atividade.
-            </p>
+            <div className="space-y-1">
+              <Label htmlFor="ai-matricula">Matrícula</Label>
+              <Input
+                id="ai-matricula"
+                value={matricula}
+                onChange={(e) => setMatricula(e.target.value)}
+                placeholder="Ex.: 2023XXXXX"
+              />
+            </div>
           </div>
 
           <Separator />
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="ai-default" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Pedido padrão
-              </Label>
-              <div className="flex items-center gap-1">
-                <PlaceholderChip token="{nome}" onClick={() => insertPlaceholder("nome")} />
-                <PlaceholderChip token="{matricula}" onClick={() => insertPlaceholder("matricula")} />
-              </div>
-            </div>
-            <Textarea
-              id="ai-default"
-              value={defaultText}
-              onChange={(e) => setDefaultText(e.target.value)}
-              rows={10}
-              placeholder="Ex.: responda como um aluno de faculdade, em português simples, sem parecer uma IA."
-              className="min-h-44 text-sm leading-relaxed"
-            />
-            {preview && (
-              <p className="rounded-md bg-muted/40 p-2 text-xs whitespace-pre-wrap text-muted-foreground">
-                <span className="font-semibold text-foreground">Prévia do que a IA recebe:</span> {preview}
-              </p>
-            )}
-            {cfg?.model && (
-              <p className="text-[11px] text-muted-foreground">Modelo atual: {cfg.model} · língua {cfg.language}</p>
-            )}
-            {msg && (
-              <p className="flex items-center gap-1.5 rounded-md border border-ok/30 bg-ok/10 px-2.5 py-1.5 text-xs text-ok">
-                <Check className="size-3.5" aria-hidden /> {msg}
-              </p>
-            )}
-            {err && <p className="text-xs text-destructive">{err}</p>}
+            <p className="text-xs text-muted-foreground">
+              O texto enviado à IA e os parâmetros de geração ficam em outras telas.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2"
+              onClick={() => {
+                setOpen(false);
+                navigate("/ajustes");
+              }}
+            >
+              <SlidersHorizontal aria-hidden />
+              Mais configurações
+            </Button>
           </div>
+
+          {msg && (
+            <p className="flex items-center gap-1.5 rounded-md border border-ok/30 bg-ok/10 px-2.5 py-1.5 text-xs text-ok">
+              <Check className="size-3.5" aria-hidden /> {msg}
+            </p>
+          )}
+          {err && <p className="text-xs text-destructive">{err}</p>}
         </div>
 
         <SheetFooter className="mt-auto">
@@ -166,7 +125,7 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
           </SheetClose>
           <Button size="sm" onClick={saveAll} disabled={busy}>
             {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-            {busy ? "Salvando…" : "Salvar perfil & padrão"}
+            {busy ? "Salvando…" : "Salvar perfil"}
           </Button>
         </SheetFooter>
       </SheetContent>

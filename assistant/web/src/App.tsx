@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AiSettingsDialog } from "@/components/ai-settings-dialog";
 import { DashboardPage } from "@/pages/dashboard";
 import { ExercisePage } from "@/pages/exercise";
+import { SettingsPage } from "@/pages/settings";
 import { ErrorState } from "@/components/state-screens";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -18,6 +19,7 @@ function Shell() {
     ? Number(location.pathname.split("/")[2])
     : null;
   const detailTitle = detailId ? items.find((x) => x.id === detailId)?.title : null;
+  const inSettings = location.pathname === "/ajustes";
 
   if (error && items.length === 0 && !loading) {
     return (
@@ -41,7 +43,7 @@ function Shell() {
           <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-5" />
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <div className="truncate font-heading text-sm font-semibold">
-              {detailId ? "Atividade" : "Minhas tarefas"}
+              {inSettings ? "Ajustes" : detailId ? "Atividade" : "Minhas tarefas"}
             </div>
             {detailTitle && (
               <>
@@ -81,6 +83,7 @@ function Shell() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/tarefa/:id" element={<ExercisePage />} />
+            <Route path="/ajustes" element={<SettingsPage />} />
             <Route
               path="*"
               element={<DashboardPage />}

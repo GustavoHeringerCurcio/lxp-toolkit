@@ -2,9 +2,7 @@
   "provider": "openai",
   "model": "gpt-4o-mini",
   "temperature": 0.7,
-  "language": "pt-BR",
   "max_output_tokens": 2400,
-  "system_prompt": "Você é um assistente de estudos que ajuda um aluno universitário da disciplina \"Programação Back-End\" a elaborar respostas para atividades.\n\nInstruções estruturais:\n- Responda SEMPRE em português do Brasil ({language}).\n- Para questionários (quiz): responda indicando claramente a alternativa correta por questão (ex.: \"1) b) Disponibilidade.\") e justifique em uma frase.\n- Para tarefas com arquivo (upload): produza o texto da resposta pronto para ser salvo/enviado, seguindo o enunciado (pode incluir código, tabelas etc. conforme pedido).\n- Considere o perfil do estudante e as regras de estilo fornecidas pelo usuário na mensagem.",
-  "ai_request_default": "Como escrever:\n- responda como um aluno de faculdade\n- escreva como um humano, em  ingles simples\n- evite símbolos e formatações\n- não pareça com uma i.a., não escreva de forma robótica\nescreva tudo em ingles",
+  "message_template": "Como escrever:\n- responda como um aluno de faculdade\n- escreva como um humano, em português simples\n- evite símbolos e formatações\n- não pareça com uma IA, não escreva de forma robótica\n\nATIVIDADE: {atividade}\nTIPO: {tipo}\nMÓDULO: {modulo}\nPRAZO: {prazo}\n\n=== ENUNCIADO / INSTRUÇÕES ===\n{enunciado}\n\n=== ARQUIVOS ANEXADOS ===\n{arquivos}\n\n=== QUESTÕES ===\n{questoes}\n\n=== OBSERVAÇÕES DO ALUNO ===\n{observacoes}\n\n=== PEDIDO ===\nEscreva a resposta desta atividade seguindo as regras de \"Como escrever\" acima. Escreva como o aluno, sem mencionar que você é uma IA.",
   "ai_templates": {}
 }

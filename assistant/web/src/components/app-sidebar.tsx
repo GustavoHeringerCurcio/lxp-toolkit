@@ -8,6 +8,7 @@ import {
   ListChecks,
   RefreshCw,
   Settings2,
+  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -118,10 +119,21 @@ export function AppSidebar() {
                   trigger={
                     <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground">
                       <Settings2 />
-                      <span>Perfil & IA</span>
+                      <span>Perfil</span>
                     </Button>
                   }
                 />
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location.pathname === "/ajustes"}
+                  tooltip="Ajustes"
+                  onClick={() => navigate("/ajustes")}
+                  className="group-data-[collapsible=icon]:!px-2"
+                >
+                  <SlidersHorizontal />
+                  <span>Ajustes</span>
+                </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>

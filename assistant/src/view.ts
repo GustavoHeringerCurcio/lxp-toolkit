@@ -1,5 +1,5 @@
 import type { AiRequest, Exercise, Answers, Overrides } from "./types.js";
-import { loadAiConfig, DEFAULT_AI_REQUEST } from "./config.js";
+import { loadAiConfig } from "./config.js";
 import { parseAiRequest } from "./prompt.js";
 
 export interface ExerciseView extends Exercise {
@@ -18,15 +18,14 @@ export interface ExerciseView extends Exercise {
 }
 
 /**
- * Resolve the effective raw AiRequest JSON for an exercise: the stored override
+ * Resolve the effective message template for an exercise: the stored override
  * (overrides[id].aiRequest) wins; otherwise the global ai-config default. When a
  * legacy plain-text `notes` exists and there is no override yet, it is folded
- * into the request's `contexto` so no prior context is silently dropped.
+ * into the template's {observacoes} slot so no prior context is silently dropped.
  */
 export function effectiveAiRequestJson(exercises: { id: number }[], overrides: Overrides): Record<string, string> {
   const cfg = loadAiConfig();
-  const defaultRaw = cfg.ai_request_default ?? JSON.stringify(DEFAULT_AI_REQUEST, null, 2);
-  const defaultParsed = parseAiRequest(defaultRaw);
+  const defaultRaw = cfg.message_template;
   const map: Record<string, string> = {};
   for (const e of exercises) {
     const o = overrides[String(e.id)] ?? {};
@@ -37,14 +36,10 @@ export function effectiveAiRequestJson(exercises: { id: number }[], overrides: O
     }
     const legacy = typeof o?.notes === "string" && o.notes.trim() ? o.notes.trim() : "";
     if (legacy) {
-      const seeded: AiRequest = {
-        ...defaultParsed,
-        perfil: defaultParsed.perfil,
-        contexto: legacy,
-        instrucoes: defaultParsed.instrucoes,
-        prompt: undefined,
-      };
-      map[key] = JSON.stringify(seeded, null, 2);
+      // Fold old free-form notes into the message template so nothing is lost.
+      map[key] = defaultRaw.includes("{observacoes}")
+        ? defaultRaw.replaceAll("{observacoes}", legacy)
+        : `${defaultRaw}\n\n${legacy}`;
       continue;
     }
     map[key] = defaultRaw;

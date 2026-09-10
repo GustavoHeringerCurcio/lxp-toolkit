@@ -1,116 +1,120 @@
-import type { AiProfile, AiRequest } from "@/types";
+import type { AiProfile, Exercise } from "@/types";
 
-export function resolvePlaceholders(text: string, profile: AiProfile): string {
+/**
+ * Default message sent to the model. Must match `DEFAULT_MESSAGE_TEMPLATE` in
+ * assistant/src/config.ts so the preview and the real request stay in sync.
+ */
+export const DEFAULT_MESSAGE_TEMPLATE = `Como escrever:
+- responda como um aluno de faculdade
+- escreva como um humano, em português simples
+- evite símbolos e formatações
+- não pareça com uma IA, não escreva de forma robótica
+
+ATIVIDADE: {atividade}
+TIPO: {tipo}
+MÓDULO: {modulo}
+PRAZO: {prazo}
+
+=== ENUNCIADO / INSTRUÇÕES ===
+{enunciado}
+
+=== ARQUIVOS ANEXADOS ===
+{arquivos}
+
+=== QUESTÕES ===
+{questoes}
+
+=== OBSERVAÇÕES DO ALUNO ===
+{observacoes}
+
+=== PEDIDO ===
+Escreva a resposta desta atividade seguindo as regras de "Como escrever" acima. Escreva como o aluno, sem mencionar que você é uma IA.`;
+
+export const PLACEHOLDERS = [
+  "{nome}",
+  "{matricula}",
+  "{atividade}",
+  "{tipo}",
+  "{modulo}",
+  "{prazo}",
+  "{enunciado}",
+  "{arquivos}",
+  "{questoes}",
+  "{observacoes}",
+] as const;
+
+export interface PromptVars {
+  nome: string;
+  matricula: string;
+  atividade: string;
+  tipo: string;
+  modulo: string;
+  prazo: string;
+  enunciado: string;
+  arquivos: string;
+  questoes: string;
+  observacoes: string;
+}
+
+/** Replace every supported {placeholder} in the message template. */
+export function renderTemplate(text: string, vars: PromptVars): string {
   return text
-    .replaceAll("{nome}", profile.nome || "")
-    .replaceAll("{matricula}", profile.matricula || "")
+    .replaceAll("{nome}", vars.nome)
+    .replaceAll("{matricula}", vars.matricula)
+    .replaceAll("{atividade}", vars.atividade)
+    .replaceAll("{tipo}", vars.tipo)
+    .replaceAll("{modulo}", vars.modulo)
+    .replaceAll("{prazo}", vars.prazo)
+    .replaceAll("{enunciado}", vars.enunciado)
+    .replaceAll("{arquivos}", vars.arquivos)
+    .replaceAll("{questoes}", vars.questoes)
+    .replaceAll("{observacoes}", vars.observacoes)
     .trim();
 }
 
-const FALLBACK_INSTRUCOES = [
-  "responda como um aluno de faculdade",
-  "escreva como um humano, em português simples",
-  "evite símbolos e formatações",
-  "não pareça com uma i.a., não escreva de forma robótica",
-];
+/** Placeholder values for one exercise. PDF bodies are only known server-side. */
+export function buildVars(e: Exercise, profile: AiProfile, notes = ""): PromptVars {
+  const tipo = e.kind === "upload" ? "tarefa com envio de arquivo" : "questionário/quiz";
+  const modulo = e.moduleTitle + (e.sectionTitle ? ` — ${e.sectionTitle}` : "");
 
-/** Friendly plain-text version of the built-in default request. */
-export const DEFAULT_PROMPT_TEXT = ["Como escrever:", ...FALLBACK_INSTRUCOES.map((i) => `- ${i}`)].join("\n");
+  let arquivos = "";
+  if (e.kind === "upload") {
+    const chunks = e.files.map(
+      (f) => `--- Arquivo: ${f.name} ---\n(texto do PDF é extraído no momento do envio)`,
+    );
+    if (e.remoteFiles.length) {
+      chunks.push(
+        `Links dos arquivos no portal:\n${e.remoteFiles.map((r) => `- ${r.filename ?? r.url} (${r.url})`).join("\n")}`,
+      );
+    }
+    arquivos = chunks.join("\n");
+  }
 
-/**
- * Parse a stored AiRequest for the editor. Accepts legacy JSON or a plain-text
- * prompt; plain text is wrapped in `prompt`. Returns null only when empty.
- */
-export function tryParseAiRequest(raw: string): AiRequest | null {
-  if (!raw || !raw.trim()) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { perfil: "", instrucoes: [], contexto: "", prompt: raw.trim() };
+  let questoes = "";
+  if (e.kind === "quiz" && e.questions.length) {
+    const lines: string[] = [];
+    for (const q of e.questions) {
+      lines.push(`Q${q.id}: ${q.text}`);
+      q.options.forEach((opt, i) => lines.push(`   ${String.fromCharCode(97 + i)}) ${opt}`));
+    }
+    questoes = lines.join("\n");
   }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return { perfil: "", instrucoes: [], contexto: "", prompt: raw.trim() };
-  }
-  const o = parsed as Record<string, unknown>;
-  const str = (v: unknown): string => (typeof v === "string" ? v : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : "");
-  const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map((i) => str(i)).filter(Boolean) : []);
-  const instrucoes = arr(o.instrucoes);
-  const prompt = str(o.prompt).trim();
+
   return {
-    perfil: str(o.perfil),
-    instrucoes: instrucoes.length ? instrucoes : [...FALLBACK_INSTRUCOES],
-    contexto: str(o.contexto),
-    ...(prompt ? { prompt } : {}),
+    nome: profile.nome ?? "",
+    matricula: profile.matricula ?? "",
+    atividade: e.title,
+    tipo,
+    modulo,
+    prazo: e.deadlineAt ?? "",
+    enunciado: e.instructionsText ?? "",
+    arquivos,
+    questoes,
+    observacoes: notes,
   };
 }
 
-/**
- * Render an AiRequest into the editable, human-friendly text shown in the UI.
- * Placeholders are intentionally left unresolved so `{nome}`/`{matricula}`
- * stay visible and keep working.
- */
-export function aiRequestToText(req: AiRequest): string {
-  if (req.prompt?.trim()) return req.prompt;
-  const lines: string[] = [];
-  if (req.perfil.trim()) lines.push(`Quem sou: ${req.perfil.trim()}`);
-  if (req.instrucoes.length) {
-    lines.push("Como escrever:");
-    for (const ins of req.instrucoes) lines.push(`- ${ins}`);
-  }
-  if (req.contexto.trim()) lines.push(`Contexto extra:\n${req.contexto.trim()}`);
-  return lines.join("\n");
-}
-
-/** Convert any stored raw AiRequest (JSON or plain text) into editable text. */
-export function rawToEditableText(raw: string): string {
-  const parsed = tryParseAiRequest(raw);
-  return parsed ? aiRequestToText(parsed) : "";
-}
-
-/** Wrap free-form editor text into an AiRequest for previews. */
-export function textToAiRequest(text: string): AiRequest {
-  return { perfil: "", instrucoes: [], contexto: "", prompt: text };
-}
-
-/** Render the AiRequest "aluno" block exactly like the server does. */
-export function renderRequestBlock(req: AiRequest, profile: AiProfile): string {
-  if (req.prompt?.trim()) return resolvePlaceholders(req.prompt, profile);
-  const lines: string[] = [];
-  const perfil = resolvePlaceholders(req.perfil, profile);
-  if (perfil) lines.push(`Quem sou: ${perfil}`);
-  if (req.instrucoes.length) {
-    lines.push("Como escrever:");
-    for (const ins of req.instrucoes) lines.push(`- ${resolvePlaceholders(ins, profile)}`);
-  }
-  const contexto = resolvePlaceholders(req.contexto, profile);
-  if (contexto) lines.push(`Contexto extra:\n${contexto}`);
-  return lines.join("\n");
-}
-
-/** Full preview (no PDF bodies) of what the model sees for a given exercise. */
-export function renderPromptPreview(opts: {
-  kind: "upload" | "quiz";
-  title: string;
-  moduleLabel: string;
-  hasInstructions: boolean;
-  fileCount: number;
-  questionCount: number;
-  req: AiRequest;
-  profile: AiProfile;
-}): string {
-  const { kind, title, moduleLabel, hasInstructions, fileCount, questionCount, req, profile } = opts;
-  const out: string[] = [];
-  const block = renderRequestBlock(req, profile);
-  if (block) out.push(block);
-  out.push("");
-  out.push(`ATIVIDADE: ${title}`);
-  out.push(`TIPO: ${kind === "upload" ? "tarefa com envio de arquivo" : "questionário/quiz"}`);
-  out.push(`MÓDULO: ${moduleLabel}`);
-  if (hasInstructions) out.push("ENUNCIADO: (texto da atividade)");
-  if (kind === "upload" && fileCount) out.push(`ARQUIVOS ANEXADOS: ${fileCount} arquivo(s) — texto extraído de cada PDF`);
-  if (kind === "quiz" && questionCount) out.push(`QUESTÕES: ${questionCount} questão(ões) com alternativas`);
-  out.push("");
-  out.push('SOLICITAÇÃO: Elabore a resposta seguindo o "Como escrever" acima.');
-  return out.join("\n");
+/** The exact message the model will receive for this exercise (PDF bodies omitted). */
+export function renderPreviewMessage(template: string, e: Exercise, profile: AiProfile): string {
+  return renderTemplate(template, buildVars(e, profile));
 }

@@ -6,7 +6,7 @@ import { extractPdfText } from "../src/pdf.js";
 import { generateAnswer } from "../src/ai.js";
 import { exportAnswer } from "../src/export.js";
 import { assist } from "../src/paths.js";
-import { parseAiRequest, renderRequestBlock } from "../src/prompt.js";
+import { parseAiRequest } from "../src/prompt.js";
 import { isTTY, color, typeChip, deadlineChip, deadlineLabel, contextLine, icon } from "./render.js";
 
 function usage(): void {
@@ -103,9 +103,8 @@ async function answerCmd(id: number, modelOverride?: string): Promise<void> {
     process.exit(1);
   }
   const profile = loadProfile();
-  const block = renderRequestBlock(parseAiRequest(v.aiRequestJson), profile);
   console.log(`\n🤖 Gerando resposta (modelo: ${cfg.model}) para "${v.title}"…\n`);
-  const text = await generateAnswer(cfg, v, block, {
+  const text = await generateAnswer(cfg, v, v.aiRequestJson, profile, {
     onDelta: (d) => process.stdout.write(d),
   });
   console.log(`\n`);
@@ -161,8 +160,9 @@ async function pdfCmd(id: number): Promise<void> {
 function configCmd(): void {
   const cfg = loadAiConfig();
   console.log(`AI config → ${assist("config", "ai-config.json")}`);
-  console.log(`  model: ${cfg.model} | language: ${cfg.language} | temperature: ${cfg.temperature}`);
-  console.log(`system_prompt: (editável) ${cfg.system_prompt.slice(0, 80)}…`);
+  console.log(`  model: ${cfg.model} | temperature: ${cfg.temperature} | max_output_tokens: ${cfg.max_output_tokens ?? 2200}`);
+  console.log(`message_template (editável):`);
+  console.log(cfg.message_template);
 }
 
 async function main(): Promise<void> {

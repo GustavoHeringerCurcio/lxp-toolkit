@@ -15,11 +15,10 @@ import {
   getAnswerRecord,
   restoreAnswerVersion,
   clearAnswerHistory,
-  defaultAiRequestJson,
 } from "../src/config.js";
 import { enrich } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
-import { parseAiRequest, renderRequestBlock } from "../src/prompt.js";
+import { parseAiRequest } from "../src/prompt.js";
 import { launchUploadSubmit, lastSubmission, sendEnv } from "../src/send.js";
 
 const DIST = path.join(ASSISTANT_DIR, "web", "dist");
@@ -81,11 +80,6 @@ function allViews() {
   return enrich(loadExercises(), loadAnswers(), loadOverrides()).filter((v) => !v.hidden);
 }
 
-function buildRequestBlockFor(view: ReturnType<typeof allViews>[number]): string {
-  const profile = loadProfile();
-  return renderRequestBlock(parseAiRequest(view.aiRequestJson), profile);
-}
-
 const server = createServer(async (req, res) => {
   const url = (req.url ?? "/").split("?")[0];
   const method = req.method ?? "GET";
@@ -98,11 +92,10 @@ const server = createServer(async (req, res) => {
       const cfg = loadAiConfig();
       return json(res, 200, {
         model: cfg.model,
-        language: cfg.language,
         max_output_tokens: cfg.max_output_tokens,
         temperature: cfg.temperature,
         configPath: assist("config", "ai-config.json"),
-        ai_request_default: cfg.ai_request_default ?? defaultAiRequestJson(),
+        message_template: cfg.message_template,
         ai_templates: cfg.ai_templates ?? {},
         profile: loadProfile(),
       });
@@ -212,13 +205,34 @@ const server = createServer(async (req, res) => {
         });
         return json(res, 200, { ok: true });
       }
-      if (url === "/api/ai-default") {
+      if (url === "/api/message-template") {
         const b = await readBody(req);
         const raw = String(b.raw ?? "");
         parseAiRequest(raw); // validate (accepts JSON or plain text)
         const cfg = loadAiConfig();
-        saveAiConfig({ ...cfg, ai_request_default: raw });
+        saveAiConfig({ ...cfg, message_template: raw });
         return json(res, 200, { ok: true });
+      }
+      if (url === "/api/ai-config") {
+        const b = await readBody(req);
+        const cfg = loadAiConfig();
+        const next = { ...cfg };
+        if (b.model != null) next.model = String(b.model).trim() || cfg.model;
+        if (b.temperature != null) {
+          const t = Number(b.temperature);
+          if (!Number.isNaN(t)) next.temperature = t;
+        }
+        if (b.max_output_tokens != null) {
+          const m = Number(b.max_output_tokens);
+          if (!Number.isNaN(m) && m > 0) next.max_output_tokens = m;
+        }
+        saveAiConfig(next);
+        return json(res, 200, {
+          ok: true,
+          model: next.model,
+          temperature: next.temperature,
+          max_output_tokens: next.max_output_tokens,
+        });
       }
       if (url === "/api/ai-templates") {
         const b = await readBody(req);
@@ -243,7 +257,7 @@ const server = createServer(async (req, res) => {
         const id = Number(b.id);
         const view = findView(id);
         const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
-        const answer = await generateAnswer(cfg, view, buildRequestBlockFor(view));
+        const answer = await generateAnswer(cfg, view, view.aiRequestJson, loadProfile());
         const rec = saveAnswerVersion(id, answer, "ai");
         return json(res, 200, { answer, current: rec, history: rec.history, updatedAt: rec.updatedAt });
       }
@@ -262,7 +276,7 @@ const server = createServer(async (req, res) => {
         const sendEvent = (payload: unknown) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
         sendEvent({ type: "start" });
         try {
-          const answer = await generateAnswer(cfg, view, buildRequestBlockFor(view), {
+          const answer = await generateAnswer(cfg, view, view.aiRequestJson, loadProfile(), {
             onDelta: (delta) => {
               sendEvent({ type: "delta", delta });
               if (typeof (res as import("node:http").ServerResponse & { flush?: () => void }).flush === "function") {

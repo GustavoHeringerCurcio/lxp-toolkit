@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { isPdf, remoteFileName } from "@/lib/files";
 import type { AnswerState, Exercise } from "@/types";
 import { BackLink } from "@/components/app-sidebar";
+import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
 import { AccChips } from "@/components/prof-chip";
 import { AiRequestPanel } from "@/components/ai-request-panel";
 import { StatusBadge, TypeBadge } from "@/components/status-badges";
@@ -231,11 +232,14 @@ function AnswerPanel({
   const canSend = isUpload && e.status !== "done" && Boolean(sendCfg?.enabled) && Boolean(draft.trim()) && !sending;
 
   return (
-    <section className="rounded-xl border border-border bg-card xl:flex xl:h-full xl:min-h-0 xl:flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-4 py-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Sparkles className="size-4 shrink-0 text-brand" aria-hidden />
-          <h3 className="font-heading text-sm font-semibold">Resposta</h3>
+    <CollapsibleCard
+      id="resposta"
+      icon={<Sparkles className="size-4 shrink-0 text-brand" aria-hidden />}
+      title="Resposta"
+      className="xl:flex xl:h-full xl:min-h-0 xl:flex-col data-[open=false]:xl:h-auto"
+      bodyClassName="flex-1 min-h-0 space-y-3 overflow-y-auto p-4"
+      badge={
+        <>
           {current && (
             <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
               salvo {fmtVersionDate(current.updatedAt)} · {current.source === "ai" ? "IA" : "manual"}
@@ -244,9 +248,10 @@ function AnswerPanel({
           {e.status === "done" && (
             <span className="rounded-full bg-ok/15 px-2 py-0.5 text-[10px] font-medium text-ok">concluída no portal</span>
           )}
-        </div>
-
-        {(current || sortedHistory.length > 0) && (
+        </>
+      }
+      actions={
+        (current || sortedHistory.length > 0) && (
           <DropdownMenu>
             <DropdownMenuTrigger
               render={<Button variant="outline" size="xs" className="gap-1.5" aria-label="histórico de versões" />}
@@ -288,10 +293,51 @@ function AnswerPanel({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
-      </div>
+        )
+      }
+      footer={
+        <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-border/60 bg-card px-4 py-3">
+          <Button size="sm" onClick={generate} disabled={busy}>
+            {busy ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+            {busy ? "Gerando…" : current ? "Regenerar (nova versão)" : "Gerar com IA"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={save} disabled={busy || !draft.trim()}>
+            {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
+            Salvar resposta
+          </Button>
+          <Button variant="ghost" size="sm" onClick={copy} disabled={!draft.trim()}>
+            <Copy aria-hidden />
+            copiar
+          </Button>
+          {current?.answer && (
+            <a className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/api/export/${e.id}`}>
+              <Download aria-hidden />
+              .md
+            </a>
+          )}
 
-      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto p-4">
+          {isUpload ? (
+            <Button
+              variant="default"
+              size="sm"
+              className="ml-auto"
+              onClick={() => {
+                setSendErr(null);
+                setSendOpen((v) => !v);
+              }}
+              disabled={!canSend}
+            >
+              <Send aria-hidden />
+              Enviar no portal
+            </Button>
+          ) : (
+            <span className="ml-auto text-xs text-muted-foreground">
+              Questionário: responda no portal — aqui você gera e salva o texto.
+            </span>
+          )}
+        </div>
+      }
+    >
         <Textarea
           value={draft}
           onChange={(ev) => setDraft(ev.target.value)}
@@ -374,49 +420,7 @@ function AnswerPanel({
             </div>
           </div>
         )}
-      </div>
-
-      <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-border/60 bg-card px-4 py-3">
-        <Button size="sm" onClick={generate} disabled={busy}>
-          {busy ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
-          {busy ? "Gerando…" : current ? "Regenerar (nova versão)" : "Gerar com IA"}
-        </Button>
-        <Button variant="outline" size="sm" onClick={save} disabled={busy || !draft.trim()}>
-          {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-          Salvar resposta
-        </Button>
-        <Button variant="ghost" size="sm" onClick={copy} disabled={!draft.trim()}>
-          <Copy aria-hidden />
-          copiar
-        </Button>
-        {current?.answer && (
-          <a className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/api/export/${e.id}`}>
-            <Download aria-hidden />
-            .md
-          </a>
-        )}
-
-        {isUpload ? (
-          <Button
-            variant="default"
-            size="sm"
-            className="ml-auto"
-            onClick={() => {
-              setSendErr(null);
-              setSendOpen((v) => !v);
-            }}
-            disabled={!canSend}
-          >
-            <Send aria-hidden />
-            Enviar no portal
-          </Button>
-        ) : (
-          <span className="ml-auto text-xs text-muted-foreground">
-            Questionário: responda no portal — aqui você gera e salva o texto.
-          </span>
-        )}
-      </div>
-    </section>
+    </CollapsibleCard>
   );
 }
 
@@ -442,6 +446,7 @@ export function ExercisePage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [regenToken, setRegenToken] = useState(0);
+  const headerCard = useCardCollapse("resumo");
 
   const exerciseId = Number(id);
   const e = items.find((x) => x.id === exerciseId) ?? null;
@@ -492,109 +497,109 @@ export function ExercisePage() {
         <div className="space-y-4 min-w-0">
           <header className="overflow-hidden rounded-xl border border-border bg-card">
             <span className="pointer-events-none block h-0.5 bg-gradient-to-r from-brand via-brand-2 to-teal" aria-hidden />
-            <div className="space-y-3 p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <TypeBadge kind={e.kind} />
-                <StatusBadge e={e} />
-                {e.deadlineAt && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock className="size-3" aria-hidden />
-                    prazo {fmtDeadline(e.deadlineAt)}
-                  </span>
-                )}
-                <span className="ml-auto" />
-                <a
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                  href={`https://unifoa2.grupoa.education/plataforma/course/${e.courseId}/content/${e.id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  abrir no portal
-                  <ExternalLink className="size-3" aria-hidden />
-                </a>
-              </div>
-              <div>
+            <div className={cn("flex flex-wrap items-center gap-2 p-5", headerCard.open && "pb-0")}>
+              <TypeBadge kind={e.kind} />
+              <StatusBadge e={e} />
+              {e.deadlineAt && (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="size-3" aria-hidden />
+                  prazo {fmtDeadline(e.deadlineAt)}
+                </span>
+              )}
+              <span className="ml-auto" />
+              <a
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+                href={`https://unifoa2.grupoa.education/plataforma/course/${e.courseId}/content/${e.id}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                abrir no portal
+                <ExternalLink className="size-3" aria-hidden />
+              </a>
+              <CollapseButton open={headerCard.open} onToggle={headerCard.toggle} label="Recolher detalhes" />
+            </div>
+            {headerCard.open && (
+              <div className="space-y-3 p-5 pt-3">
                 <h1 className="font-heading text-xl font-semibold leading-snug text-balance">{e.title}</h1>
-                <AccChips professor={e.professor} moduleName={e.moduleName} className="mt-2" />
+                <AccChips professor={e.professor} moduleName={e.moduleName} />
                 {e.sectionTitle && <p className="mt-1 text-xs text-muted-foreground">{e.sectionTitle}</p>}
               </div>
-            </div>
+            )}
           </header>
 
           {e.instructionsText && (
-            <section className="rounded-xl border border-border bg-card">
-              <h2 className="border-b border-border/60 px-4 py-3 font-heading text-sm font-semibold">Enunciado</h2>
-              <p className="whitespace-pre-wrap p-4 text-sm leading-relaxed text-foreground/90">{e.instructionsText}</p>
-            </section>
+            <CollapsibleCard id="enunciado" title="Enunciado" bodyClassName="p-4">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{e.instructionsText}</p>
+            </CollapsibleCard>
           )}
 
           {e.remoteFiles.length > 0 && (
-            <section className="rounded-xl border border-border bg-card">
-              <h2 className="border-b border-border/60 px-4 py-3 font-heading text-sm font-semibold">
-                Arquivos ({e.remoteFiles.length})
-              </h2>
-              <div className="flex flex-col gap-3 p-4">
-                {e.remoteFiles.map((f) => {
-                  const name = remoteFileName(f);
-                  return isPdf(f) ? (
-                    <div key={f.url} className="overflow-hidden rounded-md border border-border bg-muted/40">
-                      <div className="flex items-center gap-2 border-b border-border/60 px-2.5 py-1.5 text-sm">
-                        <Paperclip className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate">{name}</span>
-                        <a
-                          href={f.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex shrink-0 items-center gap-1 text-xs text-brand underline-offset-4 hover:underline"
-                        >
-                          abrir
-                          <ExternalLink className="size-3" aria-hidden />
-                        </a>
-                      </div>
-                      <iframe src={f.url} title={name} loading="lazy" className="h-[28rem] w-full bg-white" />
-                    </div>
-                  ) : (
-                    <a
-                      key={f.url}
-                      href={f.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-                    >
+            <CollapsibleCard
+              id="arquivos"
+              title="Arquivos"
+              badge={<span className="text-xs font-normal text-muted-foreground">({e.remoteFiles.length})</span>}
+              bodyClassName="flex flex-col gap-3 p-4"
+            >
+              {e.remoteFiles.map((f) => {
+                const name = remoteFileName(f);
+                return isPdf(f) ? (
+                  <div key={f.url} className="overflow-hidden rounded-md border border-border bg-muted/40">
+                    <div className="flex items-center gap-2 border-b border-border/60 px-2.5 py-1.5 text-sm">
                       <Paperclip className="size-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">{name}</span>
-                      <span className="text-xs text-muted-foreground">abrir</span>
-                    </a>
-                  );
-                })}
-              </div>
-            </section>
+                      <a
+                        href={f.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex shrink-0 items-center gap-1 text-xs text-brand underline-offset-4 hover:underline"
+                      >
+                        abrir
+                        <ExternalLink className="size-3" aria-hidden />
+                      </a>
+                    </div>
+                    <iframe src={f.url} title={name} loading="lazy" className="h-[28rem] w-full bg-white" />
+                  </div>
+                ) : (
+                  <a
+                    key={f.url}
+                    href={f.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <Paperclip className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">{name}</span>
+                    <span className="text-xs text-muted-foreground">abrir</span>
+                  </a>
+                );
+              })}
+            </CollapsibleCard>
           )}
 
           {!isUpload && e.questions.length > 0 && (
-            <section className="rounded-xl border border-border bg-card">
-              <h2 className="border-b border-border/60 px-4 py-3 font-heading text-sm font-semibold">
-                Questões ({e.questions.length})
-              </h2>
-              <div className="space-y-2 p-4">
-                {e.questions.map((q, qi) => (
-                  <div key={q.id} className="rounded-md border border-border bg-muted/25 p-3">
-                    <div className="mb-1 inline-flex size-5 items-center justify-center rounded-full bg-brand/20 text-[11px] font-bold text-brand">
-                      {qi + 1}
-                    </div>
-                    <p className="text-sm leading-relaxed">{q.text}</p>
-                    <div className="mt-1.5 space-y-0.5">
-                      {q.options.map((o, i) => (
-                        <div key={i} className="pl-1 text-[13px] text-muted-foreground">
-                          <span className="mr-1.5 font-semibold text-foreground/70">{String.fromCharCode(97 + i)})</span>
-                          {o}
-                        </div>
-                      ))}
-                    </div>
+            <CollapsibleCard
+              id="questoes"
+              title="Questões"
+              badge={<span className="text-xs font-normal text-muted-foreground">({e.questions.length})</span>}
+              bodyClassName="space-y-2 p-4"
+            >
+              {e.questions.map((q, qi) => (
+                <div key={q.id} className="rounded-md border border-border bg-muted/25 p-3">
+                  <div className="mb-1 inline-flex size-5 items-center justify-center rounded-full bg-brand/20 text-[11px] font-bold text-brand">
+                    {qi + 1}
                   </div>
-                ))}
-              </div>
-            </section>
+                  <p className="text-sm leading-relaxed">{q.text}</p>
+                  <div className="mt-1.5 space-y-0.5">
+                    {q.options.map((o, i) => (
+                      <div key={i} className="pl-1 text-[13px] text-muted-foreground">
+                        <span className="mr-1.5 font-semibold text-foreground/70">{String.fromCharCode(97 + i)})</span>
+                        {o}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </CollapsibleCard>
           )}
 
           <AiRequestPanel e={e} onSaved={() => setRegenToken((t) => t + 1)} />

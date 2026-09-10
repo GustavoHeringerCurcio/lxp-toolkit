@@ -12,35 +12,60 @@ import type {
   Submissions,
 } from "./types.js";
 
+/**
+ * The default message sent to the model. It is one single message: the style
+ * rules AND the activity content, with {placeholders} filled in at generation
+ * time. The user sees and can edit this whole thing — nothing is hidden.
+ */
+export const DEFAULT_MESSAGE_TEMPLATE = `Como escrever:
+- responda como um aluno de faculdade
+- escreva como um humano, em português simples
+- evite símbolos e formatações
+- não pareça com uma IA, não escreva de forma robótica
+
+ATIVIDADE: {atividade}
+TIPO: {tipo}
+MÓDULO: {modulo}
+PRAZO: {prazo}
+
+=== ENUNCIADO / INSTRUÇÕES ===
+{enunciado}
+
+=== ARQUIVOS ANEXADOS ===
+{arquivos}
+
+=== QUESTÕES ===
+{questoes}
+
+=== OBSERVAÇÕES DO ALUNO ===
+{observacoes}
+
+=== PEDIDO ===
+Escreva a resposta desta atividade seguindo as regras de "Como escrever" acima. Escreva como o aluno, sem mencionar que você é uma IA.`;
+
 export const DEFAULT_AI_REQUEST: AiRequest = {
   perfil: "",
   instrucoes: [
     "responda como um aluno de faculdade",
     "escreva como um humano, em português simples",
     "evite símbolos e formatações",
-    "não pareça com uma i.a., não escreva de forma robótica",
+    "não pareça com uma IA, não escreva de forma robótica",
   ],
   contexto: "",
+  prompt: DEFAULT_MESSAGE_TEMPLATE,
 };
 
 export function defaultAiRequestJson(): string {
-  return JSON.stringify(DEFAULT_AI_REQUEST, null, 2);
+  return DEFAULT_MESSAGE_TEMPLATE;
 }
 
 const DEFAULT_AI_CONFIG: AiConfig = {
   provider: "openai",
   model: "gpt-4o-mini",
   temperature: 0.7,
-  language: "pt-BR",
   max_output_tokens: 2400,
-  system_prompt: `Você é um assistente de estudos que ajuda um aluno universitário da disciplina "Programação Back-End" a elaborar respostas para atividades.
-
-Instruções estruturais:
-- Responda SEMPRE em português do Brasil ({language}).
-- Para questionários (quiz): responda indicando claramente a alternativa correta por questão (ex.: "1) b) Disponibilidade.") e justifique em uma frase.
-- Para tarefas com arquivo (upload): produza o texto da resposta pronto para ser salvo/enviado, seguindo o enunciado (pode incluir código, tabelas etc. conforme pedido).
-- Considere o perfil do estudante e as regras de estilo fornecidas pelo usuário na mensagem.`,
-  ai_request_default: defaultAiRequestJson(),
+  message_template: DEFAULT_MESSAGE_TEMPLATE,
+  ai_templates: {},
 };
 
 export function openaiKey(): string {
@@ -57,7 +82,13 @@ export function loadAiConfig(): AiConfig {
   const file = assist("config", "ai-config.json");
   if (!existsSync(file)) return DEFAULT_AI_CONFIG;
   try {
-    return { ...DEFAULT_AI_CONFIG, ...(JSON.parse(readFileSync(file, "utf-8")) as Partial<AiConfig>) };
+    const raw = JSON.parse(readFileSync(file, "utf-8")) as Partial<AiConfig>;
+    return {
+      ...DEFAULT_AI_CONFIG,
+      ...raw,
+      message_template:
+        raw.message_template ?? raw.ai_request_default ?? DEFAULT_AI_CONFIG.message_template,
+    };
   } catch {
     return DEFAULT_AI_CONFIG;
   }
