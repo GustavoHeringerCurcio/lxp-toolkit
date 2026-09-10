@@ -22,9 +22,13 @@ npm run index            # build data/exercises.json from ../docs (run the study
 ```
 
 Everything editable by hand lives in `assistant/config/`:
-- **`ai-config.json`** → `model`, `temperature`, `language`, `max_output_tokens`, and the
-  **`system_prompt`** (edit freely; `{language}` is replaced at runtime).
-- **`overrides.json`** → per-exercise `notes` (context for the AI), `hide`, `tag`, `manualStatus`.
+- **`ai-config.json`** → `model`, `temperature`, `language`, `max_output_tokens`,
+  **`system_prompt`** (edit freely; `{language}` is replaced at runtime) and
+  **`ai_request_default`** (JSON that seeds how the AI should answer each activity).
+- **`profile.json`** → your `nome` / `matricula` (filled once in the web UI; feeds the
+  `{nome}` / `{matricula}` placeholders).
+- **`overrides.json`** → per-exercise `aiRequest` (custom JSON prompt), `hide`, `tag`,
+  `manualStatus`.
 
 ## Terminal
 
@@ -46,9 +50,13 @@ npm run assistant -- send <id>           # ⚠ not available yet (submit endpoin
 npm run web        # builds + serves → http://localhost:4174
 ```
 
-- **List** ordered by deadline with badges (green done / red expired / amber due soon).
-- **Activity detail**: instructions, files (PDFs open in the browser via `/docs/…`), quiz
-  questions, notes box, and an **AI panel** that generates the answer, with Copy / Download .md.
+- **List** ordered by deadline with badges (green done / red expired / amber due soon). Each card
+  has a quick-action menu (Gerar com IA, abrir no portal, copiar link, baixar resposta).
+- **Activity detail** (`/tarefa/:id`): instructions, files (PDFs open via `/docs/…`), quiz
+  questions, an **"O que a IA recebe"** JSON editor (per-activity control of the AI prompt, with
+  `{nome}` / `{matricula}` placeholders + live preview), and an **answer workbench** that streams
+  the AI answer and keeps a **version history** (regenerate keeps previous drafts).
+- **Perfil & IA** (menu / header) sets your name/matrícula and the global default AI prompt.
 - Config shown in the header (edit `config/ai-config.json` to change the model).
 
 ## Data model
@@ -63,7 +71,9 @@ Every exercise is one of:
 
 ## AI answers
 
-Prompt = `system_prompt` + instructions + PDF text (text-based PDFs) or quiz questions + your
-notes → answer in **pt-BR**, natural, student-like. Save/copy it and submit what you'll stand
-behind — auto-submit endpoints are intentionally not wired (they're not captured yet and would
-consume real attempts).
+Prompt = `system_prompt` + the exercise's **AI request JSON** (identity, style instructions and
+context you control per activity or globally) + instructions + PDF text (text-based PDFs) or quiz
+questions. `{nome}` / `{matricula}` in the JSON are replaced from `config/profile.json`. Every
+generation saves a **new version** (history kept in `data/answers.json`); you can restore any of
+them before sending. Copy / download it and submit what you'll stand behind — auto-submit
+endpoints are not wired by default.

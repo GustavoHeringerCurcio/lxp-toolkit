@@ -7,11 +7,19 @@ import {
   loadAiConfig,
   loadAnswers,
   loadOverrides,
-  saveAnswer,
   saveOverrides,
+  saveProfile,
+  loadProfile,
+  saveAiConfig,
+  saveAnswerVersion,
+  getAnswerRecord,
+  restoreAnswerVersion,
+  clearAnswerHistory,
+  defaultAiRequestJson,
 } from "../src/config.js";
 import { enrich } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
+import { parseAiRequest, renderRequestBlock } from "../src/prompt.js";
 import { launchUploadSubmit, lastSubmission, sendEnv } from "../src/send.js";
 
 const DIST = path.join(ASSISTANT_DIR, "web", "dist");
@@ -62,137 +70,253 @@ function readBody(req: import("node:http").IncomingMessage): Promise<Record<stri
   });
 }
 
+/** Look up an enriched, non-hidden exercise view or throw a clear error. */
+function findView(id: number) {
+  const view = enrich(loadExercises(), loadAnswers(), loadOverrides()).find((x) => x.id === id && !x.hidden);
+  if (!view) throw new Error(`exercício ${id} não encontrado`);
+  return view;
+}
+
+function allViews() {
+  return enrich(loadExercises(), loadAnswers(), loadOverrides()).filter((v) => !v.hidden);
+}
+
+function buildRequestBlockFor(view: ReturnType<typeof allViews>[number]): string {
+  const profile = loadProfile();
+  return renderRequestBlock(parseAiRequest(view.aiRequestJson), profile);
+}
+
 const server = createServer(async (req, res) => {
   const url = (req.url ?? "/").split("?")[0];
   const method = req.method ?? "GET";
 
-  // data for the app
-  const allViews = () => enrich(loadExercises(), loadAnswers(), loadOverrides()).filter((v) => !v.hidden);
-  if (url === "/api/exercises") {
-    try {
+  try {
+    if (url === "/api/exercises") {
       return json(res, 200, { generatedAt: new Date().toISOString(), exercises: allViews() });
-    } catch (err) {
-      return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
     }
-  }
-  if (url === "/api/config") {
-    const cfg = loadAiConfig();
-    return json(res, 200, { model: cfg.model, language: cfg.language, configPath: assist("config", "ai-config.json") });
-  }
+    if (url === "/api/config") {
+      const cfg = loadAiConfig();
+      return json(res, 200, {
+        model: cfg.model,
+        language: cfg.language,
+        max_output_tokens: cfg.max_output_tokens,
+        temperature: cfg.temperature,
+        configPath: assist("config", "ai-config.json"),
+        ai_request_default: cfg.ai_request_default ?? defaultAiRequestJson(),
+        profile: loadProfile(),
+      });
+    }
+    if (url === "/api/profile" && method === "GET") {
+      return json(res, 200, loadProfile());
+    }
 
-  // portal send support
-  if (url === "/api/send/config") {
-    const env = sendEnv();
-    return json(res, 200, { enabled: env.enabled, reason: env.reason });
-  }
-  if (url.startsWith("/api/send/preview")) {
-    const id = Number(new URL(req.url ?? "/", "http://local").searchParams.get("id"));
-    const view = allViews().find((x) => x.id === id);
-    if (!view) return json(res, 404, { error: `exercise ${id} not found` });
-    const canSubmit = view.kind === "upload" && view.status !== "done";
-    return json(res, 200, {
-      ok: canSubmit,
-      reason: !canSubmit
-        ? view.status === "done"
-          ? "Esta atividade já está concluída."
-          : "Só é possível enviar por aqui tarefas do tipo arquivo (upload). Questionários precisam ser respondidos no portal."
-        : "",
-      kind: view.kind,
-      title: view.title,
-      courseName: view.courseName,
-      status: view.status,
-      hasAnswer: Boolean(view.answer?.trim()),
-    });
-  }
-  if (url.startsWith("/api/send/")) {
-    const id = Number(url.split("/")[3]);
-    const last = lastSubmission(id);
-    return json(res, 200, { submission: last ?? null });
-  }
+    // answers / history
+    if (url.startsWith("/api/answer/") && url.endsWith("/restore") && method === "POST") {
+      const seg = url.split("/");
+      const id = Number(seg[3]);
+      const b = await readBody(req);
+      const index = Number(b.index);
+      if (!id || Number.isNaN(index)) return json(res, 400, { error: "id e index obrigatórios" });
+      const rec = restoreAnswerVersion(id, index);
+      return json(res, 200, { current: rec, history: rec.history });
+    }
+    if (url.startsWith("/api/answer/") && url.endsWith("/history") && method === "DELETE") {
+      const id = Number(url.split("/")[3]);
+      const rec = clearAnswerHistory(id);
+      return json(res, 200, { current: rec, history: rec.history });
+    }
+    if (url.startsWith("/api/answer/") && method === "GET") {
+      const id = Number(url.split("/")[3]);
+      const rec = getAnswerRecord(id);
+      return json(res, 200, {
+        current: rec ? { answer: rec.answer, updatedAt: rec.updatedAt, source: rec.source } : null,
+        history: rec?.history ?? [],
+      });
+    }
 
-  if (method === "POST") {
-    if (url === "/api/note") {
-      const b = await readBody(req);
-      const id = String(b.id);
-      if (!id) return json(res, 400, { error: "id required" });
-      const overrides = loadOverrides();
-      overrides[id] = { ...(overrides[id] ?? {}), notes: String(b.notes ?? "") };
-      saveOverrides(overrides);
-      return json(res, 200, { ok: true });
-    }
-    if (url === "/api/answer/manual") {
-      const b = await readBody(req);
-      const id = Number(b.id);
-      const answer = String(b.answer ?? "").trim();
-      if (!id || !answer) return json(res, 400, { error: "answer required" });
-      saveAnswer(id, answer, "manual");
-      return json(res, 200, { ok: true, updatedAt: new Date().toISOString() });
-    }
-    if (url === "/api/answer") {
-      const b = await readBody(req);
-      const id = Number(b.id);
-      const view = allViews().find((x) => x.id === id);
-      if (!view) return json(res, 404, { error: `exercise ${id} not found` });
-      try {
-        const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
-        const answer = await generateAnswer(cfg, view, view.notes);
-        saveAnswer(id, answer, "ai");
-        return json(res, 200, { answer, updatedAt: new Date().toISOString() });
-      } catch (err) {
-        return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
-      }
-    }
-    if (url === "/api/send") {
-      const b = await readBody(req);
-      const id = Number(b.id);
-      const answer = String(b.answer ?? "");
-      const view = allViews().find((x) => x.id === id);
-      if (!view) return json(res, 404, { error: `exercise ${id} not found` });
-      if (view.status === "done") return json(res, 400, { error: "Esta atividade já está concluída." });
-      if (view.kind !== "upload")
-        return json(res, 400, { error: "Só é possível enviar por aqui tarefas do tipo arquivo (upload)." });
-      if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de enviar." });
+    // portal send support
+    if (url === "/api/send/config") {
       const env = sendEnv();
-      if (!env.enabled) return json(res, 503, { error: env.reason });
-      saveAnswer(id, answer, "manual");
-      try {
-        const submission = launchUploadSubmit(view, answer, "md");
-        return json(res, 200, { ok: true, submission: { status: submission.status, detail: submission.detail, at: submission.at } });
-      } catch (err) {
-        return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+      return json(res, 200, { enabled: env.enabled, reason: env.reason });
+    }
+    if (url.startsWith("/api/send/preview")) {
+      const id = Number(new URL(req.url ?? "/", "http://local").searchParams.get("id"));
+      const view = findView(id);
+      const canSubmit = view.kind === "upload" && view.status !== "done";
+      return json(res, 200, {
+        ok: canSubmit,
+        reason: !canSubmit
+          ? view.status === "done"
+            ? "Esta atividade já está concluída."
+            : "Só é possível enviar por aqui tarefas do tipo arquivo (upload). Questionários precisam ser respondidos no portal."
+          : "",
+        kind: view.kind,
+        title: view.title,
+        courseName: view.courseName,
+        status: view.status,
+        hasAnswer: Boolean(view.answer?.trim()),
+      });
+    }
+    if (url.startsWith("/api/send/")) {
+      const id = Number(url.split("/")[3]);
+      const last = lastSubmission(id);
+      return json(res, 200, { submission: last ?? null });
+    }
+
+    if (method === "POST") {
+      if (url === "/api/note") {
+        const b = await readBody(req);
+        const id = String(b.id);
+        if (!id) return json(res, 400, { error: "id required" });
+        const overrides = loadOverrides();
+        overrides[id] = { ...(overrides[id] ?? {}), notes: String(b.notes ?? "") };
+        saveOverrides(overrides);
+        return json(res, 200, { ok: true });
+      }
+      if (url === "/api/ai-request") {
+        // save per-exercise AiRequest override (or clear when raw is null)
+        const b = await readBody(req);
+        const id = Number(b.id);
+        if (!id) return json(res, 400, { error: "id required" });
+        const overrides = loadOverrides();
+        const entry = { ...(overrides[String(id)] ?? {}) };
+        if (b.raw == null) {
+          delete entry.aiRequest;
+        } else {
+          const raw = String(b.raw);
+          parseAiRequest(raw); // validate
+          entry.aiRequest = raw;
+        }
+        overrides[String(id)] = entry;
+        saveOverrides(overrides);
+        const view = findView(id);
+        return json(res, 200, { ok: true, aiRequestJson: view.aiRequestJson, hasAiOverride: view.hasAiOverride });
+      }
+      if (url === "/api/profile") {
+        const b = await readBody(req);
+        saveProfile({
+          nome: String(b.nome ?? "").trim(),
+          matricula: String(b.matricula ?? "").trim(),
+        });
+        return json(res, 200, { ok: true });
+      }
+      if (url === "/api/ai-default") {
+        const b = await readBody(req);
+        const raw = String(b.raw ?? "");
+        parseAiRequest(raw); // validate
+        const cfg = loadAiConfig();
+        saveAiConfig({ ...cfg, ai_request_default: raw });
+        return json(res, 200, { ok: true });
+      }
+      if (url === "/api/answer/manual") {
+        const b = await readBody(req);
+        const id = Number(b.id);
+        const answer = String(b.answer ?? "").trim();
+        if (!id || !answer) return json(res, 400, { error: "answer required" });
+        const rec = saveAnswerVersion(id, answer, "manual");
+        return json(res, 200, { ok: true, current: rec, history: rec.history, updatedAt: rec.updatedAt });
+      }
+      if (url === "/api/answer") {
+        const b = await readBody(req);
+        const id = Number(b.id);
+        const view = findView(id);
+        const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
+        const answer = await generateAnswer(cfg, view, buildRequestBlockFor(view));
+        const rec = saveAnswerVersion(id, answer, "ai");
+        return json(res, 200, { answer, current: rec, history: rec.history, updatedAt: rec.updatedAt });
+      }
+      if (url === "/api/answer/stream") {
+        // SSE: delta events while generating, then a final done event
+        const b = await readBody(req);
+        const id = Number(b.id);
+        const view = findView(id);
+        const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
+
+        res.writeHead(200, {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+        });
+        const sendEvent = (payload: unknown) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        sendEvent({ type: "start" });
+        try {
+          const answer = await generateAnswer(cfg, view, buildRequestBlockFor(view), {
+            onDelta: (delta) => {
+              sendEvent({ type: "delta", delta });
+              if (typeof (res as import("node:http").ServerResponse & { flush?: () => void }).flush === "function") {
+                try {
+                  (res as import("node:http").ServerResponse & { flush?: () => void }).flush?.();
+                } catch {
+                  /* ignore */
+                }
+              }
+            },
+          });
+          const rec = saveAnswerVersion(id, answer, "ai");
+          sendEvent({ type: "done", answer, current: rec, history: rec.history });
+          res.end();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          sendEvent({ type: "error", error: message });
+          res.end();
+        }
+        return;
+      }
+      if (url === "/api/send") {
+        const b = await readBody(req);
+        const id = Number(b.id);
+        const answer = String(b.answer ?? "");
+        const view = findView(id);
+        if (view.status === "done") return json(res, 400, { error: "Esta atividade já está concluída." });
+        if (view.kind !== "upload")
+          return json(res, 400, { error: "Só é possível enviar por aqui tarefas do tipo arquivo (upload)." });
+        if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de enviar." });
+        const env = sendEnv();
+        if (!env.enabled) return json(res, 503, { error: env.reason });
+        saveAnswerVersion(id, answer, "manual");
+        try {
+          const submission = launchUploadSubmit(view, answer, "md");
+          return json(res, 200, { ok: true, submission: { status: submission.status, detail: submission.detail, at: submission.at } });
+        } catch (err) {
+          return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+        }
       }
     }
-  }
 
-  if (url.startsWith("/api/export/")) {
-    const id = Number(url.split("/")[3]);
-    const view = enrich(loadExercises(), loadAnswers(), loadOverrides()).find((x) => x.id === id);
-    if (!view || !view.answer) return json(res, 404, { error: "no answer yet" });
-    const md = `# ${view.title}\n\n${view.answer}\n`;
-    res.writeHead(200, {
-      "content-type": "text/markdown; charset=utf-8",
-      "content-disposition": `attachment; filename="${view.id}-answer.md"`,
-    });
-    return res.end(md);
-  }
-
-  // /docs/** → study repo data + downloaded files (PDFs open natively)
-  if (url.startsWith("/docs/")) {
-    const rel = url.replace(/^\/docs\/?/, "");
-    const file = path.normalize(path.join(dataDir(), rel));
-    if (!file.startsWith(path.normalize(dataDir()))) {
-      res.writeHead(403).end("forbidden");
-      return;
+    if (url.startsWith("/api/export/")) {
+      const id = Number(url.split("/")[3]);
+      const view = enrich(loadExercises(), loadAnswers(), loadOverrides()).find((x) => x.id === id && !x.hidden);
+      if (!view || !view.answer) return json(res, 404, { error: "no answer yet" });
+      const md = `# ${view.title}\n\n${view.answer}\n`;
+      res.writeHead(200, {
+        "content-type": "text/markdown; charset=utf-8",
+        "content-disposition": `attachment; filename="${view.id}-answer.md"`,
+      });
+      return res.end(md);
     }
-    return sendStatic(res, file);
-  }
 
-  // served static build (SPA)
-  if (url === "/" || url.startsWith("/assets")) {
-    const file = path.join(DIST, url === "/" ? "index.html" : url);
-    return sendStatic(res, file, path.join(DIST, "index.html"));
+    // /docs/** → study repo data + downloaded files (PDFs open natively)
+    if (url.startsWith("/docs/")) {
+      const rel = url.replace(/^\/docs\/?/, "");
+      const file = path.normalize(path.join(dataDir(), rel));
+      if (!file.startsWith(path.normalize(dataDir()))) {
+        res.writeHead(403).end("forbidden");
+        return;
+      }
+      return sendStatic(res, file);
+    }
+
+    // served static build (SPA)
+    if (url === "/" || url.startsWith("/assets")) {
+      const file = path.join(DIST, url === "/" ? "index.html" : url);
+      return sendStatic(res, file, path.join(DIST, "index.html"));
+    }
+    sendStatic(res, path.join(DIST, url), path.join(DIST, "index.html"));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!res.headersSent) return json(res, 500, { error: message });
+    res.end();
   }
-  sendStatic(res, path.join(DIST, url), path.join(DIST, "index.html"));
 });
 
 server.listen(PORT, () => {

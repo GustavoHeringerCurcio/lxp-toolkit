@@ -1,4 +1,15 @@
-import { CheckCircle2, CircleAlert, Clock3, GraduationCap, ListChecks, RefreshCw } from "lucide-react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import {
+  CheckCircle2,
+  ChevronLeft,
+  CircleAlert,
+  Clock3,
+  GraduationCap,
+  ListChecks,
+  RefreshCw,
+  Settings2,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -12,10 +23,11 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { Button, buttonVariants } from "@/components/ui/button";
 import type { ExerciseStatus } from "@/types";
 import { accentFor } from "@/lib/prof";
-
-export type Scope = "open" | "expired" | "done" | "all";
+import { useAppData, useScopePrefs, type Scope } from "@/lib/app-state";
+import { AiSettingsDialog } from "@/components/ai-settings-dialog";
 
 const NAV: { key: Scope; label: string; icon: typeof ListChecks }[] = [
   { key: "open", label: "Abertas", icon: Clock3 },
@@ -24,25 +36,36 @@ const NAV: { key: Scope; label: string; icon: typeof ListChecks }[] = [
   { key: "all", label: "Todas", icon: ListChecks },
 ];
 
-interface Props {
-  courseName: string;
-  counts: { open: number; expired: number; done: number };
-  scope: Scope;
-  onScope: (s: Scope) => void;
-  professors: (string | null)[];
-}
+export function AppSidebar() {
+  const { items } = useAppData();
+  const { scope, setScope } = useScopePrefs();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const inExercise = location.pathname.startsWith("/tarefa/");
+  const activeScope: Scope | null = inExercise ? null : scope;
+  const counts = {
+    open: items.filter((i) => i.status === "open").length,
+    expired: items.filter((i) => i.status === "expired").length,
+    done: items.filter((i) => i.status === "done").length,
+  };
+  const professors = [...new Set(items.map((e) => e.professor).filter((p): p is string => !!p))].sort();
+  const courseName = items[0]?.courseName ?? "LXP";
 
-export function AppSidebar({ courseName, counts, scope, onScope, professors }: Props) {
   const badge = (key: Scope) => (key === "open" ? counts.open : key === "expired" ? counts.expired : key === "done" ? counts.done : "");
+  const goScope = (key: Scope) => {
+    setScope(key);
+    navigate("/");
+  };
+
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-1">
+        <NavLink to="/" className="flex items-center gap-2 px-1" onClick={() => setScope("open")}>
           <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-2 text-white shadow-md shadow-brand/20">
             <GraduationCap className="size-4" />
           </div>
           <div className="truncate font-heading text-sm font-semibold">LXP Assistant</div>
-        </div>
+        </NavLink>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -52,9 +75,9 @@ export function AppSidebar({ courseName, counts, scope, onScope, professors }: P
               {NAV.map((n) => (
                 <SidebarMenuItem key={n.key}>
                   <SidebarMenuButton
-                    isActive={scope === n.key}
+                    isActive={activeScope === n.key}
                     tooltip={n.label}
-                    onClick={() => onScope(n.key)}
+                    onClick={() => goScope(n.key)}
                     className="group-data-[collapsible=icon]:!px-2"
                   >
                     <n.icon />
@@ -85,6 +108,24 @@ export function AppSidebar({ courseName, counts, scope, onScope, professors }: P
             </div>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Ferramentas</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <AiSettingsDialog
+                  trigger={
+                    <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground">
+                      <Settings2 />
+                      <span>Perfil & IA</span>
+                    </Button>
+                  }
+                />
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
         <div className="flex items-center gap-2 truncate px-1 text-xs text-muted-foreground" title={courseName}>
@@ -99,4 +140,17 @@ export function AppSidebar({ courseName, counts, scope, onScope, professors }: P
 
 export function isExerciseStatus(s: string): s is ExerciseStatus {
   return s === "open" || s === "expired" || s === "done";
+}
+
+/** Reusable back link shown at the top of the exercise page. */
+export function BackLink({ to = "/" }: { to?: string }) {
+  return (
+    <Link
+      to={to}
+      className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "-ml-1 text-muted-foreground")}
+    >
+      <ChevronLeft />
+      voltar para o painel
+    </Link>
+  );
 }

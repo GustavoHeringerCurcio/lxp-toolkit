@@ -1,11 +1,12 @@
 import { loadExercises } from "../src/build.js";
-import { loadAiConfig, loadAnswers, loadOverrides, saveAnswers, saveOverrides } from "../src/config.js";
+import { loadAiConfig, loadAnswers, loadOverrides, loadProfile, saveOverrides, saveAnswerVersion } from "../src/config.js";
 import { enrich, type ExerciseView } from "../src/view.js";
 import { compareDeadline } from "../src/view.js";
 import { extractPdfText } from "../src/pdf.js";
 import { generateAnswer } from "../src/ai.js";
 import { exportAnswer } from "../src/export.js";
 import { assist } from "../src/paths.js";
+import { parseAiRequest, renderRequestBlock } from "../src/prompt.js";
 import { isTTY, color, typeChip, deadlineChip, deadlineLabel, contextLine, icon } from "./render.js";
 
 function usage(): void {
@@ -101,21 +102,28 @@ async function answerCmd(id: number, modelOverride?: string): Promise<void> {
     console.error(`Exercise ${id} not found.`);
     process.exit(1);
   }
+  const profile = loadProfile();
+  const block = renderRequestBlock(parseAiRequest(v.aiRequestJson), profile);
   console.log(`\n🤖 Gerando resposta (modelo: ${cfg.model}) para "${v.title}"…\n`);
-  const text = await generateAnswer(cfg, v, v.notes, {
+  const text = await generateAnswer(cfg, v, block, {
     onDelta: (d) => process.stdout.write(d),
   });
   console.log(`\n`);
-  const answers = loadAnswers();
-  answers[String(id)] = { answer: text, updatedAt: new Date().toISOString() };
-  saveAnswers(answers);
+  saveAnswerVersion(id, text, "ai");
   const out = exportAnswer(v, text);
   console.log(color.dim(`saved → ${out.md}`));
 }
 
 function noteCmd(id: number, text: string): void {
   const overrides = loadOverrides();
-  overrides[String(id)] = { ...(overrides[String(id)] ?? {}), notes: text };
+  const entry = { ...(overrides[String(id)] ?? {}) };
+  // keep legacy notes in sync with the aiRequest.contexto when an override exists
+  entry.notes = text;
+  if (typeof entry.aiRequest === "string") {
+    const req = parseAiRequest(entry.aiRequest);
+    entry.aiRequest = JSON.stringify({ ...req, contexto: text }, null, 2);
+  }
+  overrides[String(id)] = entry;
   saveOverrides(overrides);
   console.log(`note saved for ${id}.`);
 }

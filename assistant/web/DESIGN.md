@@ -125,29 +125,37 @@ distinguishable — deliberately independent from the brand palette.
 
 | Component | File | Role |
 |---|---|---|
-| `AppSidebar` | `components/app-sidebar.tsx` | inset nav: brand tile + wordmark, scope menu w/ counts, professor legend |
-| `NextCard` | `components/section-cards.tsx` | hero: next assignment + deadline |
+| `AppSidebar` | `components/app-sidebar.tsx` | inset nav: brand tile + wordmark, scope menu w/ counts, professor legend, Perfil & IA entry |
+| `NextCard` | `components/section-cards.tsx` | hero: next assignment + deadline (clickable → detail) |
 | `StatCards` | `components/section-cards.tsx` | open / expired / done counters with tone dots |
-| `ActivityCard` | `components/activity-card.tsx` | list row: title, professor/module chips, type + status badges |
-| `ActivityDetail` | `components/activity-detail.tsx` | instructions, files, quiz Q&A, notes, AI panel |
+| `ActivityCard` | `components/activity-card.tsx` | list row: title, professor/module chips, type + status badges, quick-action overflow menu |
+| `DashboardPage` | `pages/dashboard.tsx` | route `/` — hero, KPIs, module chips, scoped list |
+| `ExercisePage` | `pages/exercise.tsx` | route `/tarefa/:id` — full detail + answer workbench (streaming, history, send) |
+| `AiRequestPanel` | `components/ai-request-panel.tsx` | "O que a IA recebe": editable per-exercise JSON prompt, placeholders, live preview |
+| `AiSettingsDialog` | `components/ai-settings-dialog.tsx` | sheet: profile nome/matrícula + global default AI-request JSON |
 | `TypeBadge` / `StatusBadge` | `components/status-badges.tsx` | kind chip (teal/neutral) and tone pill |
 | `AccChips` | `components/prof-chip.tsx` | per-professor accent chips |
-| `App` | `App.tsx` | fetch + scope + layout orchestrator |
+| `AppProviders` | `lib/app-state.tsx` | data + scope context shared by shell/pages |
 
 shadcn primitives live under `components/ui/`.
 
 ## 9. Layout
 
-- Sticky header (h-14, `backdrop-blur`): sidebar trigger, "Minhas tarefas" title + counts, model
-  chip, refresh.
-- Two-column grid (`lg:grid-cols-[5fr_6fr]`): left = scrollable activity list, right = sticky
-  `ActivityDetail`.
-- `NextCard` + `StatCards` above the columns.
+- Sticky header (h-14, `backdrop-blur`): sidebar trigger, title ("Minhas tarefas" / "Atividade" +
+  exercise title), model chip, Perfil & IA, refresh.
+- **Dashboard** (`/`): `NextCard` + `StatCards` hero, module chips, then a responsive list of
+  `ActivityCard` rows (cards navigate to the exercise detail route).
+- **Exercise detail** (`/tarefa/:id`): two-column grid (`xl:grid-cols-[7fr_5fr]`) — left is the
+  content (header card, enunciado, arquivos, questões, `AiRequestPanel`); right is a sticky
+  answer workbench (`AnswerPanel`).
+- Scope/module selection lives in `lib/app-state.tsx` so sidebar and dashboard stay in sync across
+  routes.
 
 ## 10. Copy
 
 All UI copy is already pt-BR (`Concluída`, `Atrasada`, `Vence em Nd`, `Sem prazo`, `Próxima`,
-`Questões (N)`, `Suas anotações`, `Resposta gerada por IA`, …). Keep new strings in pt-BR.
+`Questões (N)`, `O que a IA recebe`, `Resposta`, `Gerar com IA`, `Perfil & IA`, `Histórico`,
+…). Keep new strings in pt-BR.
 
 ## 11. Accessibility
 

@@ -9,8 +9,21 @@ function client(): OpenAI {
   return _client;
 }
 
-async function buildUserContent(cfg: AiConfig, e: Exercise, notes: string): Promise<string> {
+/**
+ * Compose the user message: a "request block" rendered from the exercise's
+ * AiRequest (who the student is + how to write + extra context), followed by
+ * the activity content itself.
+ */
+async function buildUserContent(
+  cfg: AiConfig,
+  e: Exercise,
+  requestBlock: string,
+  notes: string,
+): Promise<string> {
   const parts: string[] = [];
+
+  if (requestBlock.trim()) parts.push(`=== COMO VOCÊ DEVE ESCREVER ===\n${requestBlock}`);
+
   parts.push(`ATIVIDADE: ${e.title}`);
   parts.push(`TIPO: ${e.kind === "upload" ? "tarefa com envio de arquivo" : "questionário/quiz"}`);
   parts.push(`MÓDULO: ${e.moduleTitle}${e.sectionTitle ? ` — ${e.sectionTitle}` : ""}`);
@@ -51,8 +64,9 @@ async function buildUserContent(cfg: AiConfig, e: Exercise, notes: string): Prom
     parts.push(`\n=== OBSERVAÇÕES DO ALUNO ===\n${notes}`);
   }
 
+  const quiz = e.kind === "quiz";
   parts.push(
-    `\n=== SOLICITAÇÃO ===\nElabore a resposta para essa ${e.kind === "quiz" ? "lista de questões, indicando a alternativa correta de cada uma e justificando brevemente" : "atividade, seguindo exatamente o que o enunciado pede"}. Responda em ${cfg.language}, de forma natural, sem mencionar que você é uma IA.`,
+    `\n=== SOLICITAÇÃO ===\nElabore a resposta para essa ${quiz ? "lista de questões, indicando a alternativa correta de cada uma e justificando brevemente" : "atividade, seguindo exatamente o que o enunciado pede"}. Siga o estilo descrito em "COMO VOCÊ DEVE ESCREVER" acima — escreva como o próprio aluno, sem citar que é IA.`,
   );
   return parts.join("\n");
 }
@@ -61,15 +75,16 @@ export interface GenerateOpts {
   onDelta?: (text: string) => void;
 }
 
-/** Generate a pt-BR, natural answer for an exercise using the configured model. */
+/** Generate an answer for an exercise using the configured model + a rendered request block. */
 export async function generateAnswer(
   cfg: AiConfig,
   e: Exercise,
-  notes: string,
+  requestBlock: string,
   opts: GenerateOpts = {},
+  notes = "",
 ): Promise<string> {
   const system = cfg.system_prompt.replaceAll("{language}", cfg.language);
-  const user = await buildUserContent(cfg, e, notes);
+  const user = await buildUserContent(cfg, e, requestBlock, notes);
 
   const stream = await client().chat.completions.create({
     model: cfg.model,

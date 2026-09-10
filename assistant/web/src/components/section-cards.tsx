@@ -51,7 +51,7 @@ export function StatCards({
   );
 }
 
-export function NextCard({ next }: { next: Exercise | null }) {
+export function NextCard({ next, onClick }: { next: Exercise | null; onClick?: () => void }) {
   if (!next) return null;
   const meta =
     next.kind === "quiz"
@@ -61,22 +61,38 @@ export function NextCard({ next }: { next: Exercise | null }) {
       : next.files.length
         ? `${next.files.length} arquivo${next.files.length > 1 ? "s" : ""}`
         : "";
+  const rootCls = "overflow-hidden border-primary/30 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent";
+  const content = (
+    <CardContent className="flex items-center gap-4 p-4">
+      <div className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25">
+        <Target className="size-5" aria-hidden />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-brand font-heading">Próxima</div>
+        <div className="truncate font-heading text-base font-semibold leading-snug">{next.title}</div>
+        {meta && <div className="mt-0.5 text-xs text-muted-foreground">{meta}</div>}
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <StatusBadge e={next} />
+        {next.deadlineAt && <span className="text-[11px] tabular-nums text-muted-foreground">{fmtDeadline(next.deadlineAt)}</span>}
+      </div>
+    </CardContent>
+  );
+  if (!onClick) return <Card className={rootCls}>{content}</Card>;
   return (
-    <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent">
-      <CardContent className="flex items-center gap-4 p-4">
-        <div className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-          <Target className="size-5" aria-hidden />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-brand font-heading">Próxima</div>
-          <div className="truncate font-heading text-base font-semibold leading-snug">{next.title}</div>
-          {meta && <div className="mt-0.5 text-xs text-muted-foreground">{meta}</div>}
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <StatusBadge e={next} />
-          {next.deadlineAt && <span className="text-[11px] tabular-nums text-muted-foreground">{fmtDeadline(next.deadlineAt)}</span>}
-        </div>
-      </CardContent>
+    <Card
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          onClick();
+        }
+      }}
+      className={cn(rootCls, "cursor-pointer transition-colors hover:border-primary/60 hover:from-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
+    >
+      {content}
     </Card>
   );
 }

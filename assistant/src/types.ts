@@ -1,5 +1,22 @@
 export type ExerciseKind = "upload" | "quiz";
 export type ExerciseStatus = "done" | "expired" | "open";
+export type AnswerSource = "ai" | "manual";
+
+export interface AiProfile {
+  nome: string;
+  matricula: string;
+}
+
+/**
+ * Per-exercise / global AI request. Edited as raw JSON in the UI but validated
+ * against this shape server-side. `perfil` and `instrucoes` receive the same
+ * {nome}/{matricula} placeholder substitution as the rest of the prompt.
+ */
+export interface AiRequest {
+  perfil: string;
+  instrucoes: string[];
+  contexto: string;
+}
 
 export interface PdfRef {
   name: string;
@@ -49,6 +66,8 @@ export interface AiConfig {
   language: string;
   system_prompt: string;
   max_output_tokens?: number;
+  /** JSON string of the default per-exercise AiRequest (seeded when no override). */
+  ai_request_default?: string;
 }
 
 export interface OverridesEntry {
@@ -57,10 +76,23 @@ export interface OverridesEntry {
   hide?: boolean;
   tag?: string;
   manualStatus?: ExerciseStatus;
+  /** Raw JSON string of the per-exercise AiRequest override. */
+  aiRequest?: string;
 }
 
 export type Overrides = Record<string, OverridesEntry>;
-export type Answers = Record<string, { answer: string; updatedAt: string; source?: "ai" | "manual" }>;
+
+export interface AnswerEntry {
+  answer: string;
+  updatedAt: string;
+  source?: AnswerSource;
+}
+
+export interface AnswerRecord extends AnswerEntry {
+  history: AnswerEntry[];
+}
+
+export type Answers = Record<string, AnswerRecord>;
 
 export interface SubmissionEntry {
   exerciseId: number;

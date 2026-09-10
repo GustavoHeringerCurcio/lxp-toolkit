@@ -1,11 +1,30 @@
-import { ListChecks, Paperclip, Upload } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  Copy,
+  Download,
+  ExternalLink,
+  ListChecks,
+  MoreHorizontal,
+  Paperclip,
+  Sparkles,
+  Upload,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Exercise } from "@/types";
 import { fmtDeadline } from "@/lib/status";
 import { AccChips } from "./prof-chip";
 import { StatusBadge } from "./status-badges";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
-export function ActivityCard({ e, selected, onClick }: { e: Exercise; selected: boolean; onClick: () => void }) {
+export function ActivityCard({ e }: { e: Exercise }) {
+  const navigate = useNavigate();
   const quiz = e.kind === "quiz";
   const meta =
     quiz && e.questions.length
@@ -16,15 +35,28 @@ export function ActivityCard({ e, selected, onClick }: { e: Exercise; selected: 
   const lateish = !e.done && e.status === "expired";
   const dateTone = lateish ? "text-late" : !e.done && e.daysLeft != null && e.daysLeft <= 3 ? "text-soon" : "text-muted-foreground";
 
+  const open = () => navigate(`/tarefa/${e.id}`);
+  const generate = () => navigate(`/tarefa/${e.id}?gerar=1`);
+  const portalUrl = `https://unifoa2.grupoa.education/plataforma/course/${e.courseId}/content/${e.id}`;
+  const copyLink = async () => {
+    await navigator.clipboard.writeText(window.location.origin + `/tarefa/${e.id}`);
+  };
+
   return (
-    <button
-      onClick={onClick}
-      aria-pressed={selected}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          open();
+        }
+      }}
       title={e.title}
       className={cn(
-        "flex w-full items-stretch gap-3 rounded-xl border bg-card px-3.5 py-3 text-left transition-colors",
+        "flex w-full cursor-pointer items-stretch gap-3 rounded-xl border bg-card px-3.5 py-3 text-left transition-colors",
         "hover:border-primary/30 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        selected ? "border-primary/60 bg-primary/[0.06] ring-1 ring-primary/25" : "border-border",
       )}
     >
       <span
@@ -54,6 +86,49 @@ export function ActivityCard({ e, selected, onClick }: { e: Exercise; selected: 
           <span className={cn("whitespace-nowrap text-[11px] tabular-nums", dateTone)}>{fmtDeadline(e.deadlineAt)}</span>
         )}
       </span>
-    </button>
+
+      <span
+        className="flex shrink-0 flex-col items-center justify-center gap-1"
+        onClick={(ev) => ev.stopPropagation()}
+        onKeyDown={(ev) => ev.stopPropagation()}
+      >
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="mais opções" />}>
+            <MoreHorizontal />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-44">
+            <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); generate(); }}>
+              <Sparkles />
+              Gerar com IA
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(ev) => {
+                ev.stopPropagation();
+                open();
+              }}
+            >
+              Abrir atividade
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); window.open(portalUrl, "_blank", "noopener"); }}>
+              <ExternalLink />
+              Abrir no portal
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); void copyLink(); }}>
+              <Copy />
+              Copiar link
+            </DropdownMenuItem>
+            {e.answer ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); window.location.href = `/api/export/${e.id}`; }}>
+                  <Download />
+                  Baixar resposta .md
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </span>
+    </div>
   );
 }

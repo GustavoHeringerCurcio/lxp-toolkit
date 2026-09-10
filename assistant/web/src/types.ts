@@ -1,4 +1,16 @@
 export type ExerciseStatus = "done" | "expired" | "open";
+export type AnswerSource = "ai" | "manual";
+
+export interface AiProfile {
+  nome: string;
+  matricula: string;
+}
+
+export interface AiRequest {
+  perfil: string;
+  instrucoes: string[];
+  contexto: string;
+}
 
 export interface PdfRef {
   name: string;
@@ -33,10 +45,35 @@ export interface Exercise {
   instructionsText: string;
   questions: QuizQ[];
   answer: string | null;
+  answerSource: AnswerSource | null;
   notes: string;
+  aiRequest: AiRequest;
+  hasAiOverride: boolean;
+  aiRequestJson: string;
 }
 
 export interface ExercisesPayload {
   generatedAt: string;
   exercises: Exercise[];
+}
+
+export interface AnswerEntry {
+  answer: string;
+  updatedAt: string;
+  source: AnswerSource;
+}
+
+export interface AnswerState {
+  current: AnswerEntry | null;
+  history: AnswerEntry[];
+}
+
+export interface AiConfigDto {
+  model: string;
+  language: string;
+  configPath: string;
+  max_output_tokens?: number;
+  temperature?: number;
+  ai_request_default: string;
+  profile: AiProfile;
 }
