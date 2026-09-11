@@ -1,17 +1,21 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  CircleCheckBig,
   Copy,
   Download,
   ExternalLink,
-  ListChecks,
   MoreHorizontal,
   Paperclip,
   Sparkles,
-  Upload,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Exercise } from "@/types";
 import { fmtDeadline } from "@/lib/status";
+import { CONTENT_LABEL, kindMeta } from "@/lib/kind";
+import { runMark } from "@/lib/mark";
+import { useAppData } from "@/lib/app-state";
 import { AccChips } from "./prof-chip";
 import { StatusBadge, DoneBadge } from "./status-badges";
 import {
@@ -25,14 +29,19 @@ import { Button } from "@/components/ui/button";
 
 export function ActivityCard({ e }: { e: Exercise }) {
   const navigate = useNavigate();
-  const quiz = e.kind === "quiz";
+  const { patchExercise } = useAppData();
+  const [marking, setMarking] = useState(false);
+  const meta = kindMeta(e.kind);
+  const Icon = meta.icon;
   const fileCount = e.remoteFiles.length || e.files.length;
-  const meta =
-    quiz && e.questions.length
+  const detail =
+    e.kind === "quiz" && e.questions.length
       ? `${e.questions.length} questão${e.questions.length > 1 ? "es" : ""}`
-      : !quiz && fileCount
+      : e.kind === "upload" && fileCount
         ? `${fileCount} arquivo${fileCount > 1 ? "s" : ""}`
-        : "";
+        : e.kind === "mark" || e.kind === "other"
+          ? CONTENT_LABEL[e.contentKind]
+          : "";
   const lateish = !e.done && e.status === "expired";
   const dateTone = lateish ? "text-late" : !e.done && e.daysLeft != null && e.daysLeft <= 3 ? "text-soon" : "text-muted-foreground";
 
@@ -41,6 +50,23 @@ export function ActivityCard({ e }: { e: Exercise }) {
   const portalUrl = `https://unifoa2.grupoa.education/plataforma/course/${e.courseId}/content/${e.id}`;
   const copyLink = async () => {
     await navigator.clipboard.writeText(window.location.origin + `/tarefa/${e.id}`);
+  };
+  const doMark = async () => {
+    setMarking(true);
+    const t = toast.loading("Marcando como concluída…", { description: "Fazendo login e registrando no portal." });
+    try {
+      const final = await runMark(e.id);
+      if (final.status === "ok" || final.status === "already") {
+        toast.success("Marcada como concluída", { id: t, description: final.detail });
+        patchExercise(e.id, { done: true, status: "done" });
+      } else {
+        toast.error("Não foi possível marcar", { id: t, description: final.detail });
+      }
+    } catch (x) {
+      toast.error("Não foi possível marcar", { id: t, description: x instanceof Error ? x.message : String(x) });
+    } finally {
+      setMarking(false);
+    }
   };
 
   return (
@@ -61,13 +87,10 @@ export function ActivityCard({ e }: { e: Exercise }) {
       )}
     >
       <span
-        className={cn(
-          "grid size-9 shrink-0 self-center place-items-center rounded-lg",
-          quiz ? "bg-teal/15 text-teal" : "bg-brand/15 text-brand",
-        )}
+        className={cn("grid size-9 shrink-0 self-center place-items-center rounded-lg", meta.tileClass)}
         aria-hidden
       >
-        {quiz ? <ListChecks className="size-4" /> : <Upload className="size-4" />}
+        <Icon className="size-4" />
       </span>
 
       <span className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -76,10 +99,10 @@ export function ActivityCard({ e }: { e: Exercise }) {
           {e.done && <DoneBadge className="shrink-0" />}
         </span>
         <AccChips professor={e.professor} moduleName={e.moduleName} />
-        {meta && (
+        {detail && (
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            {!quiz && <Paperclip className="size-3" aria-hidden />}
-            {meta}
+            {e.kind === "upload" && <Paperclip className="size-3" aria-hidden />}
+            {detail}
           </span>
         )}
       </span>
@@ -101,10 +124,24 @@ export function ActivityCard({ e }: { e: Exercise }) {
             <MoreHorizontal />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-44">
-            <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); generate(); }}>
-              <Sparkles />
-              Gerar com IA
-            </DropdownMenuItem>
+            {meta.canAnswer && (
+              <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); generate(); }}>
+                <Sparkles />
+                Gerar com IA
+              </DropdownMenuItem>
+            )}
+            {meta.canMark && !e.done && (
+              <DropdownMenuItem
+                disabled={marking}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  void doMark();
+                }}
+              >
+                <CircleCheckBig />
+                Marcar como concluída
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onClick={(ev) => {
                 ev.stopPropagation();

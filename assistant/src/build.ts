@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from 
 import path from "node:path";
 import { assist, dataDir, raw } from "./paths.js";
 import { computeStatus, daysLeft, refreshLive } from "./status.js";
-import type { Exercise, PdfRef, QuizQ } from "./types.js";
+import type { ContentKind, Exercise, ExerciseKind, PdfRef, QuizQ } from "./types.js";
 
 interface TreeItem {
   courseId: number;
@@ -14,13 +14,29 @@ interface TreeItem {
   itemId: number;
   itemTitle: string;
   topicTypeId: number;
-  kind: string;
+  kind: ContentKind;
+  isRecordProgress: boolean;
   done: boolean;
   hasDeadline: boolean;
   deadlineAt: string | null;
   attachments: { url: string; filename: string | null; filesize: number | null }[];
   html: string | null;
   content: Record<string, unknown> | null;
+}
+
+/** Raw kinds that the portal lets the student complete with "Mark as completed". */
+const MARKABLE_CONTENT: ContentKind[] = ["pdf", "reading", "link", "other"];
+
+/**
+ * Map a raw content item to the action bucket shown in the UI, or `null` when
+ * the item has no action at all (plain reading/pdf/link without progress).
+ */
+export function actionKindFor(item: Pick<TreeItem, "kind" | "isRecordProgress">): ExerciseKind | null {
+  if (item.kind === "file_upload") return "upload";
+  if (item.kind === "quiz") return "quiz";
+  if (item.kind === "forum") return "other";
+  if (item.isRecordProgress && MARKABLE_CONTENT.includes(item.kind)) return "mark";
+  return null;
 }
 
 interface Course {
@@ -110,14 +126,17 @@ export function buildExercises(): Exercise[] {
   const out: Exercise[] = [];
   for (const course of courses) {
     for (const it of course.items) {
-      if (it.kind !== "file_upload" && it.kind !== "quiz") continue;
+      const kind = actionKindFor(it);
+      if (!kind) continue;
       const deadlineAt = it.deadlineAt ?? null;
       const status = computeStatus(it.done, it.hasDeadline, deadlineAt);
       const { moduleName, professor } = splitModule(it.moduleTitle);
       out.push({
         id: it.itemId,
         title: it.itemTitle,
-        kind: it.kind === "file_upload" ? "upload" : "quiz",
+        kind,
+        contentKind: it.kind,
+        isRecordProgress: it.isRecordProgress === true,
         courseId: course.courseId,
         courseName: course.courseName,
         moduleId: it.moduleId,
@@ -135,7 +154,7 @@ export function buildExercises(): Exercise[] {
         files: localFilesFor(course.courseId, it.itemId),
         remoteFiles: it.attachments.map((a) => ({ filename: a.filename, url: a.url })),
         instructionsText: stripHtml(it.html),
-        questions: it.kind === "quiz" ? parseQuestions(it.content) : [],
+        questions: kind === "quiz" ? parseQuestions(it.content) : [],
         ai: { status: "none", answer: null, updatedAt: null },
       });
     }

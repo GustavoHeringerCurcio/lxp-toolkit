@@ -216,6 +216,13 @@ export async function sendAnswerToPortal(id: number, answer: string, mode: SendM
   return body.submission;
 }
 
+/** Mark a recordable content item as completed on the portal. */
+export async function markComplete(id: number): Promise<SubmissionDto> {
+  const body = (await post("/api/mark", { id })) as { error?: string; submission?: SubmissionDto };
+  if (!body.submission) throw new Error(body.error ?? "HTTP");
+  return body.submission;
+}
+
 export interface SendArtifactDto {
   blob: Blob;
   filename: string;

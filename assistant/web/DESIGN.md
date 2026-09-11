@@ -111,10 +111,15 @@ distinguishable — deliberately independent from the brand palette.
 
 ## 7. Icon mapping (lucide-react)
 
+Activity type metadata (label, icon, classes, capabilities) lives in `src/lib/kind.ts`
+(`KIND_META`), keyed by the four action buckets `quiz | upload | mark | other`.
+
 | Context | lucide icon |
 |---|---|
-| Activity type — quiz | `ListChecks` (in the teal type chip) |
-| Activity type — upload | `Upload` (neutral type chip) |
+| Activity type — quiz | `ListChecks` (teal chip) |
+| Activity type — upload | `Upload` (crimson chip) |
+| Activity type — mark as completed | `CircleCheckBig` (green chip) |
+| Activity type — other (forum) | `MessagesSquare` (neutral chip) |
 | "Próxima" hero | `Target` |
 | Brand mark (sidebar) | `GraduationCap` |
 | Sidebar nav | `Clock3` / `CircleAlert` / `CheckCircle2` / `ListChecks` |
@@ -128,12 +133,14 @@ distinguishable — deliberately independent from the brand palette.
 | `AppSidebar` | `components/app-sidebar.tsx` | inset nav: brand tile + wordmark, scope menu w/ counts, professor legend, Perfil & IA entry |
 | `NextCard` | `components/section-cards.tsx` | hero: next assignment + deadline (clickable → detail) |
 | `StatCards` | `components/section-cards.tsx` | open / expired / done counters with tone dots |
-| `ActivityCard` | `components/activity-card.tsx` | list row: title, professor/module chips, type + status badges, quick-action overflow menu |
-| `DashboardPage` | `pages/dashboard.tsx` | route `/` — hero, KPIs, module chips, scoped list |
-| `ExercisePage` | `pages/exercise.tsx` | route `/tarefa/:id` — full detail + answer workbench (streaming, history, send) |
+| `ActivityCard` | `components/activity-card.tsx` | list row: title, professor/module chips, type + status badges, quick-action overflow menu (mark-complete for `mark`) |
+| `DashboardPage` | `pages/dashboard.tsx` | route `/` — hero, KPIs, module + type filter chips, scoped list |
+| `ExercisePage` | `pages/exercise.tsx` | route `/tarefa/:id` — full detail; workbench varies by type (answer for quiz/upload, `MarkPanel` for mark, portal link for other) |
+| `MarkPanel` / `PortalOnlyPanel` | `components/mark-panel.tsx` | right-column completion panel for `mark` items; read-only portal panel for `other` |
 | `AiRequestPanel` | `components/ai-request-panel.tsx` | "O que a IA recebe": free-text extra instructions for this activity + compiled system/user preview |
 | `AiSettingsDialog` | `components/ai-settings-dialog.tsx` | sheet: profile nome/matrícula (link to IA Ajustes) |
-| `TypeBadge` / `StatusBadge` | `components/status-badges.tsx` | kind chip (teal/neutral) and tone pill |
+| `TypeBadge` / `StatusBadge` | `components/status-badges.tsx` | type chip (quiz/upload/mark/other) and tone pill |
+| `lib/kind.ts` | `lib/kind.ts` | `KIND_META`: labels, icons, classes and capabilities per action bucket |
 | `AccChips` | `components/prof-chip.tsx` | per-professor accent chips |
 | `AppProviders` | `lib/app-state.tsx` | data + scope context shared by shell/pages |
 

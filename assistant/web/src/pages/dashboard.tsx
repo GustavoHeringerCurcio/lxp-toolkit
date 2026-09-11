@@ -5,6 +5,8 @@ import { countInfo } from "@/lib/status";
 import { useAppData, useScopePrefs, type Scope } from "@/lib/app-state";
 import { ActivityCard } from "@/components/activity-card";
 import { NextCard, StatCards, type KpiKey } from "@/components/section-cards";
+import { KIND_ORDER, kindMeta } from "@/lib/kind";
+import type { ExerciseKind } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
 
@@ -45,7 +47,7 @@ function SkeletonMain() {
 
 export function DashboardPage() {
   const { items, loading, error, reload } = useAppData();
-  const { scope, setScope, moduleFilter, setModuleFilter } = useScopePrefs();
+  const { scope, setScope, moduleFilter, setModuleFilter, typeFilter, setTypeFilter } = useScopePrefs();
   const navigate = useNavigate();
 
   const counts = useMemo(() => countInfo(items), [items]);
@@ -56,10 +58,16 @@ export function DashboardPage() {
   );
 
   const scoped = useMemo(() => items.filter((e) => scope === "all" || e.status === scope), [items, scope]);
+  const typeCounts = useMemo(() => {
+    const c: Record<ExerciseKind, number> = { quiz: 0, upload: 0, mark: 0, other: 0 };
+    for (const e of scoped) c[e.kind] += 1;
+    return c;
+  }, [scoped]);
   const shown = useMemo(() => {
-    const list = moduleFilter ? scoped.filter((e) => e.moduleName === moduleFilter) : scoped;
+    let list = moduleFilter ? scoped.filter((e) => e.moduleName === moduleFilter) : scoped;
+    if (typeFilter) list = list.filter((e) => e.kind === typeFilter);
     return [...list].sort(cmpOpen);
-  }, [scoped, moduleFilter]);
+  }, [scoped, moduleFilter, typeFilter]);
 
   const next = useMemo(() => items.filter((e) => e.status === "open").sort(cmpOpen)[0] ?? null, [items]);
 
@@ -113,14 +121,65 @@ export function DashboardPage() {
         </div>
       )}
 
+      {items.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          <span className="mr-1 shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Tipos
+          </span>
+          <button
+            onClick={() => setTypeFilter(null)}
+            className={cn(
+              "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              typeFilter === null
+                ? "border-primary/60 bg-primary/15 text-primary"
+                : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
+            )}
+          >
+            Todos
+          </button>
+          {KIND_ORDER.map((k) => {
+            const meta = kindMeta(k);
+            const Icon = meta.icon;
+            const active = typeFilter === k;
+            return (
+              <button
+                key={k}
+                onClick={() => setTypeFilter(active ? null : k)}
+                aria-pressed={active}
+                title={meta.label}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  active
+                    ? "border-primary/60 bg-primary/15 text-primary"
+                    : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                )}
+              >
+                <Icon className="size-3.5" aria-hidden />
+                {meta.short}
+                <span className="tabular-nums text-muted-foreground">{typeCounts[k]}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="flex items-baseline justify-between gap-2 text-sm text-muted-foreground">
         <span>
           {SCOPE_LABEL[scope]} · <span className="font-medium text-foreground">{shown.length}</span>
         </span>
-        {moduleFilter && (
-          <button onClick={() => setModuleFilter(null)} className="text-xs text-brand underline-offset-4 hover:underline">
-            limpar módulo
-          </button>
+        {(moduleFilter || typeFilter) && (
+          <span className="flex items-center gap-3">
+            {moduleFilter && (
+              <button onClick={() => setModuleFilter(null)} className="text-xs text-brand underline-offset-4 hover:underline">
+                limpar módulo
+              </button>
+            )}
+            {typeFilter && (
+              <button onClick={() => setTypeFilter(null)} className="text-xs text-brand underline-offset-4 hover:underline">
+                limpar tipo
+              </button>
+            )}
+          </span>
         )}
       </div>
 
@@ -132,9 +191,13 @@ export function DashboardPage() {
           detail={
             items.length === 0
               ? "Nenhuma atividade encontrada. Clique em \"Atualizar\" no topo para buscar seu conteúdo."
-              : moduleFilter
-                ? `Não há atividades ${SCOPE_LABEL[scope].toLowerCase()} neste módulo.`
-                : `Não há atividades ${SCOPE_LABEL[scope].toLowerCase()}.`
+              : moduleFilter && typeFilter
+                ? `Não há atividades ${SCOPE_LABEL[scope].toLowerCase()} deste tipo neste módulo.`
+                : moduleFilter
+                  ? `Não há atividades ${SCOPE_LABEL[scope].toLowerCase()} neste módulo.`
+                  : typeFilter
+                    ? `Não há atividades ${SCOPE_LABEL[scope].toLowerCase()} deste tipo.`
+                    : `Não há atividades ${SCOPE_LABEL[scope].toLowerCase()}.`
           }
         />
       ) : (

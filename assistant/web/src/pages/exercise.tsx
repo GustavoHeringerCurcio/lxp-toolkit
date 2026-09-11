@@ -48,7 +48,9 @@ import { BackLink } from "@/components/app-sidebar";
 import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
 import { AccChips } from "@/components/prof-chip";
 import { AiRequestPanel } from "@/components/ai-request-panel";
+import { MarkPanel, PortalOnlyPanel } from "@/components/mark-panel";
 import { StatusBadge, TypeBadge, DoneBadge } from "@/components/status-badges";
+import { kindMeta } from "@/lib/kind";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -809,7 +811,7 @@ export function ExercisePage() {
   }
   if (!e) return null;
 
-  const isUpload = e.kind === "upload";
+  const meta = kindMeta(e.kind);
 
   return (
     <div className="p-4">
@@ -820,7 +822,7 @@ export function ExercisePage() {
           <header className="overflow-hidden rounded-xl border border-border bg-card">
             <span className="pointer-events-none block h-0.5 bg-gradient-to-r from-brand via-brand-2 to-teal" aria-hidden />
             <div className={cn("flex flex-wrap items-center gap-2 p-5", headerCard.open && "pb-0")}>
-              <TypeBadge kind={e.kind} />
+              <TypeBadge kind={e.kind} contentKind={e.contentKind} />
               {e.done && <DoneBadge />}
               <StatusBadge e={e} />
               {e.deadlineAt && (
@@ -872,7 +874,7 @@ export function ExercisePage() {
             </CollapsibleCard>
           )}
 
-          {!isUpload && e.questions.length > 0 && (
+          {e.kind === "quiz" && e.questions.length > 0 && (
             <CollapsibleCard
               id="questoes"
               title="Questões"
@@ -898,12 +900,18 @@ export function ExercisePage() {
             </CollapsibleCard>
           )}
 
-          <AiRequestPanel e={e} onSaved={() => setRegenToken((t) => t + 1)} />
+          {meta.canAnswer && <AiRequestPanel e={e} onSaved={() => setRegenToken((t) => t + 1)} />}
         </div>
 
-        {/* right column: answer workbench */}
+        {/* right column: answer workbench / completion panel */}
         <div className="min-w-0 xl:sticky xl:top-[4.5rem] xl:h-[calc(100vh-6rem)]">
-          <AnswerPanel key={e.id} e={e} onRefresh={onRefresh} autoGenerate={wantsAuto} regenToken={regenToken} />
+          {meta.canAnswer ? (
+            <AnswerPanel key={e.id} e={e} onRefresh={onRefresh} autoGenerate={wantsAuto} regenToken={regenToken} />
+          ) : meta.canMark ? (
+            <MarkPanel key={e.id} e={e} onRefresh={onRefresh} />
+          ) : (
+            <PortalOnlyPanel e={e} />
+          )}
         </div>
       </div>
     </div>

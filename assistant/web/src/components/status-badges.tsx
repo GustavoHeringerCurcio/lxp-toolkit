@@ -1,20 +1,32 @@
-import { CalendarClock, CheckCircle2, CircleAlert, Clock3, ListChecks, Minus, Upload, type LucideIcon } from "lucide-react";
+import { CalendarClock, CheckCircle2, CircleAlert, Clock3, Minus, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Exercise } from "@/types";
 import { deadlineInfo, TONE_CLS, type Tone } from "@/lib/status";
+import { CONTENT_LABEL, kindMeta } from "@/lib/kind";
 
-export function TypeBadge({ kind, className }: { kind: Exercise["kind"]; className?: string }) {
-  const quiz = kind === "quiz";
+export function TypeBadge({
+  kind,
+  contentKind,
+  className,
+}: {
+  kind: Exercise["kind"];
+  contentKind?: Exercise["contentKind"];
+  className?: string;
+}) {
+  const meta = kindMeta(kind);
+  const Icon = meta.icon;
+  const title = contentKind ? `${meta.label} · ${CONTENT_LABEL[contentKind]}` : meta.label;
   return (
     <span
+      title={title}
       className={cn(
         "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold",
-        quiz ? "border-teal/25 bg-teal/10 text-teal" : "border-border bg-muted/50 text-muted-foreground",
+        meta.badgeClass,
         className,
       )}
     >
-      {quiz ? <ListChecks className="size-3" /> : <Upload className="size-3" />}
-      {quiz ? "Quiz" : "Tarefa"}
+      <Icon className="size-3" aria-hidden />
+      {meta.short}
     </span>
   );
 }

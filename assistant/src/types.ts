@@ -1,4 +1,15 @@
-export type ExerciseKind = "upload" | "quiz";
+/**
+ * Coarse action bucket the UI filters/badges on:
+ * - `upload` — file-upload task (topicTypeId 8)
+ * - `quiz`   — questionnaire / pre/post-test / exercises (15, 29, 30, 37)
+ * - `mark`   — manually "mark as completed" content (recordable pdf/reading/link/other)
+ * - `other`  — anything actionable that is neither (e.g. forum)
+ */
+export type ExerciseKind = "quiz" | "upload" | "mark" | "other";
+
+/** Raw portal content classification (`src/content.ts::classify`). */
+export type ContentKind = "pdf" | "reading" | "quiz" | "file_upload" | "link" | "forum" | "other";
+
 export type ExerciseStatus = "done" | "expired" | "open";
 export type AnswerSource = "ai" | "manual";
 
@@ -49,6 +60,10 @@ export interface Exercise {
   id: number;
   title: string;
   kind: ExerciseKind;
+  /** Raw content classification (pdf/reading/link/forum/other/quiz/file_upload). */
+  contentKind: ContentKind;
+  /** Whether the portal records progress for this item (drives "mark as completed"). */
+  isRecordProgress: boolean;
   courseId: number;
   courseName: string;
   moduleId: number;

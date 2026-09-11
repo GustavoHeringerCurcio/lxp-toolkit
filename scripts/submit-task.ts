@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Locator, Page } from "playwright";
 import { createSession, closeSession } from "../src/session.js";
+import { markRead } from "../src/actions.js";
 import { config, logger } from "../src/config.js";
 
 /**
@@ -33,6 +34,9 @@ import { config, logger } from "../src/config.js";
  *   { "action": "quiz", "courseId": number, "itemId": number,
  *     "selections": [{ questionId, optionIndex, letter, questionText, optionText }] }
  *
+ * Mark request JSON (manually "mark as completed"):
+ *   { "action": "mark", "courseId": number, "itemId": number }
+ *
  * Result JSON:
  *   { "ok": boolean, "status": "ok"|"unknown"|"error", "detail": string, "at": string }
  */
@@ -59,7 +63,8 @@ type SubmitRequest =
       /** Absolute path to a pre-generated file to attach (used by "pdf"). */
       filePath?: string;
     }
-  | { action: "quiz"; courseId: number; itemId: number; selections: QuizItem[] };
+  | { action: "quiz"; courseId: number; itemId: number; selections: QuizItem[] }
+  | { action: "mark"; courseId: number; itemId: number };
 
 interface SubmitResult {
   ok: boolean;
@@ -395,6 +400,27 @@ async function main(): Promise<void> {
     return null;
   });
   if (!session) return;
+
+  // "Mark as completed" is a plain progress POST — no SPA navigation needed.
+  if (req.action === "mark") {
+    try {
+      const ok = await markRead(session.client, req.courseId, req.itemId);
+      result = ok
+        ? { ok: true, status: "ok", detail: "Item marcado como concluído no portal.", at: new Date().toISOString() }
+        : {
+            ok: false,
+            status: "unknown",
+            detail: "O portal não confirmou a marcação de progresso.",
+            at: new Date().toISOString(),
+          };
+      writeResult(resultPath, result);
+      console.log(`submit-task done [${result.status}]`);
+      process.exit(0);
+    } catch (err) {
+      return fail(`mark failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   try {
     const { page } = session;
     const route = `/course/${req.courseId}/content/${req.itemId}`;

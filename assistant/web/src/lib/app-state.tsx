@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchConfig, fetchExercises } from "@/api";
-import type { AiConfigDto, Exercise } from "@/types";
+import type { AiConfigDto, Exercise, ExerciseKind } from "@/types";
 
 export type Scope = "open" | "expired" | "done" | "all";
 
@@ -22,6 +22,8 @@ interface ScopeValue {
   setScope: (s: Scope) => void;
   moduleFilter: string | null;
   setModuleFilter: (m: string | null) => void;
+  typeFilter: ExerciseKind | null;
+  setTypeFilter: (t: ExerciseKind | null) => void;
 }
 
 const ScopeContext = createContext<ScopeValue | null>(null);
@@ -33,6 +35,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState<Scope>("open");
   const [moduleFilter, setModuleFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<ExerciseKind | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -76,8 +79,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
   );
 
   const scopeValue = useMemo<ScopeValue>(
-    () => ({ scope, setScope, moduleFilter, setModuleFilter }),
-    [scope, moduleFilter],
+    () => ({ scope, setScope, moduleFilter, setModuleFilter, typeFilter, setTypeFilter }),
+    [scope, moduleFilter, typeFilter],
   );
 
   return (

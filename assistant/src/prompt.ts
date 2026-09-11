@@ -1,5 +1,6 @@
 import type { AiActivitySections, AiProfile, AiStyle, Exercise, QuizQ, QuizSelection } from "./types.js";
 import { DEFAULT_ACTIVITY_SECTIONS } from "./config.js";
+import { kindLabel } from "./kind.js";
 import { extractFileText } from "./pdf.js";
 
 export function isPlaceholder(value: string): boolean {
@@ -161,7 +162,12 @@ export async function buildPromptVars(
   notes = "",
   sections: AiActivitySections = DEFAULT_ACTIVITY_SECTIONS,
 ): Promise<PromptVars> {
-  const tipo = e.kind === "upload" ? "tarefa com envio de arquivo" : "questionário/quiz";
+  const tipo =
+    e.kind === "upload"
+      ? "tarefa com envio de arquivo"
+      : e.kind === "quiz"
+        ? "questionário/quiz"
+        : kindLabel(e.kind);
   const modulo = e.moduleTitle + (e.sectionTitle ? ` — ${e.sectionTitle}` : "");
 
   let arquivos = "";

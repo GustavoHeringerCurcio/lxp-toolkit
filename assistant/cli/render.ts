@@ -1,4 +1,6 @@
 import type { ExerciseView } from "../src/view.js";
+import type { ExerciseKind } from "../src/types.js";
+import { KIND_LABEL } from "../src/kind.js";
 
 export const isTTY = process.stdout.isTTY === true;
 
@@ -20,7 +22,12 @@ function fg(hex: string): string {
   return isTTY ? `\x1b[38;2;${r};${g};${b}m` : "";
 }
 
-export const TYPES = { quiz: "❓ Quiz", upload: "📤 Tarefa" };
+export const TYPES: Record<ExerciseKind, string> = {
+  quiz: "❓ Quiz",
+  upload: "📤 Tarefa",
+  mark: "☑️ Marcar",
+  other: "💬 Outro",
+};
 
 /** Deadline badge — same semantics as the web app, in pt-BR. */
 export function deadlineLabel(e: ExerciseView): { text: string; hex: string } {
@@ -71,11 +78,18 @@ export function contextLine(e: ExerciseView): string {
   return isTTY ? `${fg(acc)}${text}${C.reset}` : text;
 }
 
+const KIND_ICON: Record<ExerciseKind, string> = {
+  quiz: "❓",
+  upload: "📤",
+  mark: "☑️",
+  other: "💬",
+};
+
 export function icon(e: ExerciseView): string {
   if (e.done) return "✅";
-  return e.kind === "quiz" ? "❓" : "📤";
+  return KIND_ICON[e.kind];
 }
 
 export function kindLabel(e: ExerciseView): string {
-  return e.kind === "quiz" ? "Quiz" : "Tarefa";
+  return KIND_LABEL[e.kind];
 }

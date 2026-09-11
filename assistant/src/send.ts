@@ -157,6 +157,42 @@ export function launchQuizSubmit(
   return entry;
 }
 
+/**
+ * Writes the request file and spawns the root runner to "mark as completed" a
+ * recordable content item (reading/pdf/link/other). The runner fresh-logins and
+ * POSTs the progress endpoint; no answer is involved.
+ */
+export function launchMarkComplete(view: { id: number; courseId: number; title: string }): SubmissionEntry {
+  const env = sendEnv();
+  if (!env.enabled || !env.rootDir) {
+    throw new Error(env.reason || "runner não configurado");
+  }
+
+  const at = Date.now();
+  const dir = assist("data", "send");
+  mkdirSync(dir, { recursive: true });
+  const reqFile = path.join(dir, `req-${view.id}-${at}.json`);
+  const resFile = path.join(dir, `res-${view.id}-${at}.json`);
+
+  writeFileSync(
+    reqFile,
+    JSON.stringify({ action: "mark", courseId: view.courseId, itemId: view.id }, null, 2),
+    "utf-8",
+  );
+
+  const entry: SubmissionEntry = {
+    exerciseId: view.id,
+    at: new Date().toISOString(),
+    status: "running",
+    detail: "aguardando login no portal…",
+  };
+  pushSubmission(entry);
+
+  spawnRunner(env.rootDir, reqFile, resFile, entry);
+
+  return entry;
+}
+
 /** Spawn the root submit runner and mirror its result into the submission entry. */
 function spawnRunner(rootDir: string, reqFile: string, resFile: string, entry: SubmissionEntry): void {
   const child = spawn(tsxBin(rootDir), [path.join(rootDir, "scripts", "submit-task.ts"), "--req", reqFile, "--result", resFile], {

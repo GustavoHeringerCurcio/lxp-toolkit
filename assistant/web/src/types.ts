@@ -1,3 +1,5 @@
+export type ExerciseKind = "quiz" | "upload" | "mark" | "other";
+export type ContentKind = "pdf" | "reading" | "quiz" | "file_upload" | "link" | "forum" | "other";
 export type ExerciseStatus = "done" | "expired" | "open";
 export type AnswerSource = "ai" | "manual";
 
@@ -40,7 +42,9 @@ export interface QuizSelection {
 export interface Exercise {
   id: number;
   title: string;
-  kind: "upload" | "quiz";
+  kind: ExerciseKind;
+  contentKind: ContentKind;
+  isRecordProgress: boolean;
   courseId: number;
   courseName: string;
   moduleTitle: string;

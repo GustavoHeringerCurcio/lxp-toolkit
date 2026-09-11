@@ -1,4 +1,5 @@
 import type { AiActivitySections, AiProfile, AiStyle, Exercise } from "@/types";
+import { KIND_META } from "@/lib/kind";
 
 /**
  * Default writing rules. Must match `DEFAULT_STYLE` in `assistant/src/config.ts`
@@ -123,7 +124,12 @@ export function buildVars(
   notes = "",
   sections: AiActivitySections = DEFAULT_ACTIVITY_SECTIONS,
 ): PromptVars {
-  const tipo = e.kind === "upload" ? "tarefa com envio de arquivo" : "questionário/quiz";
+  const tipo =
+    e.kind === "upload"
+      ? "tarefa com envio de arquivo"
+      : e.kind === "quiz"
+        ? "questionário/quiz"
+        : KIND_META[e.kind].label;
   const modulo = e.moduleTitle + (e.sectionTitle ? ` — ${e.sectionTitle}` : "");
 
   let arquivos = "";

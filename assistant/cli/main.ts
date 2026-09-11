@@ -7,6 +7,7 @@ import { generateAnswer } from "../src/ai.js";
 import { exportAnswer } from "../src/export.js";
 import { assist } from "../src/paths.js";
 import { parseQuizSelections } from "../src/prompt.js";
+import { isAnswerable, kindLabel } from "../src/kind.js";
 import { isTTY, color, typeChip, deadlineChip, deadlineLabel, contextLine, icon } from "./render.js";
 
 function usage(): void {
@@ -100,6 +101,10 @@ async function answerCmd(id: number, modelOverride?: string): Promise<void> {
   const v = views.find((x) => x.id === id);
   if (!v) {
     console.error(`Exercise ${id} not found.`);
+    process.exit(1);
+  }
+  if (!isAnswerable(v.kind)) {
+    console.error(`"${v.title}" é do tipo ${kindLabel(v.kind)} — não aceita resposta por aqui.`);
     process.exit(1);
   }
   const profile = loadProfile();

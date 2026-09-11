@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Exercise } from "@/types";
 import { fmtDeadline } from "@/lib/status";
+import { CONTENT_LABEL } from "@/lib/kind";
 import { StatusBadge, TypeBadge } from "./status-badges";
 
 export type KpiKey = "open" | "expired" | "done";
@@ -55,13 +56,13 @@ export function NextCard({ next, onClick }: { next: Exercise | null; onClick?: (
   if (!next) return null;
   const fileCount = next.remoteFiles.length || next.files.length;
   const meta =
-    next.kind === "quiz"
-      ? next.questions.length
-        ? `${next.questions.length} questão${next.questions.length > 1 ? "es" : ""}`
-        : ""
-      : fileCount
+    next.kind === "quiz" && next.questions.length
+      ? `${next.questions.length} questão${next.questions.length > 1 ? "es" : ""}`
+      : next.kind === "upload" && fileCount
         ? `${fileCount} arquivo${fileCount > 1 ? "s" : ""}`
-        : "";
+        : next.kind === "mark" || next.kind === "other"
+          ? CONTENT_LABEL[next.contentKind]
+          : "";
   const rootCls = "overflow-hidden border-primary/30 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent";
   const content = (
     <CardContent className="flex items-center gap-4 p-4">
@@ -74,6 +75,7 @@ export function NextCard({ next, onClick }: { next: Exercise | null; onClick?: (
         {meta && <div className="mt-0.5 text-xs text-muted-foreground">{meta}</div>}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <TypeBadge kind={next.kind} contentKind={next.contentKind} />
         <StatusBadge e={next} />
         {next.deadlineAt && <span className="text-[11px] tabular-nums text-muted-foreground">{fmtDeadline(next.deadlineAt)}</span>}
       </div>

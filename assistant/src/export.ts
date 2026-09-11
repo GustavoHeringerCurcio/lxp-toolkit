@@ -1,6 +1,7 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { assist } from "./paths.js";
+import { kindLabel } from "./kind.js";
 import type { Exercise } from "./types.js";
 
 /** Write the AI answer for an exercise to assistant/out/{id}-{slug}.{ext}. */
@@ -14,7 +15,7 @@ export function exportAnswer(
   const meta = [
     `# ${e.title}`,
     ``,
-    `- Tipo: ${e.kind === "quiz" ? "Quiz" : "Upload"}`,
+    `- Tipo: ${kindLabel(e.kind)}`,
     `- Módulo: ${e.moduleTitle}${e.sectionTitle ? ` — ${e.sectionTitle}` : ""}`,
     e.deadlineAt ? `- Prazo: ${e.deadlineAt}` : "",
     ``,

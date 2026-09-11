@@ -25,6 +25,7 @@ import type { AiActivitySections, AiStyle } from "../src/types.js";
 import {
   launchUploadSubmit,
   launchQuizSubmit,
+  launchMarkComplete,
   lastSubmission,
   sendEnv,
   submissionsFor,
@@ -230,6 +231,11 @@ function findView(id: number) {
 
 function allViews() {
   return enrich(loadExercises(), loadAnswers(), loadOverrides()).filter((v) => !v.hidden);
+}
+
+/** Only tasks/quizzes have AI-answerable content. */
+function isAnswerable(view: { kind: string }): boolean {
+  return view.kind === "upload" || view.kind === "quiz";
 }
 
 const server = createServer(async (req, res) => {
@@ -438,6 +444,7 @@ const server = createServer(async (req, res) => {
         const answer = String(b.answer ?? "").trim();
         if (!id || !answer) return json(res, 400, { error: "answer required" });
         const view = findView(id);
+        if (!isAnswerable(view)) return json(res, 400, { error: "Esta atividade não aceita resposta por aqui." });
         const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
         const rec = saveAnswerVersion(id, answer, "manual", undefined, selections);
         return json(res, 200, { ok: true, current: rec, history: rec.history, updatedAt: rec.updatedAt });
@@ -446,6 +453,7 @@ const server = createServer(async (req, res) => {
         const b = await readBody(req);
         const id = Number(b.id);
         const view = findView(id);
+        if (!isAnswerable(view)) return json(res, 400, { error: "Esta atividade não aceita resposta por aqui." });
         const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
         const answer = await generateAnswer(cfg, view, view.aiRequestJson, loadProfile(), {}, view.notes);
         const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
@@ -457,6 +465,7 @@ const server = createServer(async (req, res) => {
         const b = await readBody(req);
         const id = Number(b.id);
         const view = findView(id);
+        if (!isAnswerable(view)) return json(res, 400, { error: "Esta atividade não aceita resposta por aqui." });
         const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
 
         res.writeHead(200, {
@@ -525,6 +534,22 @@ const server = createServer(async (req, res) => {
             ok: true,
             submission: { status: submission.status, detail: submission.detail, at: submission.at, mode: submission.mode },
           });
+        } catch (err) {
+          return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+      if (url === "/api/mark") {
+        const b = await readBody(req);
+        const id = Number(b.id);
+        if (!id) return json(res, 400, { error: "id obrigatório" });
+        const view = findView(id);
+        if (view.kind !== "mark") return json(res, 400, { error: "Esta atividade não pode ser marcada por aqui." });
+        if (view.status === "done") return json(res, 400, { error: "Esta atividade já está concluída." });
+        const env = sendEnv();
+        if (!env.enabled) return json(res, 503, { error: env.reason });
+        try {
+          const submission = launchMarkComplete(view);
+          return json(res, 200, { ok: true, submission });
         } catch (err) {
           return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
         }
