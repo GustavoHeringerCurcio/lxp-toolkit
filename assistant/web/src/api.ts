@@ -195,21 +195,61 @@ export async function fetchSendPreview(id: number): Promise<SendPreviewDto> {
 
 export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
 
+/** How an upload answer reaches the portal. */
+export type SendMode = "text" | "txt" | "pdf";
+
 export interface SubmissionDto {
   status: SubmissionStatus;
   detail: string;
   at: string;
   answer?: string;
+  mode?: SendMode;
   attachmentName?: string;
   attemptNumber?: number | null;
   portalDetail?: string;
   confirmationAt?: string;
 }
 
-export async function sendAnswerToPortal(id: number, answer: string): Promise<SubmissionDto> {
-  const body = (await post("/api/send", { id, answer })) as { error?: string; submission?: SubmissionDto };
+export async function sendAnswerToPortal(id: number, answer: string, mode: SendMode = "txt"): Promise<SubmissionDto> {
+  const body = (await post("/api/send", { id, answer, mode })) as { error?: string; submission?: SubmissionDto };
   if (!body.submission) throw new Error(body.error ?? "HTTP");
   return body.submission;
+}
+
+export interface SendArtifactDto {
+  blob: Blob;
+  filename: string;
+}
+
+/**
+ * Build the exact file that would be sent (`txt`/`pdf`) from the current draft,
+ * without submitting. Returns the blob + suggested filename for preview/download.
+ */
+export async function fetchSendArtifact(
+  id: number,
+  answer: string,
+  mode: SendMode,
+  download = false,
+): Promise<SendArtifactDto> {
+  const res = await fetch("/api/send/artifact", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, answer, mode, download }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let detail = "";
+    try {
+      const body = JSON.parse(text) as { error?: string };
+      if (body?.error) detail = ` · ${body.error}`;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(`POST /api/send/artifact → HTTP ${res.status}${detail}`);
+  }
+  const blob = await res.blob();
+  const filename = res.headers.get("x-filename") ?? `resposta.${mode === "pdf" ? "pdf" : "txt"}`;
+  return { blob, filename };
 }
 
 export async function fetchSubmission(id: number): Promise<SubmissionDto | null> {

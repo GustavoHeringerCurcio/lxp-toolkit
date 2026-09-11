@@ -7,6 +7,9 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Eye,
+  FileText,
+  FileType,
   History,
   Loader2,
   Paperclip,
@@ -15,11 +18,13 @@ import {
   Send,
   Sparkles,
   Trash2,
+  Type,
   Undo2,
 } from "lucide-react";
 import {
   clearAnswerHistory,
   fetchAnswerState,
+  fetchSendArtifact,
   fetchSendConfig,
   fetchSubmission,
   fetchSubmissions,
@@ -30,6 +35,7 @@ import {
   snippet,
   streamGenerate,
   type SendConfigDto,
+  type SendMode,
   type SubmissionDto,
 } from "@/api";
 import { toast } from "sonner";
@@ -57,6 +63,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+const SEND_MODES: { value: SendMode; label: string; hint: string; icon: typeof Type }[] = [
+  { value: "text", label: "Texto direto", hint: "digitado no campo de resposta do portal", icon: Type },
+  { value: "txt", label: "Arquivo .txt", hint: "anexado como arquivo de texto", icon: FileText },
+  { value: "pdf", label: "Arquivo .pdf", hint: "convertido em PDF e anexado", icon: FileType },
+];
+
+function sendModeLabel(mode: SendMode): string {
+  return SEND_MODES.find((m) => m.value === mode)?.label ?? mode;
+}
+
 function AnswerPanel({
   e,
   onRefresh,
@@ -74,9 +90,15 @@ function AnswerPanel({
   const [state, setState] = useState<AnswerState | null>(null);
   const [sendCfg, setSendCfg] = useState<SendConfigDto | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
+  const [sendMode, setSendMode] = useState<SendMode>("text");
   const [agree, setAgree] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [previewErr, setPreviewErr] = useState<string | null>(null);
   const [sub, setSub] = useState<SubmissionDto | null>(null);
   const [subs, setSubs] = useState<SubmissionDto[]>([]);
   const cancelRef = useRef(false);
@@ -93,6 +115,7 @@ function AnswerPanel({
     setDraft(e.answer ?? "");
     setErr(null);
     setSendOpen(false);
+    setSendMode("text");
     setAgree(false);
     setSub(null);
     setSendErr(null);
@@ -132,6 +155,20 @@ function AnswerPanel({
       cancelRef.current = true;
     };
   }, [e.id]);
+
+  // Drop the blob URL whenever the preview changes or the panel unmounts.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  // A preview is only valid for the draft/mode it was generated from.
+  useEffect(() => {
+    setPreviewUrl(null);
+    setPreviewText(null);
+    setPreviewErr(null);
+  }, [draft, sendMode]);
 
   const setBusySync = (v: boolean) => {
     busyRef.current = v;
@@ -225,7 +262,7 @@ function AnswerPanel({
       description: "Fazendo login e entregando a atividade.",
     });
     try {
-      const started = await sendAnswerToPortal(e.id, answer);
+      const started = await sendAnswerToPortal(e.id, answer, sendMode);
       setSub(started);
       let final = started;
       const deadline = Date.now() + 150_000;
@@ -268,6 +305,47 @@ function AnswerPanel({
       setSending(false);
       setSendOpen(false);
       cancelRef.current = true;
+    }
+  };
+
+  const previewArtifact = async () => {
+    if (sendMode !== "txt" && sendMode !== "pdf") return;
+    setPreviewBusy(true);
+    setPreviewErr(null);
+    try {
+      const { blob } = await fetchSendArtifact(e.id, draft, sendMode);
+      if (sendMode === "pdf") {
+        setPreviewText(null);
+        setPreviewUrl(URL.createObjectURL(blob));
+      } else {
+        setPreviewUrl(null);
+        setPreviewText(await blob.text());
+      }
+    } catch (x) {
+      setPreviewErr(x instanceof Error ? x.message : String(x));
+    } finally {
+      setPreviewBusy(false);
+    }
+  };
+
+  const downloadArtifact = async () => {
+    if (sendMode !== "txt" && sendMode !== "pdf") return;
+    setDownloadBusy(true);
+    setPreviewErr(null);
+    try {
+      const { blob, filename } = await fetchSendArtifact(e.id, draft, sendMode, true);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (x) {
+      setPreviewErr(x instanceof Error ? x.message : String(x));
+    } finally {
+      setDownloadBusy(false);
     }
   };
 
@@ -413,13 +491,96 @@ function AnswerPanel({
             </div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-foreground/90">
               <li>
-                {isUpload
-                  ? "Sua conta LXP abre, o texto é anexado como arquivo (.txt) e entregue."
-                  : "Sua conta LXP abre, as alternativas são marcadas e o questionário é enviado."}
+                {!isUpload
+                  ? "Sua conta LXP abre, as alternativas são marcadas e o questionário é enviado."
+                  : sendMode === "text"
+                    ? "Sua conta LXP abre e o texto é digitado direto no campo de resposta do portal."
+                    : sendMode === "pdf"
+                      ? "Sua conta LXP abre, o texto é convertido em PDF e anexado à resposta."
+                      : "Sua conta LXP abre, o texto é anexado como arquivo (.txt) e entregue."}
               </li>
               <li>A ação não é reversível e pode consumir uma tentativa.</li>
               <li>Confira o texto e o prazo antes de confirmar.</li>
             </ul>
+
+            {isUpload && (
+              <div className="mt-3">
+                <div className="mb-1.5 text-[13px] font-medium text-foreground">Formato do envio</div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {SEND_MODES.map((m) => {
+                    const Icon = m.icon;
+                    const selected = sendMode === m.value;
+                    return (
+                      <button
+                        key={m.value}
+                        type="button"
+                        onClick={() => setSendMode(m.value)}
+                        disabled={sending}
+                        aria-pressed={selected}
+                        className={cn(
+                          "flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-[12px] transition-colors",
+                          "disabled:cursor-not-allowed disabled:opacity-60",
+                          selected
+                            ? "border-brand/60 bg-brand/15 text-foreground"
+                            : "border-border bg-muted/30 text-muted-foreground hover:bg-accent/40",
+                        )}
+                      >
+                        <Icon className="size-4" aria-hidden />
+                        {m.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  {SEND_MODES.find((m) => m.value === sendMode)?.hint}
+                </p>
+
+                {(sendMode === "txt" || sendMode === "pdf") && (
+                  <>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => void previewArtifact()}
+                        disabled={previewBusy || !draft.trim()}
+                      >
+                        {previewBusy ? <Loader2 className="animate-spin" aria-hidden /> : <Eye aria-hidden />}
+                        Pré-visualizar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => void downloadArtifact()}
+                        disabled={downloadBusy || !draft.trim()}
+                      >
+                        {downloadBusy ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
+                        Baixar
+                      </Button>
+                    </div>
+                    {previewErr && (
+                      <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                        {previewErr}
+                      </p>
+                    )}
+                    {previewUrl && (
+                      <iframe
+                        src={previewUrl}
+                        title="Pré-visualização do arquivo"
+                        className="mt-2 h-72 w-full rounded-md border border-border bg-white"
+                      />
+                    )}
+                    {previewText != null && (
+                      <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-2.5 text-[12px] leading-relaxed">
+                        {previewText}
+                      </pre>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             <label className="mt-3 flex cursor-pointer items-start gap-2 text-[13px]">
               <input
                 type="checkbox"
@@ -493,6 +654,7 @@ function AnswerPanel({
                   <div className="min-w-0">
                     <span className="font-medium">{submissionLabel(s.status)}</span>
                     <span className="text-muted-foreground"> · {fmtVersionDate(s.at)}</span>
+                    {s.mode && <span className="text-muted-foreground"> · {sendModeLabel(s.mode)}</span>}
                     {s.attachmentName && <span className="text-muted-foreground"> · {s.attachmentName}</span>}
                     <p className="break-words text-muted-foreground">{s.detail}</p>
                   </div>
