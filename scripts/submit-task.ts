@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Locator, Page } from "playwright";
@@ -17,7 +17,14 @@ import { config, logger } from "../src/config.js";
  *
  * Upload request JSON:
  *   { "action": "upload", "courseId": number, "itemId": number, "answer": string,
- *     "ext"?: "md"|"txt", "filename"?: string }
+ *     "mode"?: "text"|"txt"|"pdf", "ext"?: "md"|"txt", "filename"?: string,
+ *     "filePath"?: string }
+ *   `mode` selects how the answer reaches the portal:
+ *     - "text" (default when set): typed straight into the reply editor, no file.
+ *     - "txt": written to a temp `.txt` file and attached.
+ *     - "pdf": attaches the pre-generated PDF at `filePath` (the assistant server
+ *       renders it from the answer and passes the absolute path).
+ *   When omitted, "txt" is assumed for backward compatibility.
  *   `filename` is an optional attachment base name (no extension), e.g.
  *   "Aluno Exemplo_BDI - Atividade 01". When omitted the runner falls
  *   back to a generic "lxp-submit-<timestamp>-<itemId>" name.
@@ -37,8 +44,21 @@ interface QuizItem {
   optionText: string;
 }
 
+type UploadMode = "text" | "txt" | "pdf";
+
 type SubmitRequest =
-  | { action: "upload"; courseId: number; itemId: number; answer: string; ext?: "md" | "txt"; filename?: string }
+  | {
+      action: "upload";
+      courseId: number;
+      itemId: number;
+      answer: string;
+      /** How the answer reaches the portal. Defaults to "txt". */
+      mode?: UploadMode;
+      ext?: "md" | "txt";
+      filename?: string;
+      /** Absolute path to a pre-generated file to attach (used by "pdf"). */
+      filePath?: string;
+    }
   | { action: "quiz"; courseId: number; itemId: number; selections: QuizItem[] };
 
 interface SubmitResult {
@@ -349,7 +369,7 @@ async function main(): Promise<void> {
 
   let req: SubmitRequest;
   let result: SubmitResult;
-  const fail = (detail: string, status: "error" | "unknown" = "error") => {
+  const fail = (detail: string, status: "error" | "unknown" = "error"): never => {
     result = { ok: false, status, detail, at: new Date().toISOString() };
     writeResult(resultPath, result);
     console.error(`submit-task failed [${status}]: ${detail}`);
@@ -442,26 +462,40 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    // Build the answer file from the text and attach it.
-    const ext = req.ext ?? "md";
-    const fallbackName = `lxp-submit-${Date.now()}-${req.itemId}`;
-    const base = req.filename?.trim() ? sanitizeFilename(req.filename) : fallbackName;
-    const filePath = path.join(tmpdir(), `${base || fallbackName}.${ext}`);
-    mkdirSync(path.dirname(filePath), { recursive: true });
-    writeFileSync(filePath, req.answer, "utf-8");
-
-    const fileInput = await findFileInput(page, 15_000);
-    if (!fileInput) {
-      const reason = await detectAlreadySubmitted(page, true).catch(() => null);
-      if (reason) return already(reason);
-      const buttons = await describeButtons(page).catch(() => "");
-      return fail(`no file input found. Buttons seen: ${buttons}`);
+    // Resolve the attachment according to the requested mode.
+    const mode: UploadMode = req.mode ?? "txt";
+    let attachedPath: string | null = null;
+    if (mode === "pdf") {
+      if (!req.filePath) return fail("pdf mode requires a filePath");
+      if (!existsSync(req.filePath)) return fail(`attachment not found: ${req.filePath}`);
+      attachedPath = req.filePath;
+    } else if (mode === "txt") {
+      const ext = req.ext ?? "txt";
+      const fallbackName = `lxp-submit-${Date.now()}-${req.itemId}`;
+      const base = req.filename?.trim() ? sanitizeFilename(req.filename) : fallbackName;
+      attachedPath = path.join(tmpdir(), `${base || fallbackName}.${ext}`);
+      mkdirSync(path.dirname(attachedPath), { recursive: true });
+      writeFileSync(attachedPath, req.answer, "utf-8");
     }
-    await fileInput.setInputFiles(filePath);
-    logger.info("file attached");
+
+    if (attachedPath) {
+      const fileInput = await findFileInput(page, 15_000);
+      if (!fileInput) {
+        const reason = await detectAlreadySubmitted(page, true).catch(() => null);
+        if (reason) return already(reason);
+        const buttons = await describeButtons(page).catch(() => "");
+        return fail(`no file input found. Buttons seen: ${buttons}`);
+      }
+      await fileInput.setInputFiles(attachedPath);
+      logger.info({ attachedPath }, "file attached");
+    }
 
     const filled = await fillEditor(page, req.answer).catch(() => false);
-    logger.info({ filled }, "reply text filled");
+    logger.info({ filled, mode }, "reply text filled");
+    if (mode === "text" && !filled) {
+      const buttons = await describeButtons(page).catch(() => "");
+      return fail(`no reply editor found for text mode. Buttons seen: ${buttons}`);
+    }
 
     // Give the SPA a beat to register the file, then wait for the submit to enable.
     await page.waitForTimeout(2_000);
@@ -501,7 +535,7 @@ async function main(): Promise<void> {
         status: "ok",
         detail: snippet(detection.snippet, 300),
         at: new Date().toISOString(),
-        attachmentName: path.basename(filePath),
+        attachmentName: attachedPath ? path.basename(attachedPath) : undefined,
         portalDetail: snippet(detection.snippet, 300),
       };
     } else {
@@ -510,7 +544,7 @@ async function main(): Promise<void> {
         status: "unknown",
         detail: `submit clicked but success not confirmed. Page: ${snippet(detection.snippet, 300)}`,
         at: new Date().toISOString(),
-        attachmentName: path.basename(filePath),
+        attachmentName: attachedPath ? path.basename(attachedPath) : undefined,
         portalDetail: snippet(detection.snippet, 300),
       };
     }

@@ -22,8 +22,17 @@ import { enrich } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
 import { parseQuizSelections } from "../src/prompt.js";
 import type { AiActivitySections, AiStyle } from "../src/types.js";
-import { launchUploadSubmit, launchQuizSubmit, lastSubmission, sendEnv, submissionsFor } from "../src/send.js";
+import {
+  launchUploadSubmit,
+  launchQuizSubmit,
+  lastSubmission,
+  sendEnv,
+  submissionsFor,
+  uploadBaseName,
+  type SendMode,
+} from "../src/send.js";
 import { officeToPdf, previewCacheDir } from "../src/office.js";
+import { answerToPdf } from "../src/pdf.js";
 
 const DIST = path.join(ASSISTANT_DIR, "web", "dist");
 const PORT = Number(process.env.PORT || 4174);
@@ -127,6 +136,18 @@ function sendStatic(res: import("node:http").ServerResponse, file: string, fallb
   }
   res.writeHead(200, { "content-type": MIME[path.extname(target).toLowerCase()] ?? "application/octet-stream" });
   createReadStream(target).pipe(res);
+}
+
+/** Safe attachment filename (matches the runner's sanitizer), forced to `ext`. */
+function safeFilename(name: string, ext: string): string {
+  const base = name
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/[/\\:*?"<>|]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[.\s]+|[.\s]+$/g, "")
+    .slice(0, 120)
+    .trim();
+  return `${base || "resposta"}.${ext}`;
 }
 
 function readBody(req: import("node:http").IncomingMessage): Promise<Record<string, unknown>> {
@@ -297,6 +318,42 @@ const server = createServer(async (req, res) => {
         hasAnswer: Boolean(view.answer?.trim()),
       });
     }
+    if (url === "/api/send/artifact" && method === "POST") {
+      const b = await readBody(req);
+      const id = Number(b.id);
+      const answer = String(b.answer ?? "");
+      const mode = b.mode === "pdf" ? "pdf" : "txt";
+      const download = b.download === true;
+      if (!id) return json(res, 400, { error: "id obrigatório" });
+      if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de gerar o arquivo." });
+      const view = findView(id);
+      const baseName = uploadBaseName(view);
+      const ext = mode === "pdf" ? "pdf" : "txt";
+      const filename = safeFilename(baseName, ext);
+      const disposition = `${download ? "attachment" : "inline"}; filename="${filename}"`;
+
+      if (mode === "pdf") {
+        const pdf = await answerToPdf(answer, baseName);
+        if (!pdf) return json(res, 500, { error: "Não foi possível gerar o PDF (LibreOffice indisponível?)." });
+        res.writeHead(200, {
+          "content-type": "application/pdf",
+          "content-length": statSync(pdf).size,
+          "content-disposition": disposition,
+          "x-filename": filename,
+          "cache-control": "no-store",
+        });
+        createReadStream(pdf).pipe(res);
+        return;
+      }
+
+      res.writeHead(200, {
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": disposition,
+        "x-filename": filename,
+        "cache-control": "no-store",
+      });
+      return res.end(answer);
+    }
     if (url.startsWith("/api/send/")) {
       const id = Number(url.split("/")[3]);
       const last = lastSubmission(id);
@@ -437,6 +494,8 @@ const server = createServer(async (req, res) => {
         const b = await readBody(req);
         const id = Number(b.id);
         const answer = String(b.answer ?? "");
+        const rawMode = String(b.mode ?? "");
+        const mode: SendMode = rawMode === "text" || rawMode === "pdf" || rawMode === "txt" ? rawMode : "txt";
         const view = findView(id);
         if (view.status === "done") return json(res, 400, { error: "Esta atividade já está concluída." });
         if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de enviar." });
@@ -447,11 +506,25 @@ const server = createServer(async (req, res) => {
           return json(res, 400, { error: "Não foi possível identificar as alternativas escolhidas na resposta." });
         saveAnswerVersion(id, answer, "manual", undefined, selections);
         try {
-          const submission =
-            view.kind === "quiz"
-              ? launchQuizSubmit(view, selections)
-              : launchUploadSubmit(view, answer, "txt");
-          return json(res, 200, { ok: true, submission: { status: submission.status, detail: submission.detail, at: submission.at } });
+          let submission;
+          if (view.kind === "quiz") {
+            submission = launchQuizSubmit(view, selections);
+          } else {
+            let filePath: string | undefined;
+            if (mode === "pdf") {
+              const pdf = await answerToPdf(answer, uploadBaseName(view));
+              if (!pdf)
+                return json(res, 500, {
+                  error: "Não foi possível gerar o PDF da resposta (LibreOffice indisponível?).",
+                });
+              filePath = pdf;
+            }
+            submission = launchUploadSubmit(view, answer, mode, filePath);
+          }
+          return json(res, 200, {
+            ok: true,
+            submission: { status: submission.status, detail: submission.detail, at: submission.at, mode: submission.mode },
+          });
         } catch (err) {
           return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
         }

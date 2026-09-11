@@ -3,7 +3,9 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ASSISTANT_DIR, assist } from "./paths.js";
 import { loadOverrides, loadProfile, loadSubmissions, saveOverrides, saveSubmissions } from "./config.js";
-import type { QuizSelection, SubmissionEntry } from "./types.js";
+import type { QuizSelection, SendMode, SubmissionEntry } from "./types.js";
+
+export type { SendMode };
 
 /**
  * LXP submission transport: a gated browser-runner in the ROOT study repo
@@ -38,12 +40,27 @@ function tsxBin(rootDir: string): string {
   return path.join(rootDir, "node_modules", ".bin", process.platform === "win32" ? "tsx.cmd" : "tsx");
 }
 
+/** Attachment/title base name for an upload: `<nome>_<título da atividade>`. */
+export function uploadBaseName(view: { title: string }): string {
+  return [loadProfile().nome, view.title]
+    .map((part) => part?.trim() ?? "")
+    .filter(Boolean)
+    .join("_");
+}
+
 /**
  * Writes the request file and spawns the root runner for an upload task.
- * Returns the submission entry immediately (status "running"); the entry is
- * updated when the child process exits.
+ * `mode` selects how the answer is delivered (see `SendMode`); `filePath` is the
+ * pre-generated PDF to attach when `mode === "pdf"`. Returns the submission
+ * entry immediately (status "running"); the entry is updated when the child
+ * process exits.
  */
-export function launchUploadSubmit(view: { id: number; courseId: number; title: string }, answerText: string, ext: "md" | "txt"): SubmissionEntry {
+export function launchUploadSubmit(
+  view: { id: number; courseId: number; title: string },
+  answerText: string,
+  mode: SendMode = "txt",
+  filePath?: string,
+): SubmissionEntry {
   const env = sendEnv();
   if (!env.enabled || !env.rootDir) {
     throw new Error(env.reason || "runner não configurado");
@@ -54,15 +71,18 @@ export function launchUploadSubmit(view: { id: number; courseId: number; title: 
   mkdirSync(dir, { recursive: true });
   const reqFile = path.join(dir, `req-${view.id}-${at}.json`);
   const resFile = path.join(dir, `res-${view.id}-${at}.json`);
-  const filename = [loadProfile().nome, view.title]
-    .map((part) => part?.trim() ?? "")
-    .filter(Boolean)
-    .join("_");
-  writeFileSync(
-    reqFile,
-    JSON.stringify({ action: "upload", courseId: view.courseId, itemId: view.id, answer: answerText, ext, filename }, null, 2),
-    "utf-8",
-  );
+  const filename = uploadBaseName(view);
+  const payload: Record<string, unknown> = {
+    action: "upload",
+    courseId: view.courseId,
+    itemId: view.id,
+    answer: answerText,
+    mode,
+    filename,
+  };
+  if (mode === "txt") payload.ext = "txt";
+  if (mode === "pdf" && filePath) payload.filePath = filePath;
+  writeFileSync(reqFile, JSON.stringify(payload, null, 2), "utf-8");
 
   const entry: SubmissionEntry = {
     exerciseId: view.id,
@@ -70,6 +90,7 @@ export function launchUploadSubmit(view: { id: number; courseId: number; title: 
     status: "running",
     detail: "aguardando login no portal…",
     answer: answerText,
+    mode,
   };
   pushSubmission(entry);
 

@@ -154,6 +154,8 @@ export type Answers = Record<string, AnswerRecord>;
 
 export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
 
+export type SendMode = "text" | "txt" | "pdf";
+
 export interface SubmissionEntry {
   exerciseId: number;
   at: string;
@@ -161,6 +163,8 @@ export interface SubmissionEntry {
   detail: string;
   /** What was submitted (answer text), for the history. */
   answer?: string;
+  /** How the answer was delivered: typed, .txt attachment, or .pdf attachment. */
+  mode?: SendMode;
   /** Attachment filename registered by the portal. */
   attachmentName?: string;
   /** Attempt number reported by the portal, when known. */
