@@ -72,7 +72,7 @@ export function localFilesFor(courseId: number, itemId: number): PdfRef[] {
   const mine = names.filter((n) => n.startsWith(`${itemId}_`) || n.startsWith(`${itemId}.`) || n === String(itemId));
   return mine.map((name) => {
     const absPath = path.join(filesRoot, name);
-    const relPath = path.join("docs", "courses", dir, "files", name);
+    const relPath = path.join("scraped", "courses", dir, "files", name);
     return {
       name,
       relPath: relPath.split(path.sep).join("/"),

@@ -50,13 +50,13 @@ Data flow per activity kind:
 ### Phase 1 — Controlled discovery (human-in-the-loop, one-time)
 Objective: close `docs/gaps.md` §1–2 with real contracts.
 - Use the existing tool: `npm run capture-api -- --url <quiz item> --headful`, answer one question
-  for real, press Enter → inspect `docs/raw/api-calls.json` + `docs/api-captured.md`.
+  for real, press Enter → inspect `scraped/raw/api-calls.json` + `scraped/api-captured.md`.
   Repeat once for a file-upload task (upload one file).
 - Record: endpoint path, HTTP method, JSON/multipart body shape, required headers, whether an
   `aws-waf-token` was sent and matters, and **DOM selectors + confirm-click flow** (radio/label,
   "entregar", success state) — capture screenshots/DOM dumps to support the runner.
 - Deliverables: update `agent-docs/03-api-endpoints.md` (new "write side" table), close the two gap
-  entries, save a short `docs/raw/submit-contract.json` describing payload + DOM flow.
+  entries, save a short `scraped/raw/submit-contract.json` describing payload + DOM flow.
 
 Gate: this submits real work. Only run with explicit intent.
 

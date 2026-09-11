@@ -14,14 +14,14 @@ gerado não deve parecer escrito por IA.
 ## Fluxo ponta a ponta
 
 ```
-1. RASPAGEM   (raiz)       npm run dump          portal -> docs/courses/**, docs/raw/**
-2. ÍNDICE     (assistant)  npm run index         docs/ -> assistant/data/exercises.json
+1. RASPAGEM   (raiz)       npm run dump          portal -> scraped/courses/**, scraped/raw/**
+2. ÍNDICE     (assistant)  npm run index         scraped/ -> assistant/data/exercises.json
 3. GERAÇÃO    (assistant)  botão "Gerar"         exercises + PDF -> OpenAI -> data/answers.json
 4. ENVIO      (assistant)  botão "Enviar"        spawn scripts/submit-task.ts (Playwright)
 5. PORTAL     (raiz)       submit-task.ts        login fresco -> SPA -> anexa/seleciona -> envia
 ```
 
-- Leitura: só o passo 1 e 5 falam com o portal. O app lê do `docs/` já raspado.
+- Leitura: só o passo 1 e 5 falam com o portal. O app lê do `scraped/` já raspado.
 - Escrita: sempre por navegador real (Playwright), porque o token é de uso único e a
   AWS WAF protege os POST/PUT.
 - Cada geração guarda uma versão em `data/answers.json` (histórico). Envio registra em
@@ -49,7 +49,7 @@ overrides). Reenvios de algo já entregue são detectados e avisados, sem dump c
 | `src/config.ts` | config de IA + respostas + overrides + envios |
 | `src/prompt.ts` | monta a única mensagem enviada ao modelo |
 | `src/ai.ts` | chamada à OpenAI (streaming) |
-| `src/build.ts` / `src/load.ts` | `docs/` -> `data/exercises.json` |
+| `src/build.ts` / `src/load.ts` | `scraped/` -> `data/exercises.json` |
 | `src/view.ts` | visão enriquecida de cada atividade |
 | `src/send.ts` | dispara o runner de envio no repositório raiz |
 | `src/export.ts` | exporta resposta para `out/` |
@@ -68,7 +68,7 @@ overrides). Reenvios de algo já entregue são detectados e avisados, sem dump c
 # dentro de assistant/
 npm install
 cp .env.example .env      # coloque OPENAI_API_KEY
-npm run index             # monta data/exercises.json a partir do docs/ raspado
+npm run index             # monta data/exercises.json a partir do scraped/ raspado
 npm run web               # build + servidor -> http://localhost:4174
 npm run assistant -- list # CLI
 npm run typecheck

@@ -7,10 +7,10 @@ export const ASSISTANT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta
 
 loadEnv({ override: true, path: path.join(ASSISTANT_DIR, ".env") });
 
-/** Directory that holds the scraped LXP data (the study repo's docs/). */
+/** Directory that holds the scraped LXP data (the study repo's scraped/). */
 export function dataDir(): string {
   const d = process.env.DATA_DIR;
-  return d ? path.resolve(ASSISTANT_DIR, d) : path.join(ASSISTANT_DIR, "..", "docs");
+  return d ? path.resolve(ASSISTANT_DIR, d) : path.join(ASSISTANT_DIR, "..", "scraped");
 }
 
 export const assist = (...p: string[]): string => path.join(ASSISTANT_DIR, ...p);

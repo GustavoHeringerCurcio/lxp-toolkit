@@ -25,7 +25,7 @@ const EnvSchema = z.object({
     .default("info"),
   PLAYWRIGHT_NO_SANDBOX: boolFromString.default(false),
   HEADFUL: boolFromString.default(false),
-  OUT_DIR: z.string().default("docs"),
+  OUT_DIR: z.string().default("scraped"),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

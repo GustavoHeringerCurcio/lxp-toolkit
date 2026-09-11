@@ -12,22 +12,24 @@ Scraped + reverse-engineered state of the **UniFOA / Grupoa LXP** platform
 | [api-endpoints.md](api-endpoints.md) | every discovered API endpoint (verb, path, payload shape) |
 | [topic-types.md](topic-types.md) | authoritative `topicTypeId` → name/alias/category mapping |
 | [gaps.md](gaps.md) | write-side gap analysis (quiz submit, file upload) |
-| [portal-map.md](portal-map.md) | frontend SPA routes (generated) |
-| [api-captured.md](api-captured.md) | raw captured traffic (generated) |
+
+> Generated captures (route maps, raw API traffic, course content) are **not** committed — they
+> are per-account and written to the gitignored `scraped/` directory. Run the scraper with your
+> own `.env` credentials to produce them.
 
 ## Scraped data
 
-- **Courses** (`docs/courses/{courseId}-{slug}/`) — 1 course, **145 items**, one `.md` per item +
-  a `README.md`. Every item includes metadata, rendered HTML, full `context`, `studentGrade`:
-  - **8 quizzes** with complete question + option lists.
-  - **35 file-uploads** with instructions, template attachments, limits.
-  - **7 links** with their target URLs.
-  - **102 attachment files** downloaded (PDF/PPTX/DOCX/ZIP, ~81 MB) → `docs/courses/**/files/`.
-- **Routes** (`docs/routes/*.md`) — 10 SPA routes captured via client-side navigation (incl.
-  course detail + grades grid).
-- **Surfaces** (`docs/*.md`) — grades, calendar, notices, messages, achievements, communities,
+Each user scrapes **their own** account into `scraped/` (gitignored — never commit it):
+
+- **Courses** (`scraped/courses/{courseId}-{slug}/`) — one `.md` per item + a `README.md`.
+  Every item includes metadata, rendered HTML, full `context`, and your `studentGrade`.
+  - Quizzes with complete question + option lists.
+  - File-uploads with instructions, template attachments, limits.
+  - Downloaded attachments (PDF/PPTX/DOCX/ZIP) → `scraped/courses/**/files/`.
+- **Routes** (`scraped/routes/*.md`) — SPA routes captured via client-side navigation.
+- **Surfaces** (`scraped/*.md`) — grades, calendar, notices, messages, achievements, communities,
   LTI tools, each as readable markdown + raw JSON.
-- **Raw JSON** (`docs/raw/`) — `content-tree.json`, `routes.json`, `api-calls.json`,
+- **Raw JSON** (`scraped/raw/`) — `content-tree.json`, `routes.json`, `api-calls.json`,
   `surfaces.json`, `topic-types.json`, `example-quiz-topic.json`, `example-upload-topic.json`,
   `deep-api.json`, `deep-routes.json`, `homework-index.json`.
 
@@ -52,12 +54,12 @@ Scraped + reverse-engineered state of the **UniFOA / Grupoa LXP** platform
 ## Commands
 
 ```bash
-npm run dump           # scrape all course content (incl. quizzes/uploads/links) + download files
-npm run dump-surfaces  # scrape grades, calendar, notices, messages, achievements, communities, LTI
-npm run crawl-routes   # crawl SPA routes (client-side) → docs/routes/** + portal-map.md
-npm run capture-api    # record network → docs/api-captured.md
+npm run dump           # scrape your course content (incl. quizzes/uploads/links) + download files
+npm run dump-surfaces  # scrape your grades, calendar, notices, messages, achievements, communities, LTI
+npm run crawl-routes   # crawl SPA routes (client-side) → scraped/routes/** + scraped/portal-map.md
+npm run capture-api    # record network → scraped/api-captured.md
 npm run agent          # list / auto-complete readings (quiz/upload pending — see gaps.md)
-npm run index          # build docs/raw/homework-index.json (topic-linked homework index)
+npm run index          # build scraped/raw/homework-index.json (topic-linked homework index)
 npm run homework       # friendly terminal board of open homework
 npm run exercises -- <itemId>   # read a quiz's questions or an upload's info from the API
 ```
@@ -98,7 +100,7 @@ That's why link-crawling doesn't work and you must navigate with `$nuxt.$router.
 Write a tiny script that logs in and prints your grades by reusing `createSession()` and:
 
 ```ts
-const res = await client.get("/v1/plataforma/grades/me/course/5254272");
+const res = await client.get("/v1/plataforma/grades/me/course/<yourCourseId>");
 console.log(JSON.stringify(res.data, null, 2));
 ```
 

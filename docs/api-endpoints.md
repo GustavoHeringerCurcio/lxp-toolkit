@@ -12,7 +12,7 @@ x-notice-show-modal: false
 ```
 
 > Endpoints marked ✅ were hit against the live API during the scrape (full response bodies
-> captured in `docs/raw/surfaces.json` and `docs/raw/deep-api.json`).
+> captured in `scraped/raw/surfaces.json` and `scraped/raw/deep-api.json`).
 
 ## Identity / auth (safea-client)
 
@@ -54,7 +54,7 @@ x-notice-show-modal: false
 | GET | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}` | ✅ **item/topic detail** — `topics.content` + `context` (richest source) |
 | GET | `/v1/plataforma/content/lti/tool/list-by-alias/student` | ✅ LTI tools (`results[{id,title,url,icon,ltiProviderId}]`) |
 
-### Item/topic detail `content` shapes (see `docs/raw/example-*.json`)
+### Item/topic detail `content` shapes (see `scraped/raw/example-*.json`)
 
 **Quiz** (`topicTypeId` 15/29/30/37) — `content.questions[]`:
 ```json

@@ -21,7 +21,7 @@ reverse-engineered facts, not assumptions.
    - `agent-docs/06-tooling.md` — the scripts + gotchas.
    - `agent-docs/07-scraped-data.md` — already-scraped data (prefer reading it over re-scraping).
 
-If scraped data already answers the question (`docs/`), use it instead of hitting the live API.
+If scraped data already answers the question (`scraped/`), use it instead of hitting the live API.
 
 ## Critical facts — never forget these
 

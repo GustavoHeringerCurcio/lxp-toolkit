@@ -5,3 +5,7 @@ web/dist/
 data/
 out/
 *.log
+
+# Personal config (name, matrícula, per-item overrides) — never commit
+config/profile.json
+config/overrides.json

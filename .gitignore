@@ -12,6 +12,22 @@ dist/
 data/
 storageState.json
 
+# Scraped user data (per-account; never commit)
+scraped/
+
+# Legacy scraped locations (belt & suspenders)
+docs/courses/
+docs/raw/
+docs/routes/
+
+# Playwright artifacts (screenshots, snapshots, traces)
+.playwright-mcp/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+playwright/.auth/
+
 # Logs
 *.log
 logs/

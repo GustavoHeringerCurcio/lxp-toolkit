@@ -43,7 +43,7 @@ Legend: `[x]` done · `[ ]` pending.
   - Poppins on titles, Lato body; no FOUT gaps beyond webfont load;
   - tone pills legible: Concluída (green) / Atrasada (crimson) / Vence em Nd (amber / teal) /
     Sem prazo (gray);
-  - `/docs/…` file links + `/api/export` still resolve.
+  - `/scraped/…` file links + `/api/export` still resolve.
 
 ## Phase 4 — Polish pass
 

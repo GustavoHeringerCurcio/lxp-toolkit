@@ -52,7 +52,7 @@ npm run web        # builds + serves → http://localhost:4174
 
 - **List** ordered by deadline with badges (green done / red expired / amber due soon). Each card
   has a quick-action menu (Gerar com IA, abrir no portal, copiar link, baixar resposta).
-- **Activity detail** (`/tarefa/:id`): instructions, files (PDFs open via `/docs/…`), quiz
+- **Activity detail** (`/tarefa/:id`): instructions, files (PDFs open via `/scraped/…`), quiz
   questions, an **"O que a IA recebe"** editor — free-text extra instructions just for that
   activity, with a live preview of the compiled `system` + `user` messages — and an **answer
   workbench** that streams the AI answer and keeps a **version history** (regenerate keeps previous

@@ -10,19 +10,19 @@ cp .env.example .env    # then fill LXP_USERNAME (RA) and LXP_PASSWORD
 
 `.env` keys: `LXP_LOGIN_URL`, `LXP_USERNAME`, `LXP_PASSWORD`, `LXP_URL`, `API_BASE`, `TZ`,
 `LOG_LEVEL`, `HEADFUL`, `OUT_DIR`. The API base defaults to
-`https://api.plataforma.grupoa.education`.
+`https://api.plataforma.grupoa.education`; `OUT_DIR` defaults to `scraped` (gitignored).
 
 ## Scripts (`npm run <name>`)
 
 | Script | File | What it does |
 |---|---|---|
 | `login` | `scripts/login.ts` | interactive login; saves a session to `data/storageState.json` (legacy; scripts re-login each run anyway) |
-| `dump` | `scripts/dump-content.ts` | scrape all course content (quizzes, uploads, links) + download attachments → `docs/courses/**` + `docs/raw/content-tree.json` |
-| `dump-surfaces` | `scripts/dump-surfaces.ts` | scrape grades, calendar, notices, messages, achievements, communities, LTI → `docs/*.md` + `docs/raw/surfaces.json` |
-| `crawl-routes` | `scripts/crawl-routes.ts` | capture SPA pages via client-side nav → `docs/routes/**` + `docs/portal-map.md` |
-| `capture-api` | `scripts/capture-api.ts` | record network traffic → `docs/api-captured.md` + `docs/raw/api-calls.json` |
+| `dump` | `scripts/dump-content.ts` | scrape all your course content (quizzes, uploads, links) + download attachments → `scraped/courses/**` + `scraped/raw/content-tree.json` |
+| `dump-surfaces` | `scripts/dump-surfaces.ts` | scrape grades, calendar, notices, messages, achievements, communities, LTI → `scraped/*.md` + `scraped/raw/surfaces.json` |
+| `crawl-routes` | `scripts/crawl-routes.ts` | capture SPA pages via client-side nav → `scraped/routes/**` + `scraped/portal-map.md` |
+| `capture-api` | `scripts/capture-api.ts` | record network traffic → `scraped/api-captured.md` + `scraped/raw/api-calls.json` |
 | `agent` | `scripts/agent.ts` | list actionable items; `--read`/`--complete` auto-completes undone readings **and** all "Mark as completed" content (pdf/link/rich); `--dry-run` previews |
-| `index` | `scripts/build-homework-index.ts` | build `docs/raw/homework-index.json` (topic-linked: upload ↔ section ↔ sibling content ↔ local files) |
+| `index` | `scripts/build-homework-index.ts` | build `scraped/raw/homework-index.json` (topic-linked: upload ↔ section ↔ sibling content ↔ local files) |
 | `homework` | `scripts/homework.ts` | friendly terminal board of open homework (grouped by section, sorted by due date); `--fresh`, `--json` |
 | `exercises` | `scripts/exercises.ts` | read-only: `npm run exercises -- <itemId>` prints a quiz's questions or an upload's info |
 | `typecheck` | — | `tsc --noEmit` (run after any code change) |
@@ -43,7 +43,7 @@ cp .env.example .env    # then fill LXP_USERNAME (RA) and LXP_PASSWORD
 
 ## Prefer the offline index
 
-`docs/raw/homework-index.json` (built by `npm run index`) links every open assignment to its
+`scraped/raw/homework-index.json` (built by `npm run index`) links every open assignment to its
 section, sibling content, and local files. Read it instead of re-scraping. `npm run homework` is
 the friendly terminal board; the browser UI is the LXP Homework (`npm run web` inside `assistant/`).
 
@@ -53,7 +53,7 @@ the friendly terminal board; the browser UI is the LXP Homework (`npm run web` i
 1. **Never `page.goto` the LXP** after login — full reload kills the single-use token and the SPA
    redirects to `/auth/signin`. Use client-side navigation:
    ```js
-   await page.evaluate((p) => window.$nuxt?.$router.push(p), "/course/5254272/content/89612190");
+   await page.evaluate((p) => window.$nuxt?.$router.push(p), "/course/<courseId>/content/<itemId>");
    ```
 2. **`tsx` + `page.evaluate`** throw `ReferenceError: __name is not defined` because tsx/esbuild
    transpiles with `keepNames`. `createSession()` already injects a global `__name` shim, so any

@@ -8,7 +8,7 @@ import { logger } from "../src/config.js";
  * upload instructions/limits) straight from the API.
  *
  * Usage:
- *   npm run exercises -- <itemId>            (course 5254272 is inferred)
+ *   npm run exercises -- <itemId>            (searches all your enrolled courses)
  *   npm run exercises -- <itemId> <courseId>
  */
 function usage(): void {
@@ -19,8 +19,8 @@ Usage:
   npm run exercises -- <itemId> <courseId>
 
 Examples:
-  npm run exercises -- 89612190            → quiz questions (Eng. Requisitos)
-  npm run exercises -- 89612213            → "Casos de Uso" upload info
+  npm run exercises -- 12345678            → quiz questions
+  npm run exercises -- 12345679 987654     → upload info in a specific course
 
 Note: this only READS. Submitting answers/uploads is intentionally not wired —
 see docs/gaps.md.
@@ -32,21 +32,27 @@ async function main(): Promise<void> {
   if (args.includes("--help") || args.includes("-h") || args.length === 0) return usage();
 
   const itemId = Number(args[0]);
-  const courseId = args.length > 1 ? Number(args[1]) : 5254272;
+  const explicitCourseId = args.length > 1 ? Number(args[1]) : null;
   if (!Number.isFinite(itemId)) return usage();
 
   const session = await createSession();
   try {
     // figure out kind + title from the content tree
     const { collectContent } = await import("../src/content.js");
-    const courses = await collectContent(session.client, [courseId]);
-    const course = courses.find((c) => c.courseId === courseId);
+    const courses = await collectContent(
+      session.client,
+      explicitCourseId ? [explicitCourseId] : [],
+    );
+    const course = courses.find((c) => c.items.some((i) => i.itemId === itemId));
     const item = course?.items.find((i) => i.itemId === itemId);
 
-    if (!item) {
-      console.error(`Item ${itemId} not found in course ${courseId}.`);
+    if (!course || !item) {
+      console.error(
+        `Item ${itemId} not found${explicitCourseId ? ` in course ${explicitCourseId}` : " in your enrolled courses"}.`,
+      );
       return;
     }
+    const courseId = course.courseId;
 
     console.log(`\n${item.itemTitle}`);
     console.log(`  kind: ${item.kind} | module: ${item.moduleTitle}${item.sectionTitle ? " | section: " + item.sectionTitle : ""}`);

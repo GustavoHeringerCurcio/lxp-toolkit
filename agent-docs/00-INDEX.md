@@ -20,9 +20,10 @@ If the task is narrow (e.g. "why did grades come back empty"), read the one rele
 
 ```
 agent-docs/         ← THIS knowledge base (read this first)
-docs/                ← human docs + full scraped data (big; read specific files, not wholesale)
+docs/                ← human reverse-engineering notes (committed)
 ├── auth.md, api-endpoints.md, topic-types.md, gaps.md, README.md, PLAN.md
-├── courses/{courseId}-{slug}/   ← 145 item .md dumps + downloaded files/
+scraped/             ← YOUR scraped data (gitignored; never commit)
+├── courses/{courseId}-{slug}/   ← per-item .md dumps + downloaded files/
 ├── raw/            ← content-tree.json, homework-index.json, surfaces.json, topic-types.json …
 ├── routes/         ← SPA route DOM captures
 └── grades-*.md, calendar.md, notices.md, messages.md, achievements.md, lti-tools.md …

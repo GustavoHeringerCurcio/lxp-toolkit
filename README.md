@@ -1,8 +1,8 @@
 # 🎓 UniFOA / Grupoa LXP — Study Toolkit
 
-Your own little helper for the **UniFOA / Grupoa LXP** portal (the *PROGRAMAÇÃO BACK-END*
-course). It logs in once, saves every material / quiz / homework as readable markdown so you can
-study offline, and adds friendly dashboards + AI study help on top.
+Your own little helper for the **UniFOA / Grupoa LXP** portal. It logs in with **your** account,
+saves every material / quiz / homework as readable markdown so you can study offline, and adds
+friendly dashboards + AI study help on top.
 
 > No black magic — just a Playwright login + a bunch of small scripts that talk to the same JSON
 > API the website uses. See `docs/README.md` and `agent-docs/` if you want the deep dive.
@@ -35,11 +35,11 @@ That's it — the rest of `.env` already has sensible defaults.
 
 | Command | What it does |
 |---|---|
-| `npm run dump` | Full re-scrape of all course content (readings, quizzes, uploads, links) + download attachments → `docs/courses/**` |
-| `npm run dump-surfaces` | Scrape grades, calendar, notices, messages → `docs/*.md` |
+| `npm run dump` | Full re-scrape of **your** course content (readings, quizzes, uploads, links) + download attachments → `scraped/courses/**` |
+| `npm run dump-surfaces` | Scrape your grades, calendar, notices, messages → `scraped/*.md` |
 | `npm run homework` | Friendly terminal board of open homework, deadline-first (`-- --fresh` rebuilds the index first) |
 | `npm run exercises -- <itemId>` | Read one quiz's questions or an upload's info |
-| `npm run index` | Build the offline homework index (`docs/raw/homework-index.json`) |
+| `npm run index` | Build the offline homework index (`scraped/raw/homework-index.json`) |
 | `npm run agent` | List / auto-complete leftover readings |
 | `npm run typecheck` | Check the code after you edit it |
 
@@ -57,11 +57,16 @@ Deeper reverse-engineering tools for studying how the site works: `crawl-routes`
 
 | Folder | What's inside |
 |---|---|
-| `docs/courses/` | Your course materials — one `.md` per item + downloaded attachments |
-| `docs/raw/` | Raw JSON captures (`content-tree.json`, `homework-index.json`, …) |
+| `scraped/courses/` | **Your** course materials — one `.md` per item + downloaded attachments (local only, gitignored) |
+| `scraped/raw/` | Raw JSON captures (`content-tree.json`, `homework-index.json`, …) — local only |
+| `docs/` | Reverse-engineering knowledge base (auth, API endpoints, topic types) — committed |
 | `src/` + `scripts/` | The code: auth, API client, and one script per command |
 | `assistant/` | The friendly CLI + web dashboard + AI answers |
 | `agent-docs/` | Distilled notes for working on this repo |
+
+> 🔒 Everything under `scraped/` is **your account's data** and is gitignored on purpose. Each
+> user logs in with their own `.env` credentials and generates their own `scraped/` locally —
+> nothing personal is ever committed.
 
 ## Good to know (the gotchas)
 

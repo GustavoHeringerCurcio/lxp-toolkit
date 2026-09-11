@@ -2,7 +2,7 @@
 
 Authoritative mapping fetched live from
 `GET /v1/plataforma/settings/institution/configuration/topic-types`
-(raw captured at `docs/raw/topic-types.json`).
+(raw captured at `scraped/raw/topic-types.json`).
 
 `topicTypeId` is the discriminator on every content-tree node and item. `category_type_id`
 groups them into coarse buckets (see table).

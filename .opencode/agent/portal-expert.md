@@ -17,7 +17,7 @@ Before answering or acting, read these files in order (they live in this repo):
 3. The relevant file(s) for the task: `01-overview.md`, `03-api-endpoints.md`,
    `04-topic-types.md`, `05-data-schemas.md`, `06-tooling.md`, `07-scraped-data.md`.
 
-Prefer reading already-scraped data under `docs/` (content tree, surfaces, routes) over
+Prefer reading already-scraped data under `scraped/` (content tree, surfaces, routes) over
 re-scraping the live API.
 
 ## Core facts you operate by

@@ -4,7 +4,7 @@
 
 ```
                  (raiz do repositório)                        (assistant/)
- portal  ──dump──►  docs/courses/**, docs/raw/**  ──index──►  data/exercises.json
+ portal  ──dump──►  scraped/courses/**, scraped/raw/**  ──index──►  data/exercises.json
                                                                 │
                                                   OpenAI ◄──── ai.ts ◄── prompt.ts
                                                                 │
@@ -24,14 +24,14 @@
 - `src/session.ts` — `createSession()` faz login fresco no Lyceum e devolve
   `{ browser, context, page, client, auth }`.
 - `src/auth.ts` / `src/client.ts` — login e cliente autenticado da API LXP.
-- `scripts/dump-content.ts` (`npm run dump`) — raspa o conteúdo do curso para `docs/`.
+- `scripts/dump-content.ts` (`npm run dump`) — raspa o conteúdo do curso para `scraped/`.
 - `scripts/submit-task.ts` — runner de envio. Recebe `--req <json>` e `--result <json>`.
   Hoje só trata `action: "upload"`: navega via `$nuxt.$router.push`, anexa o arquivo
   montado a partir do texto, clica em enviar e detecta o sucesso.
 
 ### assistant/ (produto)
 
-- `src/build.ts` + `src/load.ts` — transformam o `docs/` raspado em
+- `src/build.ts` + `src/load.ts` — transformam o `scraped/` raspado em
   `data/exercises.json` (uploads e quizzes, com prazo, arquivos e questões).
 - `src/view.ts` — enriquece cada atividade com resposta salva, override e as instruções
   extras de IA.

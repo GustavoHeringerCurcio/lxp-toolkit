@@ -8,7 +8,7 @@ There are **two distinct systems** that connect via SSO:
 - The classic student portal: enrollments, finance, documents, schedule, etc.
 - Angular hash SPA at `/aluno/#/…`.
 - **Used in this project ONLY as the login gateway** to reach the LXP. Do not scrape it.
-- Interesting fact: login is direct (username = RA, e.g. `REDACTED_RA`) — no Microsoft SAML redirect
+- Interesting fact: login is direct (username = RA) — no Microsoft SAML redirect
   happens for this tenant.
 
 ### 2. Grupoa LXP "Plataforma A" — `unifoa2.grupoa.education/plataforma/` (THE scrape target)
@@ -22,15 +22,13 @@ There are **two distinct systems** that connect via SSO:
 Lyceum's nav menu contains an **"LXP"** entry whose URL carries a one-time `tokenId`. Opening that
 URL in the LXP SPA produces the bearer token used for all API calls. Full detail: `02-auth.md`.
 
-## Current scraped state (what the agent can rely on)
+## Scraped state (per user, local only)
 
-- One enrolled course: **`5254272` — "PROGRAMAÇÃO BACK-END (8793_T01_2026_2)"**
-  under the category **"SISTEMAS DE INFORMAÇÃO"** (`117574`), period `2026/2`.
-- Course contains **145 content items**: 74 readings/PDFs (type 3), 35 file-upload tasks (type 8),
-  8 quizzes (types 15/37), 7 links (type 7), 3 forums (type 9), 18 other.
-- 102 attachment files (PDF/PPTX/DOCX/ZIP) already downloaded locally.
-- All read surfaces mapped: content, grades, calendar, notices, messages, achievements,
-  communities, LTI tools. See `03-api-endpoints.md`.
+- Every user logs in with their own `.env` credentials and scrapes their own enrolled courses.
+- Scraped output lives in the gitignored `scraped/` folder — it is **not** committed to the repo.
+  If it's empty, run `npm run dump` / `npm run dump-surfaces` first.
+- Typical contents: per-item markdown + downloaded attachments, grades, calendar, notices,
+  messages, achievements, communities, LTI tools. See `03-api-endpoints.md`.
 
 ## The project's purpose
 

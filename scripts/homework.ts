@@ -79,7 +79,7 @@ function usage(): void {
   console.log(`Homeworks dashboard
 
 Usage:
-  npm run homework          Show grouped homework board (reads docs/raw/homework-index.json)
+  npm run homework          Show grouped homework board (reads scraped/raw/homework-index.json)
   npm run homework -- --fresh   Rebuild the index first, then show
   npm run homework -- --json    Output raw homework JSON
 `);

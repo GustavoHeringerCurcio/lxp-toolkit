@@ -1,18 +1,18 @@
 # Data schemas — the JSON shapes you'll parse
 
-These are the real shapes returned by the API. Raw examples live in `docs/raw/`.
+These are the real shapes returned by the API. Raw examples live in `scraped/raw/`.
 
-## Content item (normalized, in `docs/raw/content-tree.json`)
+## Content item (normalized, in `scraped/raw/content-tree.json`)
 
 Each leaf item in the scraped content tree looks like:
 
 ```json
 {
-  "courseId": 5254272,
-  "courseName": "PROGRAMAÇÃO BACK-END (8793_T01_2026_2)",
-  "moduleId": 89611984, "moduleTitle": "Banco de Dados I - Profa. Débora Amorim",
-  "sectionId": 89611985, "sectionTitle": "Material Didático",
-  "itemId": 89611986, "itemTitle": "Apostila de Banco de Dados I",
+  "courseId": 1234567,
+  "courseName": "YOUR COURSE (CODE_CLASS_TERM)",
+  "moduleId": 10000001, "moduleTitle": "Module title - Prof. Name",
+  "sectionId": 10000002, "sectionTitle": "Material Didático",
+  "itemId": 10000003, "itemTitle": "Apostila de exemplo",
   "topicTypeId": 3, "categoryTypeId": 2,
   "progressTypeId": 1, "isRecordProgress": false,
   "kind": "pdf",                    // pdf | reading | quiz | file_upload | link | forum | other

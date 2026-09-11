@@ -248,7 +248,9 @@ only for login and must not be crawled.
 
 ## 6. Documentation structure (the deliverable)
 
-All docs live under `docs/`. Expected tree:
+All docs live under `docs/`. Generated, per-account captures now live in the gitignored
+`scraped/` (this original tree is kept for history; paths below may show the old layout). Expected
+tree:
 
 ```
 docs/
@@ -299,17 +301,17 @@ non-empty with the fields listed in §5.
 
 ### Phase 2 — Route crawler ✅
 - `scripts/crawl-routes.ts` — BFS over `/plataforma/*` routes (skips Lyceum), writes
-  `docs/routes/*.md` + `docs/raw/routes.json` + `docs/portal-map.md`.
+  `scraped/routes/*.md` + `scraped/raw/routes.json` + `scraped/portal-map.md`.
 
 ### Phase 3 — API harvester ✅
 - `src/network.ts` — `NetworkRecorder` (records requests + response bodies).
-- `scripts/capture-api.ts` — drives navigation + dumps `docs/api-captured.md` + `docs/raw/api-calls.json`.
+- `scripts/capture-api.ts` — drives navigation + dumps `scraped/api-captured.md` + `scraped/raw/api-calls.json`.
   `--url <itemUrl> --headful` is the one-time reverse-engineering entry point.
 
 ### Phase 4 — Content dump ✅
 - `src/content.ts` — full tree-walk + classification + HTML capture.
 - `src/actions.ts` — `markRead` (progress POST) + `downloadPdf`.
-- `scripts/dump-content.ts` — writes `docs/courses/**` + `docs/raw/content-tree.json`.
+- `scripts/dump-content.ts` — writes `scraped/courses/**` + `scraped/raw/content-tree.json`.
 
 ### Phase 5 — Gap closing (live interaction, one-time) ⏳
 - Open a quiz + a file-upload item in a headful browser with network recording.
@@ -382,7 +384,7 @@ only where a real DOM/SSO is unavoidable. Tool selection follows that principle:
   scraping. The library is used instead.
 - **Cheerio/jsdom** — unnecessary; content arrives as JSON + small HTML fragments converted by
   `node-html-markdown`.
-- **A database** — not needed for a one-shot documentation dump; raw JSON is written to `docs/raw/`.
+- **A database** — not needed for a one-shot documentation dump; raw JSON is written to `scraped/raw/`.
 
 ### Project layout (implemented)
 
@@ -400,9 +402,9 @@ src/
 └── index.ts         # CLI help entry
 scripts/
 ├── login.ts         # interactive login → data/storageState.json
-├── dump-content.ts  # scrape all content → docs/courses/**
-├── capture-api.ts   # record network → docs/api-captured.md (+ raw JSON)
-├── crawl-routes.ts  # crawl /plataforma/* routes → docs/routes/** + portal-map.md
+├── dump-content.ts  # scrape all content → scraped/courses/**
+├── capture-api.ts   # record network → scraped/api-captured.md (+ raw JSON)
+├── crawl-routes.ts  # crawl /plataforma/* routes → scraped/routes/** + portal-map.md
 └── agent.ts         # list / auto-complete exercises (reading done; quiz/upload pending)
 ```
 
@@ -422,9 +424,9 @@ cp .env.example .env      # then fill LXP_USERNAME / LXP_PASSWORD
 npm run login
 
 # 4. Scrape + document everything
-npm run dump              # all course content → docs/courses/**
-npm run crawl-routes      # all LXP routes → docs/routes/** + docs/portal-map.md
-npm run capture-api       # API traffic → docs/api-captured.md + docs/raw/api-calls.json
+npm run dump              # all course content → scraped/courses/**
+npm run crawl-routes      # all LXP routes → scraped/routes/** + scraped/portal-map.md
+npm run capture-api       # API traffic → scraped/api-captured.md + scraped/raw/api-calls.json
 
 # 5. Exercise agent (reading auto-complete is live; quiz/upload after Phase 5)
 npm run agent             # list quizzes/uploads/readings
