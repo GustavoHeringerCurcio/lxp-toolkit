@@ -209,12 +209,17 @@ export async function fetchSendPreview(id: number): Promise<SendPreviewDto> {
   return req<SendPreviewDto>(`/api/send/preview?id=${id}`);
 }
 
-export type SubmissionStatus = "running" | "ok" | "unknown" | "failed";
+export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
 
 export interface SubmissionDto {
   status: SubmissionStatus;
   detail: string;
   at: string;
+  answer?: string;
+  attachmentName?: string;
+  attemptNumber?: number | null;
+  portalDetail?: string;
+  confirmationAt?: string;
 }
 
 export async function sendAnswerToPortal(id: number, answer: string): Promise<SubmissionDto> {
@@ -229,6 +234,15 @@ export async function fetchSubmission(id: number): Promise<SubmissionDto | null>
     return body.submission ?? null;
   } catch {
     return null;
+  }
+}
+
+export async function fetchSubmissions(id: number): Promise<SubmissionDto[]> {
+  try {
+    const body = await req<{ submissions?: SubmissionDto[] }>(`/api/send/${id}`);
+    return body.submissions ?? [];
+  } catch {
+    return [];
   }
 }
 

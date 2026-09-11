@@ -22,6 +22,7 @@ import {
   fetchAnswerState,
   fetchSendConfig,
   fetchSubmission,
+  fetchSubmissions,
   fmtVersionDate,
   restoreAnswerVersion,
   saveManualAnswer,
@@ -31,6 +32,7 @@ import {
   type SendConfigDto,
   type SubmissionDto,
 } from "@/api";
+import { toast } from "sonner";
 import { useAppData } from "@/lib/app-state";
 import { fmtDeadline } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -40,7 +42,7 @@ import { BackLink } from "@/components/app-sidebar";
 import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
 import { AccChips } from "@/components/prof-chip";
 import { AiRequestPanel } from "@/components/ai-request-panel";
-import { StatusBadge, TypeBadge } from "@/components/status-badges";
+import { StatusBadge, TypeBadge, DoneBadge } from "@/components/status-badges";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -72,15 +74,20 @@ function AnswerPanel({
   const [state, setState] = useState<AnswerState | null>(null);
   const [sendCfg, setSendCfg] = useState<SendConfigDto | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
-  const [sendAfterGenerate, setSendAfterGenerate] = useState(false);
   const [agree, setAgree] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
   const [sub, setSub] = useState<SubmissionDto | null>(null);
+  const [subs, setSubs] = useState<SubmissionDto[]>([]);
   const cancelRef = useRef(false);
   const busyRef = useRef(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const { patchExercise } = useAppData();
+
+  const loadSubs = useCallback(async () => {
+    setSubs(await fetchSubmissions(e.id));
+  }, [e.id]);
 
   useEffect(() => {
     setDraft(e.answer ?? "");
@@ -97,6 +104,7 @@ function AnswerPanel({
         if (st.current?.answer && !busyRef.current) setDraft(st.current.answer);
       })
       .catch(() => undefined);
+    void loadSubs();
     // Reset only when the activity changes: a refresh after generating/sending
     // must not wipe the draft or the submission status.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -213,22 +221,49 @@ function AnswerPanel({
     setSendErr(null);
     cancelRef.current = false;
     setSub({ status: "running", detail: "Abrindo sessão no portal…", at: new Date().toISOString() });
+    const toastId = toast.loading("Enviando para o portal…", {
+      description: "Fazendo login e entregando a atividade.",
+    });
     try {
       const started = await sendAnswerToPortal(e.id, answer);
       setSub(started);
+      let final = started;
       const deadline = Date.now() + 150_000;
       while (Date.now() < deadline && !cancelRef.current) {
         await new Promise((r) => setTimeout(r, 2_500));
         const cur = await fetchSubmission(e.id);
         if (cur && cur.status !== "running") {
+          final = cur;
           setSub(cur);
           break;
         }
       }
+      if (final.status === "ok") {
+        toast.success("Entregue no portal", {
+          id: toastId,
+          description: final.attachmentName
+            ? `Anexo ${final.attachmentName} registrado.`
+            : final.detail || "A atividade foi registrada.",
+        });
+        patchExercise(e.id, { done: true, status: "done" });
+      } else if (final.status === "already") {
+        toast.info("Já estava entregue", { id: toastId, description: final.detail });
+        patchExercise(e.id, { done: true, status: "done" });
+      } else if (final.status === "unknown") {
+        toast.warning("Envio sem confirmação", {
+          id: toastId,
+          description: `${final.detail} Confira no portal.`,
+        });
+      } else {
+        toast.error("Não foi possível enviar", { id: toastId, description: final.detail });
+      }
       onRefresh();
+      void loadSubs();
     } catch (x) {
-      setSendErr(x instanceof Error ? x.message : String(x));
+      const msg = x instanceof Error ? x.message : String(x);
+      setSendErr(msg);
       setSub(null);
+      toast.error("Não foi possível enviar", { id: toastId, description: msg });
     } finally {
       setSending(false);
       setSendOpen(false);
@@ -236,17 +271,9 @@ function AnswerPanel({
     }
   };
 
-  const generateAndSend = async () => {
-    setSendErr(null);
-    const answer = await generate();
-    if (!answer?.trim()) return;
-    setDraft(answer);
-    await confirmSend(answer);
-  };
-
   const isUpload = e.kind === "upload";
-  const canSend = e.status !== "done" && Boolean(sendCfg?.enabled) && Boolean(draft.trim()) && !sending;
-  const canGenerateAndSend = e.status !== "done" && Boolean(sendCfg?.enabled) && !busy && !sending;
+  const isDone = e.done || e.status === "done";
+  const canSend = !isDone && Boolean(sendCfg?.enabled) && Boolean(draft.trim()) && !sending;
 
   return (
     <CollapsibleCard
@@ -334,32 +361,25 @@ function AnswerPanel({
           )}
 
           <div className="ml-auto flex items-center gap-2">
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => {
-                setSendErr(null);
-                setSendAfterGenerate(true);
-                setSendOpen(true);
-              }}
-              disabled={!canGenerateAndSend}
-            >
-              <Sparkles aria-hidden />
-              Gerar e enviar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setSendErr(null);
-                setSendAfterGenerate(false);
-                setSendOpen((v) => !v);
-              }}
-              disabled={!canSend}
-            >
-              <Send aria-hidden />
-              Enviar no portal
-            </Button>
+            {isDone ? (
+              <Button size="sm" disabled className="bg-ok text-white disabled:opacity-100">
+                <CheckCircle2 aria-hidden />
+                Feito
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSendErr(null);
+                  setSendOpen((v) => !v);
+                }}
+                disabled={!canSend}
+              >
+                <Send aria-hidden />
+                Enviar no portal
+              </Button>
+            )}
           </div>
         </div>
       }
@@ -389,19 +409,12 @@ function AnswerPanel({
           <div className="rounded-lg border border-brand/30 bg-brand/10 p-3.5 text-sm">
             <div className="flex items-start gap-2 font-semibold text-foreground">
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden />
-              <span>
-                {sendAfterGenerate
-                  ? "Você está prestes a gerar uma resposta e enviar para o portal de verdade."
-                  : "Você está prestes a enviar para o portal de verdade."}
-              </span>
+              <span>Você está prestes a enviar para o portal de verdade.</span>
             </div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-foreground/90">
-              {sendAfterGenerate && (
-                <li>A IA vai gerar a resposta agora e enviá-la em seguida, sem parar para revisão.</li>
-              )}
               <li>
                 {isUpload
-                  ? "Sua conta LXP abre e o texto é anexado como arquivo e entregue."
+                  ? "Sua conta LXP abre, o texto é anexado como arquivo (.txt) e entregue."
                   : "Sua conta LXP abre, as alternativas são marcadas e o questionário é enviado."}
               </li>
               <li>A ação não é reversível e pode consumir uma tentativa.</li>
@@ -420,23 +433,17 @@ function AnswerPanel({
               <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{sendErr}</p>
             )}
             <div className="mt-3 flex items-center justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setSendOpen(false)} disabled={sending || busy}>
+              <Button variant="ghost" size="sm" onClick={() => setSendOpen(false)} disabled={sending}>
                 Cancelar
               </Button>
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => void (sendAfterGenerate ? generateAndSend() : confirmSend())}
-                disabled={!agree || sending || busy || (!sendAfterGenerate && !draft.trim())}
+                onClick={() => void confirmSend()}
+                disabled={!agree || sending || !draft.trim()}
               >
-                {sending || busy ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
-                {sending
-                  ? "Enviando… (login no portal)"
-                  : busy
-                    ? "Gerando…"
-                    : sendAfterGenerate
-                      ? "Gerar e enviar"
-                      : "Confirmar e enviar"}
+                {sending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
+                {sending ? "Enviando… (login no portal)" : "Confirmar e enviar"}
               </Button>
             </div>
           </div>
@@ -446,30 +453,73 @@ function AnswerPanel({
           <div
             className={cn(
               "flex items-start gap-2 rounded-md border p-3 text-sm",
-              sub.status === "ok" && "border-ok/40 bg-ok/10 text-ok",
+              (sub.status === "ok" || sub.status === "already") && "border-ok/40 bg-ok/10 text-ok",
               sub.status === "failed" && "border-destructive/40 bg-destructive/10 text-destructive",
               sub.status === "unknown" && "border-soon/40 bg-soon/10 text-soon",
               sub.status === "running" && "border-border bg-muted/40 text-muted-foreground",
             )}
           >
-            {sub.status === "ok" ? (
+            {sub.status === "ok" || sub.status === "already" ? (
               <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
             ) : (
               <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
             )}
             <div className="min-w-0">
-              <div className="font-semibold">
-                {sub.status === "ok" && "Resposta enviada com sucesso."}
-                {sub.status === "failed" && "Não foi possível enviar."}
-                {sub.status === "unknown" && "Envio feito, mas sem confirmação do portal."}
-                {sub.status === "running" && "Enviando…"}
-              </div>
+              <div className="font-semibold">{submissionLabel(sub.status)}</div>
               <p className="mt-0.5 break-words text-xs text-muted-foreground">{sub.detail}</p>
             </div>
           </div>
         )}
+
+        {subs.length > 0 && (
+          <div className="rounded-md border border-border/60 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <History className="size-3.5" aria-hidden />
+              Envios ({subs.length})
+            </div>
+            <ul className="space-y-2">
+              {[...subs].reverse().map((s) => (
+                <li key={s.at} className="flex items-start gap-2 text-xs">
+                  <span
+                    className={cn(
+                      "mt-1 size-2 shrink-0 rounded-full",
+                      (s.status === "ok" || s.status === "already") && "bg-ok",
+                      s.status === "failed" && "bg-destructive",
+                      s.status === "unknown" && "bg-soon",
+                      s.status === "running" && "bg-muted-foreground",
+                    )}
+                    aria-hidden
+                  />
+                  <div className="min-w-0">
+                    <span className="font-medium">{submissionLabel(s.status)}</span>
+                    <span className="text-muted-foreground"> · {fmtVersionDate(s.at)}</span>
+                    {s.attachmentName && <span className="text-muted-foreground"> · {s.attachmentName}</span>}
+                    <p className="break-words text-muted-foreground">{s.detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
     </CollapsibleCard>
   );
+}
+
+function submissionLabel(status: SubmissionDto["status"]): string {
+  switch (status) {
+    case "ok":
+      return "Entregue no portal";
+    case "already":
+      return "Já estava entregue";
+    case "unknown":
+      return "Envio sem confirmação";
+    case "failed":
+      return "Falhou";
+    case "running":
+      return "Enviando…";
+    default:
+      return status;
+  }
 }
 
 function FilePreview({ file }: { file: RemoteFile }) {
@@ -609,6 +659,7 @@ export function ExercisePage() {
             <span className="pointer-events-none block h-0.5 bg-gradient-to-r from-brand via-brand-2 to-teal" aria-hidden />
             <div className={cn("flex flex-wrap items-center gap-2 p-5", headerCard.open && "pb-0")}>
               <TypeBadge kind={e.kind} />
+              {e.done && <DoneBadge />}
               <StatusBadge e={e} />
               {e.deadlineAt && (
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -630,7 +681,10 @@ export function ExercisePage() {
             </div>
             {headerCard.open && (
               <div className="space-y-3 p-5 pt-3">
-                <h1 className="font-heading text-xl font-semibold leading-snug text-balance">{e.title}</h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="font-heading text-xl font-semibold leading-snug text-balance">{e.title}</h1>
+                  {e.done && <DoneBadge />}
+                </div>
                 <AccChips professor={e.professor} moduleName={e.moduleName} />
                 {e.sectionTitle && <p className="mt-1 text-xs text-muted-foreground">{e.sectionTitle}</p>}
               </div>

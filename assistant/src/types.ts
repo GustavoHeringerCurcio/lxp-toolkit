@@ -121,10 +121,22 @@ export interface AnswerRecord extends AnswerEntry {
 
 export type Answers = Record<string, AnswerRecord>;
 
+export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
+
 export interface SubmissionEntry {
   exerciseId: number;
   at: string;
-  status: "running" | "ok" | "unknown" | "failed";
+  status: SubmissionStatus;
   detail: string;
+  /** What was submitted (answer text), for the history. */
+  answer?: string;
+  /** Attachment filename registered by the portal. */
+  attachmentName?: string;
+  /** Attempt number reported by the portal, when known. */
+  attemptNumber?: number | null;
+  /** Portal page detail (e.g. success banner) captured by the runner. */
+  portalDetail?: string;
+  /** When the portal confirmed the submission. */
+  confirmationAt?: string;
 }
 export type Submissions = Record<string, SubmissionEntry[]>;

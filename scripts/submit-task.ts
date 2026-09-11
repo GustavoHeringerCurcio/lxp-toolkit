@@ -39,9 +39,11 @@ type SubmitRequest =
 
 interface SubmitResult {
   ok: boolean;
-  status: "ok" | "unknown" | "error";
+  status: "ok" | "already" | "unknown" | "error";
   detail: string;
   at: string;
+  attachmentName?: string;
+  portalDetail?: string;
 }
 
 function flagValue(args: string[], name: string): string | undefined {
@@ -219,6 +221,24 @@ async function detectSuccess(page: Page): Promise<{ ok: boolean; snippet: string
   return { ok: success, snippet: snippet(body, 500) };
 }
 
+/**
+ * Detect that the activity was already submitted. After a submission the portal
+ * disables the composer and shows "Limit reached / It is not possible to upload
+ * more files". Returns a friendly reason, or null when it looks submittable.
+ */
+async function detectAlreadySubmitted(page: Page): Promise<string | null> {
+  const body = await page.locator("body").innerText({ timeout: 3_000 }).catch(() => "");
+  const patterns: [RegExp, string][] = [
+    [/limit reached|not possible to upload more files/i, "O portal já registrou um envio (limite de arquivos atingido)."],
+    [/already submitted|already sent|you have already|has already been (sent|submitted)/i, "O portal indica que esta atividade já foi enviada."],
+    [/já (foi )?entregue|já enviad|limite atingido|não é possível enviar mais/i, "O portal indica que esta atividade já foi entregue."],
+  ];
+  for (const [re, msg] of patterns) {
+    if (re.test(body)) return msg;
+  }
+  return null;
+}
+
 /** Click one quiz option: find the question container, then the matching option. */
 async function clickQuizOption(page: Page, sel: QuizItem): Promise<boolean> {
   const qNeedle = normalize(sel.questionText).slice(0, 40);
@@ -300,6 +320,12 @@ async function main(): Promise<void> {
     console.error(`submit-task failed [${status}]: ${detail}`);
     process.exit(status === "unknown" ? 0 : 1);
   };
+  const already = (detail: string) => {
+    result = { ok: false, status: "already", detail, at: new Date().toISOString() };
+    writeResult(resultPath, result);
+    console.log("submit-task done [already]");
+    process.exit(0);
+  };
 
   try {
     req = JSON.parse(readFileSync(reqPath, "utf-8")) as SubmitRequest;
@@ -320,6 +346,9 @@ async function main(): Promise<void> {
     logger.info({ route, action: req.action }, "navigating to task");
     await clientNav(page, route);
     await page.waitForTimeout(8_000);
+
+    const alreadyReason = await detectAlreadySubmitted(page).catch(() => null);
+    if (alreadyReason && !dryRun) return already(alreadyReason);
 
     if (req.action === "quiz") {
       const outcome = await answerQuiz(page, req.selections);
@@ -362,6 +391,7 @@ async function main(): Promise<void> {
           status: "ok",
           detail: `${outcome.done}/${outcome.total} marcadas. ${snippet(detection.snippet, 200)}`,
           at: new Date().toISOString(),
+          portalDetail: snippet(detection.snippet, 200),
         };
       } else {
         result = {
@@ -369,6 +399,7 @@ async function main(): Promise<void> {
           status: "unknown",
           detail: `submit clicado mas sucesso não confirmado (${outcome.done}/${outcome.total} marcadas). Page: ${snippet(detection.snippet, 300)}`,
           at: new Date().toISOString(),
+          portalDetail: snippet(detection.snippet, 300),
         };
       }
       writeResult(resultPath, result);
@@ -384,6 +415,8 @@ async function main(): Promise<void> {
 
     const fileInput = await findFileInput(page, 15_000);
     if (!fileInput) {
+      const reason = await detectAlreadySubmitted(page).catch(() => null);
+      if (reason) return already(reason);
       const buttons = await describeButtons(page).catch(() => "");
       return fail(`no file input found. Buttons seen: ${buttons}`);
     }
@@ -426,13 +459,22 @@ async function main(): Promise<void> {
 
     const detection = await detectSuccess(page);
     if (detection.ok) {
-      result = { ok: true, status: "ok", detail: snippet(detection.snippet, 300), at: new Date().toISOString() };
+      result = {
+        ok: true,
+        status: "ok",
+        detail: snippet(detection.snippet, 300),
+        at: new Date().toISOString(),
+        attachmentName: path.basename(filePath),
+        portalDetail: snippet(detection.snippet, 300),
+      };
     } else {
       result = {
         ok: false,
         status: "unknown",
         detail: `submit clicked but success not confirmed. Page: ${snippet(detection.snippet, 300)}`,
         at: new Date().toISOString(),
+        attachmentName: path.basename(filePath),
+        portalDetail: snippet(detection.snippet, 300),
       };
     }
     writeResult(resultPath, result);

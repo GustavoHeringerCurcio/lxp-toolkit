@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import type { Exercise } from "@/types";
 import { fmtDeadline } from "@/lib/status";
 import { AccChips } from "./prof-chip";
-import { StatusBadge } from "./status-badges";
+import { StatusBadge, DoneBadge } from "./status-badges";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,7 +71,10 @@ export function ActivityCard({ e }: { e: Exercise }) {
       </span>
 
       <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <span className={cn("truncate text-sm font-medium", e.done && "text-muted-foreground line-through")}>{e.title}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={cn("truncate text-sm font-medium", e.done && "text-muted-foreground line-through")}>{e.title}</span>
+          {e.done && <DoneBadge className="shrink-0" />}
+        </span>
         <AccChips professor={e.professor} moduleName={e.moduleName} />
         {meta && (
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">

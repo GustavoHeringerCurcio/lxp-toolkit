@@ -54,8 +54,13 @@ export function enrich(exercises: Exercise[], answers: Answers, overrides: Overr
   return exercises.map((e) => {
     const o = overrides[String(e.id)] ?? {};
     const a = answers[String(e.id)];
+    const manual = o.manualStatus;
+    const status = manual ?? e.status;
+    const done = manual === "done" || e.done;
     return {
       ...e,
+      status,
+      done,
       answer: a?.answer ?? null,
       answerSource: a?.source ?? null,
       selections: a?.selections ?? [],

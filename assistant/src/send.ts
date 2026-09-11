@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ASSISTANT_DIR, assist } from "./paths.js";
-import { loadSubmissions, saveSubmissions } from "./config.js";
+import { loadOverrides, loadSubmissions, saveOverrides, saveSubmissions } from "./config.js";
 import type { QuizSelection, SubmissionEntry } from "./types.js";
 
 /**
@@ -60,7 +60,13 @@ export function launchUploadSubmit(view: { id: number; courseId: number; title: 
     "utf-8",
   );
 
-  const entry: SubmissionEntry = { exerciseId: view.id, at: new Date().toISOString(), status: "running", detail: "aguardando login no portal…" };
+  const entry: SubmissionEntry = {
+    exerciseId: view.id,
+    at: new Date().toISOString(),
+    status: "running",
+    detail: "aguardando login no portal…",
+    answer: answerText,
+  };
   pushSubmission(entry);
 
   spawnRunner(env.rootDir, reqFile, resFile, entry);
@@ -112,7 +118,13 @@ export function launchQuizSubmit(
     "utf-8",
   );
 
-  const entry: SubmissionEntry = { exerciseId: view.id, at: new Date().toISOString(), status: "running", detail: "aguardando login no portal…" };
+  const entry: SubmissionEntry = {
+    exerciseId: view.id,
+    at: new Date().toISOString(),
+    status: "running",
+    detail: "aguardando login no portal…",
+    answer: items.map((i) => `Q${i.questionId}: ${i.letter}`).join(", "),
+  };
   pushSubmission(entry);
 
   spawnRunner(env.rootDir, reqFile, resFile, entry);
@@ -136,21 +148,50 @@ function spawnRunner(rootDir: string, reqFile: string, resFile: string, entry: S
   });
 
   child.on("close", (code) => {
+    let status: SubmissionEntry["status"] = "failed";
     if (existsSync(resFile)) {
       try {
-        const res = JSON.parse(readFileSync(resFile, "utf-8")) as { ok?: boolean; status?: string; detail?: string };
-        entry.status = res.status === "ok" ? "ok" : res.status === "unknown" ? "unknown" : "failed";
+        const res = JSON.parse(readFileSync(resFile, "utf-8")) as {
+          ok?: boolean;
+          status?: string;
+          detail?: string;
+          attachmentName?: string;
+          portalDetail?: string;
+        };
+        status =
+          res.status === "ok"
+            ? "ok"
+            : res.status === "already"
+              ? "already"
+              : res.status === "unknown"
+                ? "unknown"
+                : "failed";
         entry.detail = res.detail ?? `runner saiu com código ${code}`;
+        if (res.attachmentName) entry.attachmentName = res.attachmentName;
+        if (res.portalDetail) entry.portalDetail = res.portalDetail;
+        if (status === "ok") entry.confirmationAt = new Date().toISOString();
       } catch {
-        entry.status = "failed";
         entry.detail = `runner terminou mas o resultado não pôde ser lido (código ${code})`;
       }
     } else {
-      entry.status = "failed";
       entry.detail = `runner terminou com código ${code} sem gerar resultado`;
     }
+    entry.status = status;
+    if (status === "ok" || status === "already") markDone(entry.exerciseId);
     pushSubmission(entry);
   });
+}
+
+/** Persist "done" for an exercise so the UI keeps showing it as completed. */
+function markDone(exerciseId: number): void {
+  try {
+    const overrides = loadOverrides();
+    const key = String(exerciseId);
+    overrides[key] = { ...(overrides[key] ?? {}), manualStatus: "done" };
+    saveOverrides(overrides);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function lastSubmission(exerciseId: number): SubmissionEntry | null {

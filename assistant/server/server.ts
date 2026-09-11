@@ -21,7 +21,7 @@ import {
 import { enrich } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
 import { parseAiRequest, parseQuizSelections } from "../src/prompt.js";
-import { launchUploadSubmit, launchQuizSubmit, lastSubmission, sendEnv } from "../src/send.js";
+import { launchUploadSubmit, launchQuizSubmit, lastSubmission, sendEnv, submissionsFor } from "../src/send.js";
 import { officeToPdf, previewCacheDir } from "../src/office.js";
 
 const DIST = path.join(ASSISTANT_DIR, "web", "dist");
@@ -311,7 +311,7 @@ const server = createServer(async (req, res) => {
     if (url.startsWith("/api/send/")) {
       const id = Number(url.split("/")[3]);
       const last = lastSubmission(id);
-      return json(res, 200, { submission: last ?? null });
+      return json(res, 200, { submission: last ?? null, submissions: submissionsFor(id) });
     }
 
     if (method === "POST") {

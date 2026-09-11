@@ -43,3 +43,18 @@ export function StatusBadge({ e, className }: { e: Pick<Exercise, "done" | "stat
     </span>
   );
 }
+
+/** Prominent green "Feito" pill shown on completed activities. */
+export function DoneBadge({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-ok/30 bg-ok-bg px-2.5 py-0.5 text-[11px] font-semibold text-ok",
+        className,
+      )}
+    >
+      <CheckCircle2 className="size-3" aria-hidden />
+      Feito
+    </span>
+  );
+}
