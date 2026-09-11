@@ -293,3 +293,19 @@ export function parseQuizSelections(text: string, questions: QuizQ[]): QuizSelec
       return { questionId: q.id, optionIndex, letter: String.fromCharCode(97 + optionIndex) };
     });
 }
+
+/**
+ * Rewrite the machine-readable `Q<id>: <letra>` lines the model is forced to
+ * produce into human-facing `N. <letra>` lines, numbered by question order.
+ * Only for display/save/export — parsing must always run on the raw text first.
+ * Unknown ids and everything else are left untouched.
+ */
+export function humanizeQuizAnswer(text: string, questions: QuizQ[]): string {
+  if (!text || !questions.length) return text;
+  const orderById = new Map(questions.map((q, i) => [q.id, i + 1]));
+  const idRe = /Q\s*(\d+)\s*[:=\-.)\]]*\s*\(?([a-jA-J])\)?/g;
+  return text.replace(idRe, (match, rawId: string, rawLetter: string) => {
+    const n = orderById.get(Number(rawId));
+    return n ? `${n}. ${rawLetter.toUpperCase()}` : match;
+  });
+}

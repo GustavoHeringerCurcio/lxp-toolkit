@@ -6,7 +6,7 @@ import { extractPdfText } from "../src/pdf.js";
 import { generateAnswer } from "../src/ai.js";
 import { exportAnswer } from "../src/export.js";
 import { assist } from "../src/paths.js";
-import { parseQuizSelections } from "../src/prompt.js";
+import { humanizeQuizAnswer, parseQuizSelections } from "../src/prompt.js";
 import { isAnswerable, kindLabel } from "../src/kind.js";
 import { isTTY, color, typeChip, deadlineChip, deadlineLabel, contextLine, icon } from "./render.js";
 
@@ -119,8 +119,9 @@ async function answerCmd(id: number, modelOverride?: string): Promise<void> {
   );
   console.log(`\n`);
   const selections = v.kind === "quiz" ? parseQuizSelections(text, v.questions) : [];
-  saveAnswerVersion(id, text, "ai", undefined, selections);
-  const out = exportAnswer(v, text);
+  const shown = v.kind === "quiz" ? humanizeQuizAnswer(text, v.questions) : text;
+  saveAnswerVersion(id, shown, "ai", undefined, selections);
+  const out = exportAnswer(v, shown);
   console.log(color.dim(`saved → ${out.md}`));
 }
 

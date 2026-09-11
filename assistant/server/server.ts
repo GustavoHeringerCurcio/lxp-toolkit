@@ -20,7 +20,7 @@ import {
 } from "../src/config.js";
 import { enrich } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
-import { parseQuizSelections } from "../src/prompt.js";
+import { humanizeQuizAnswer, parseQuizSelections } from "../src/prompt.js";
 import type { AiActivitySections, AiStyle } from "../src/types.js";
 import {
   launchUploadSubmit,
@@ -446,7 +446,8 @@ const server = createServer(async (req, res) => {
         const view = findView(id);
         if (!isAnswerable(view)) return json(res, 400, { error: "Esta atividade não aceita resposta por aqui." });
         const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
-        const rec = saveAnswerVersion(id, answer, "manual", undefined, selections);
+        const shown = view.kind === "quiz" ? humanizeQuizAnswer(answer, view.questions) : answer;
+        const rec = saveAnswerVersion(id, shown, "manual", undefined, selections);
         return json(res, 200, { ok: true, current: rec, history: rec.history, updatedAt: rec.updatedAt });
       }
       if (url === "/api/answer") {
@@ -457,8 +458,9 @@ const server = createServer(async (req, res) => {
         const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
         const answer = await generateAnswer(cfg, view, view.aiRequestJson, loadProfile(), {}, view.notes);
         const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
-        const rec = saveAnswerVersion(id, answer, "ai", undefined, selections);
-        return json(res, 200, { answer, current: rec, history: rec.history, updatedAt: rec.updatedAt });
+        const shown = view.kind === "quiz" ? humanizeQuizAnswer(answer, view.questions) : answer;
+        const rec = saveAnswerVersion(id, shown, "ai", undefined, selections);
+        return json(res, 200, { answer: shown, current: rec, history: rec.history, updatedAt: rec.updatedAt });
       }
       if (url === "/api/answer/stream") {
         // SSE: delta events while generating, then a final done event
@@ -489,8 +491,9 @@ const server = createServer(async (req, res) => {
             },
           }, view.notes);
           const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
-          const rec = saveAnswerVersion(id, answer, "ai", undefined, selections);
-          sendEvent({ type: "done", answer, current: rec, history: rec.history });
+          const shown = view.kind === "quiz" ? humanizeQuizAnswer(answer, view.questions) : answer;
+          const rec = saveAnswerVersion(id, shown, "ai", undefined, selections);
+          sendEvent({ type: "done", answer: shown, current: rec, history: rec.history });
           res.end();
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

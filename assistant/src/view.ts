@@ -1,5 +1,5 @@
 import type { AiRequest, Exercise, Answers, Overrides, QuizSelection } from "./types.js";
-import { parseAiRequest } from "./prompt.js";
+import { humanizeQuizAnswer, parseAiRequest } from "./prompt.js";
 
 export interface ExerciseView extends Exercise {
   answer: string | null;
@@ -41,11 +41,16 @@ export function enrich(exercises: Exercise[], answers: Answers, overrides: Overr
     const manual = o.manualStatus;
     const status = manual ?? e.status;
     const done = manual === "done" || e.done;
+    const rawAnswer = a?.answer ?? null;
+    const answer =
+      rawAnswer && e.kind === "quiz" && e.questions.length
+        ? humanizeQuizAnswer(rawAnswer, e.questions)
+        : rawAnswer;
     return {
       ...e,
       status,
       done,
-      answer: a?.answer ?? null,
+      answer,
       answerSource: a?.source ?? null,
       selections: a?.selections ?? [],
       notes: o.notes ?? "",

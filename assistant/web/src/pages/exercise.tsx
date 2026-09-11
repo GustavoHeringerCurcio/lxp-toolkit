@@ -188,7 +188,10 @@ function AnswerPanel({
           live.value += ev.delta ?? "";
           setDraft(live.value);
         }
-        if (ev.type === "done") setState({ current: ev.current ?? null, history: ev.history ?? [] });
+        if (ev.type === "done") {
+          if (ev.answer) setDraft(ev.answer);
+          setState({ current: ev.current ?? null, history: ev.history ?? [] });
+        }
       });
       setState(st);
       onRefresh();
