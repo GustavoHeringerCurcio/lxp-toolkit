@@ -41,8 +41,8 @@ assistant/server/server.ts  ── spawns (tsx) ──▶  scripts/submit-task.t
 ```
 
 Data flow per activity kind:
-- **upload**: server writes the AI answer to a temp file (`.txt`/`.md`; see Open Questions A3), the
-  runner attaches it on the portal and confirms.
+- **upload**: the chosen format decides delivery — `text` fills the portal's rich-text reply editor,
+  `txt`/`pdf` attach a file (the server renders the PDF and passes its absolute path to the runner).
 - **quiz**: requires structured answers (per question → chosen option). See Open Questions A2.
 
 ## 2. Phases
@@ -127,9 +127,10 @@ Objective: one command that performs a fresh login and submits one task.
   for open-text/"dissertativa" tasks (option quizzes done by hand)? Most LXP quizzes here are
   multiple-choice → need an AI step that returns structured `{questionId, optionIndex}` plus a
   parser that maps it to whatever Phase 1 reveals the payload needs.
-- **A3** Upload type: the assistant answer is text (`.md`). Does the portal accept `.txt`/`.md` for
-  these `Tarefa` uploads, or must the answer be rendered to PDF before attaching? Resolve in
-  Phase 1 (check `maxFilesLimit`/allowed types or the real uploader).
+- **A3** ✅ Resolved: uploads are delivered three ways — **text** typed straight into the portal's
+  rich-text reply editor, **.txt** attachment, or **.pdf** (rendered from the answer via LibreOffice
+  `officeToPdf` in the assistant server, then attached by the runner). Chosen in the web UI before
+  confirming.
 - **A4** Consent UX depth: always-blocking checkbox, or a once-per-session "entendi" acknowledgement?
 - **A5** Should submission also be reachable from the CLI's existing `send` placeholder in this
   same effort (recommended) or web-only first?

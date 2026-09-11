@@ -25,6 +25,7 @@ cp .env.example .env    # then fill LXP_USERNAME (RA) and LXP_PASSWORD
 | `index` | `scripts/build-homework-index.ts` | build `scraped/raw/homework-index.json` (topic-linked: upload ↔ section ↔ sibling content ↔ local files) |
 | `homework` | `scripts/homework.ts` | friendly terminal board of open homework (grouped by section, sorted by due date); `--fresh`, `--json` |
 | `exercises` | `scripts/exercises.ts` | read-only: `npm run exercises -- <itemId>` prints a quiz's questions or an upload's info |
+| `submit-task` | `scripts/submit-task.ts` | gated browser runner (spawned by the assistant's `/api/send`): fresh login → SPA-nav to the task → deliver the answer. Uploads support `text` (typed into the portal's rich-text reply editor), `txt` and `pdf` attachments; quizzes select options. |
 | `typecheck` | — | `tsc --noEmit` (run after any code change) |
 
 ## Architecture (src/)
