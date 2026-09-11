@@ -226,7 +226,7 @@ async function detectSuccess(page: Page): Promise<{ ok: boolean; snippet: string
  * disables the composer and shows "Limit reached / It is not possible to upload
  * more files". Returns a friendly reason, or null when it looks submittable.
  */
-async function detectAlreadySubmitted(page: Page): Promise<string | null> {
+async function detectAlreadySubmitted(page: Page, structural = false): Promise<string | null> {
   const body = await page.locator("body").innerText({ timeout: 3_000 }).catch(() => "");
   const patterns: [RegExp, string][] = [
     [/limit reached|not possible to upload more files/i, "O portal já registrou um envio (limite de arquivos atingido)."],
@@ -235,6 +235,22 @@ async function detectAlreadySubmitted(page: Page): Promise<string | null> {
   ];
   for (const [re, msg] of patterns) {
     if (re.test(body)) return msg;
+  }
+  if (structural) {
+    // After a submission the composer stays but is disabled: no file input and
+    // no enabled send button.
+    const hasEditor =
+      (await page.locator(".tox-edit-area, .tox-toolbar, [class*='tinymce' i]").count().catch(() => 0)) > 0;
+    const fileInputs = await page.locator("input[type='file']").count().catch(() => 0);
+    const sendBtns = await page
+      .locator("button, [role='button']")
+      .filter({ hasText: /send reply|entregar|enviar|submeter|responder|send|submit/i })
+      .filter({ visible: true })
+      .count()
+      .catch(() => 0);
+    if (hasEditor && fileInputs === 0 && sendBtns === 0) {
+      return "A atividade já foi entregue: o formulário de envio está desabilitado.";
+    }
   }
   return null;
 }
@@ -415,7 +431,7 @@ async function main(): Promise<void> {
 
     const fileInput = await findFileInput(page, 15_000);
     if (!fileInput) {
-      const reason = await detectAlreadySubmitted(page).catch(() => null);
+      const reason = await detectAlreadySubmitted(page, true).catch(() => null);
       if (reason) return already(reason);
       const buttons = await describeButtons(page).catch(() => "");
       return fail(`no file input found. Buttons seen: ${buttons}`);

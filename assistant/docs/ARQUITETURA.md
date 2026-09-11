@@ -80,6 +80,11 @@ botões "Save draft" e "Send reply", e o texto do botão pode aparecer em inglê
 O envio é considerado ok quando o portal registra a tentativa (campo `attempts` do
 tópico) com o anexo. Use `--dry-run` para validar os seletores sem enviar nada.
 
+Cada tentativa vira uma entrada em `data/submissions.json` (status `running`/`ok`/
+`already`/`unknown`/`failed`, detalhe, anexo e horário). Quando o resultado é `ok` ou
+`already`, o servidor grava `manualStatus: "done"` no override da atividade, e o
+`enrich` passa a mostrá-la como concluída. A web usa o sonner para avisar o resultado.
+
 ### Quiz
 
 Para questionários a IA gera no formato `Q<id>: <letra>`. O servidor extrai as

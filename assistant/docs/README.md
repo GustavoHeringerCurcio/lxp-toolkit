@@ -32,12 +32,15 @@ gerado não deve parecer escrito por IA.
 | Etapa | Situação |
 |---|---|
 | Raspar conteúdo | automático (`npm run dump`) |
-| Gerar resposta | automático (um clique, com confirmação) |
-| Enviar upload | funciona (runner `scripts/submit-task.ts`, ação `upload`) |
+| Gerar resposta | automático |
+| Enviar upload | funciona (runner `scripts/submit-task.ts`, ação `upload`, arquivo `.txt`) |
 | Enviar quiz | implementado (ação `quiz`); os seletores do portal ainda precisam ser validados ao vivo |
 
-O fluxo "Gerar e enviar" faz geração + envio num clique, sempre com um diálogo de
-confirmação antes de qualquer coisa chegar ao portal.
+O envio mostra o resultado em **toast** (sucesso, "já estava entregue", sem confirmação
+ou erro com o motivo). Cada tentativa fica salva em `data/submissions.json` e aparece na
+seção "Envios" da atividade. Quando o portal confirma, a atividade é marcada como feita
+(botão verde "Feito" + badge), inclusive de forma persistente (`manualStatus` nos
+overrides). Reenvios de algo já entregue são detectados e avisados, sem dump cru.
 
 ## Mapa de arquivos
 
