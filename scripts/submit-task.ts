@@ -72,15 +72,6 @@ async function clientNav(page: Page, pathName: string): Promise<void> {
     .then(() => {});
 }
 
-/** Best-effort discovery of clickable texts on the page (to guide tuning). */
-async function candidateTexts(page: Page): Promise<string[]> {
-  const texts = await page
-    .locator("button, [role='button'], a, label")
-    .allInnerTexts()
-    .catch(() => []);
-  return [...new Set(texts.map((t) => t.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 25);
-}
-
 async function findFileInput(page: Page, timeoutMs: number): Promise<Locator | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -90,7 +81,7 @@ async function findFileInput(page: Page, timeoutMs: number): Promise<Locator | n
     // Maybe an "attach" button must be clicked first to mount the input.
     const trigger = page
       .locator("button, [role='button']")
-      .filter({ hasText: /anexar|enviar arquivo|adicionar arquivo|upload|escolher arquivo|arquivo/i })
+      .filter({ hasText: /anexar|enviar arquivo|adicionar arquivo|upload|escolher arquivo|arquivo|attach|choose file|select file|drag and drop/i })
       .first();
     if ((await trigger.count().catch(() => 0)) > 0) {
       await trigger.click({ timeout: 1500 }).catch(() => {});
@@ -102,27 +93,119 @@ async function findFileInput(page: Page, timeoutMs: number): Promise<Locator | n
   return null;
 }
 
+async function isEnabled(loc: Locator): Promise<boolean> {
+  return !(await loc.isDisabled().catch(() => false));
+}
+
+/**
+ * Fill the rich-text (TinyMCE) reply box with the answer text. File-upload
+ * tasks submit a "reply"; leaving the text empty makes the portal warn and may
+ * mark the attempt invalid. Returns true when an editor was found.
+ */
+async function fillEditor(page: Page, text: string): Promise<boolean> {
+  const frames = [".tox-edit-area__iframe", "iframe[title*='Rich Text' i]", "iframe[id*='tinymce' i]"];
+  for (const sel of frames) {
+    try {
+      const body = page.frameLocator(sel).first().locator("body");
+      if ((await body.count()) === 0) continue;
+      await body.click({ timeout: 3000 }).catch(() => {});
+      await body.fill(text).catch(async () => {
+        await page.keyboard.insertText(text);
+      });
+      return true;
+    } catch {
+      /* try next selector */
+    }
+  }
+  return false;
+}
+
+/**
+ * Find the button that submits the activity. The portal UI can render in
+ * Portuguese or English, and file-upload tasks sometimes use a composer with
+ * "Save draft" + "Send reply". Prefer send/submit-like buttons (enabled) over
+ * draft/save ones.
+ */
 async function findSubmit(page: Page): Promise<Locator | null> {
-  const typed = page.locator("button[type='submit']").filter({ visible: true }).first();
-  if ((await typed.count().catch(() => 0)) > 0) return typed;
-  const texted = page
-    .locator("button, [role='button']")
-    .filter({ hasText: /entregar|enviar|finalizar|concluir|submeter|responder|salvar/i })
+  const typed = page.locator("button[type='submit'], input[type='submit']").filter({ visible: true }).first();
+  if ((await typed.count().catch(() => 0)) > 0 && (await isEnabled(typed))) return typed;
+
+  const sendRe = /send reply|send|submit|reply|post|entregar|enviar|responder|submeter|finalizar|concluir/i;
+  const draftRe = /save draft|salvar rascunho|rascunho|\bdraft\b/i;
+
+  const candidates = page
+    .locator("button, [role='button'], input[type='submit'], input[type='button']")
+    .filter({ visible: true });
+  const count = await candidates.count().catch(() => 0);
+  let firstSendLike: Locator | null = null;
+  for (let i = 0; i < count; i++) {
+    const el = candidates.nth(i);
+    const text = ((await el.innerText().catch(() => "")) || (await el.getAttribute("value")) || "").trim();
+    if (!sendRe.test(text) || draftRe.test(text)) continue;
+    if (!firstSendLike) firstSendLike = el;
+    if (await isEnabled(el)) return el;
+  }
+  if (firstSendLike) return firstSendLike;
+
+  const fallback = page
+    .locator("button, [role='button'], input[type='submit'], input[type='button']")
+    .filter({ hasText: /save|salvar/i })
     .filter({ visible: true })
     .first();
-  if ((await texted.count().catch(() => 0)) > 0) return texted;
+  if ((await fallback.count().catch(() => 0)) > 0) return fallback;
   return null;
 }
 
+/** Wait until a submit button exists and is enabled (uploads may take a moment). */
+async function waitForSubmit(page: Page, timeoutMs: number): Promise<Locator | null> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const s = await findSubmit(page);
+    if (s && (await isEnabled(s))) return s;
+    await page.waitForTimeout(700);
+  }
+  return findSubmit(page);
+}
+
+/** Describe visible buttons (tag, type, disabled, text) for failure diagnostics. */
+async function describeButtons(page: Page): Promise<string> {
+  const btns = page.locator("button, [role='button'], input[type='submit'], input[type='button'], a[role='button']");
+  const count = await btns.count().catch(() => 0);
+  const out: string[] = [];
+  for (let i = 0; i < count && out.length < 30; i++) {
+    const b = btns.nth(i);
+    if (!(await b.isVisible().catch(() => false))) continue;
+    const tag = await b.evaluate((el) => el.tagName.toLowerCase()).catch(() => "?");
+    const type = await b.getAttribute("type").catch(() => null);
+    const text = (((await b.innerText().catch(() => "")) || (await b.getAttribute("value")) || "") as string)
+      .replace(/\s+/g, " ")
+      .trim();
+    const disabled = await b.isDisabled().catch(() => false);
+    out.push(`${tag}${type ? `[type=${type}]` : ""}${disabled ? "(disabled)" : ""}: "${text.slice(0, 60)}"`);
+  }
+  return out.join(" | ");
+}
+
 async function confirmDialog(page: Page): Promise<void> {
-  // Some flows show a confirmation modal right after the main submit click.
-  const confirm = page
-    .locator("[role='dialog'], .modal, .dialog, [class*='modal' i] button, body button")
-    .filter({ hasText: /confirmar|sim, enviar|sim|finalizar/i })
-    .filter({ visible: true })
-    .first();
-  if ((await confirm.count().catch(() => 0)) > 0) {
-    await confirm.click({ timeout: 1500 }).catch(() => {});
+  // File-upload tasks show a confirmation modal after the main "Send reply"
+  // click ("Submission confirmation ... Do you want to send anyway?"), whose
+  // confirm button is also labeled "Send reply". Wait for it and confirm.
+  const deadline = Date.now() + 4_000;
+  while (Date.now() < deadline) {
+    const dialog = page.locator("[role='dialog'], .v-dialog, [class*='dialog' i]").filter({ visible: true }).last();
+    if ((await dialog.count().catch(() => 0)) > 0) {
+      const confirm = dialog
+        .locator("button, [role='button']")
+        .filter({ hasText: /send reply|confirmar|confirm|enviar|yes|sim|\bok\b/i })
+        .filter({ hasNotText: /cancel|cancelar|voltar/i })
+        .filter({ visible: true })
+        .last();
+      if ((await confirm.count().catch(() => 0)) > 0) {
+        await confirm.click({ timeout: 2_500 }).catch(() => {});
+        return;
+      }
+    }
+    await page.waitForTimeout(300);
   }
 }
 
@@ -130,7 +213,9 @@ async function detectSuccess(page: Page): Promise<{ ok: boolean; snippet: string
   await page.waitForTimeout(5_000);
   const body = await page.locator("body").innerText({ timeout: 5_000 }).catch(() => "");
   const success =
-    /entregue|atividade entregue|entregue com sucesso|concluído com sucesso|tudo certo|resposta enviada|sucesso/i.test(body);
+    /entregue|atividade entregue|entregue com sucesso|concluído com sucesso|tudo certo|resposta enviada|enviado com sucesso|sucesso|sent successfully|reply sent|sent|success|posted|replied|submitted|uploaded/i.test(
+      body,
+    );
   return { ok: success, snippet: snippet(body, 500) };
 }
 
@@ -201,6 +286,7 @@ async function main(): Promise<void> {
   const reqPath = flagValue(args, "--req");
   const resultPath = flagValue(args, "--result");
   const headful = args.includes("--headful") || config.headful;
+  const dryRun = args.includes("--dry-run") || args.includes("--dryrun");
   if (!reqPath || !resultPath) {
     console.error("usage: tsx scripts/submit-task.ts --req <req.json> --result <result.json> [--headful]");
     process.exit(2);
@@ -239,15 +325,35 @@ async function main(): Promise<void> {
       const outcome = await answerQuiz(page, req.selections);
       logger.info(outcome, "quiz options selected");
       if (outcome.done === 0) {
-        const candidates = await candidateTexts(page).catch(() => []);
-        return fail(`nenhuma alternativa marcada. ${outcome.notes.join(" | ")}. Botões: ${candidates.join(" | ")}`);
+        const buttons = await describeButtons(page).catch(() => "");
+        return fail(`nenhuma alternativa marcada. ${outcome.notes.join(" | ")}. Botões: ${buttons}`);
       }
-      const submit = await findSubmit(page);
+      const submit = await waitForSubmit(page, 15_000);
       if (!submit) {
-        const candidates = await candidateTexts(page).catch(() => []);
-        return fail(`no submit button found. Buttons/labels seen: ${candidates.join(" | ")}`);
+        const buttons = await describeButtons(page).catch(() => "");
+        return fail(`no submit button found. Buttons seen: ${buttons}`);
       }
-      await submit.click();
+      if (dryRun) {
+        const buttons = await describeButtons(page).catch(() => "");
+        const text = ((await submit.innerText().catch(() => "")) || "").trim();
+        result = {
+          ok: true,
+          status: "unknown",
+          detail: `dry-run: submit="${text}" (${outcome.done}/${outcome.total} marcadas). Botões: ${buttons}`,
+          at: new Date().toISOString(),
+        };
+        writeResult(resultPath, result);
+        console.log("submit-task dry-run done");
+        process.exit(0);
+      }
+      const clicked = await submit
+        .click({ timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!clicked) {
+        const buttons = await describeButtons(page).catch(() => "");
+        return fail(`submit button found but not clickable (disabled?). Buttons: ${buttons}`);
+      }
       await confirmDialog(page);
       const detection = await detectSuccess(page);
       if (detection.ok) {
@@ -278,21 +384,44 @@ async function main(): Promise<void> {
 
     const fileInput = await findFileInput(page, 15_000);
     if (!fileInput) {
-      const candidates = await candidateTexts(page).catch(() => []);
-      return fail(`no file input found. Buttons/labels seen: ${candidates.join(" | ")}`);
+      const buttons = await describeButtons(page).catch(() => "");
+      return fail(`no file input found. Buttons seen: ${buttons}`);
     }
     await fileInput.setInputFiles(filePath);
     logger.info("file attached");
 
-    // Give the SPA a beat to register the file before looking for submit.
+    const filled = await fillEditor(page, req.answer).catch(() => false);
+    logger.info({ filled }, "reply text filled");
+
+    // Give the SPA a beat to register the file, then wait for the submit to enable.
     await page.waitForTimeout(2_000);
 
-    const submit = await findSubmit(page);
+    const submit = await waitForSubmit(page, 20_000);
     if (!submit) {
-      const candidates = await candidateTexts(page).catch(() => []);
-      return fail(`no submit button found. Buttons/labels seen: ${candidates.join(" | ")}`);
+      const buttons = await describeButtons(page).catch(() => "");
+      return fail(`no submit button found. Buttons seen: ${buttons}`);
     }
-    await submit.click();
+    if (dryRun) {
+      const buttons = await describeButtons(page).catch(() => "");
+      const text = ((await submit.innerText().catch(() => "")) || "").trim();
+      result = {
+        ok: true,
+        status: "unknown",
+        detail: `dry-run: submit="${text}". Botões: ${buttons}`,
+        at: new Date().toISOString(),
+      };
+      writeResult(resultPath, result);
+      console.log("submit-task dry-run done");
+      process.exit(0);
+    }
+    const clicked = await submit
+      .click({ timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!clicked) {
+      const buttons = await describeButtons(page).catch(() => "");
+      return fail(`submit button found but not clickable (disabled?). Buttons: ${buttons}`);
+    }
     await confirmDialog(page);
 
     const detection = await detectSuccess(page);

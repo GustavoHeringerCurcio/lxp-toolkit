@@ -477,7 +477,7 @@ const server = createServer(async (req, res) => {
           const submission =
             view.kind === "quiz"
               ? launchQuizSubmit(view, selections)
-              : launchUploadSubmit(view, answer, "md");
+              : launchUploadSubmit(view, answer, "txt");
           return json(res, 200, { ok: true, submission: { status: submission.status, detail: submission.detail, at: submission.at } });
         } catch (err) {
           return json(res, 500, { error: err instanceof Error ? err.message : String(err) });

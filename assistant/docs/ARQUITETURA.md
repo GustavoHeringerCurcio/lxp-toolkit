@@ -67,6 +67,19 @@ por um navegador real:
 3. O resultado vira `data/send/res-<id>-<ts>.json` e é registrado em
    `data/submissions.json`.
 
+### Upload
+
+A tarefa de envio de arquivo do LXP é um compositor de resposta (TinyMCE + anexo) com os
+botões "Save draft" e "Send reply", e o texto do botão pode aparecer em inglês. O runner:
+
+- aceita os botões em português e inglês e prioriza envio sobre rascunho;
+- preenche o editor com o texto da resposta e anexa um arquivo `.txt` (o uploader só
+  aceita `jpg/png/gif/txt/pdf/doc/docx/xls/xlsx/ppt/pptx/rar/zip/7z` — `.md` é recusado);
+- clica em "Send reply" e confirma o modal "Submission confirmation" (outro "Send reply").
+
+O envio é considerado ok quando o portal registra a tentativa (campo `attempts` do
+tópico) com o anexo. Use `--dry-run` para validar os seletores sem enviar nada.
+
 ### Quiz
 
 Para questionários a IA gera no formato `Q<id>: <letra>`. O servidor extrai as
