@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ASSISTANT_DIR, assist } from "./paths.js";
-import { loadOverrides, loadSubmissions, saveOverrides, saveSubmissions } from "./config.js";
+import { loadOverrides, loadProfile, loadSubmissions, saveOverrides, saveSubmissions } from "./config.js";
 import type { QuizSelection, SubmissionEntry } from "./types.js";
 
 /**
@@ -54,9 +54,13 @@ export function launchUploadSubmit(view: { id: number; courseId: number; title: 
   mkdirSync(dir, { recursive: true });
   const reqFile = path.join(dir, `req-${view.id}-${at}.json`);
   const resFile = path.join(dir, `res-${view.id}-${at}.json`);
+  const filename = [loadProfile().nome, view.title]
+    .map((part) => part?.trim() ?? "")
+    .filter(Boolean)
+    .join("_");
   writeFileSync(
     reqFile,
-    JSON.stringify({ action: "upload", courseId: view.courseId, itemId: view.id, answer: answerText, ext }, null, 2),
+    JSON.stringify({ action: "upload", courseId: view.courseId, itemId: view.id, answer: answerText, ext, filename }, null, 2),
     "utf-8",
   );
 

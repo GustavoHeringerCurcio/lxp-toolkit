@@ -75,6 +75,8 @@ botões "Save draft" e "Send reply", e o texto do botão pode aparecer em inglê
 - aceita os botões em português e inglês e prioriza envio sobre rascunho;
 - preenche o editor com o texto da resposta e anexa um arquivo `.txt` (o uploader só
   aceita `jpg/png/gif/txt/pdf/doc/docx/xls/xlsx/ppt/pptx/rar/zip/7z` — `.md` é recusado);
+- nomeia o anexo como `<nome do perfil>_<título da atividade>.txt` (o `filename` vai no
+  request; o runner sanitiza e cai no antigo `lxp-submit-<ts>-<itemId>` se não houver);
 - clica em "Send reply" e confirma o modal "Submission confirmation" (outro "Send reply").
 
 O envio é considerado ok quando o portal registra a tentativa (campo `attempts` do

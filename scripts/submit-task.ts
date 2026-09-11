@@ -16,7 +16,11 @@ import { config, logger } from "../src/config.js";
  *   tsx scripts/submit-task.ts --req <request.json> --result <result.json> [--headful]
  *
  * Upload request JSON:
- *   { "action": "upload", "courseId": number, "itemId": number, "answer": string, "ext"?: "md"|"txt" }
+ *   { "action": "upload", "courseId": number, "itemId": number, "answer": string,
+ *     "ext"?: "md"|"txt", "filename"?: string }
+ *   `filename` is an optional attachment base name (no extension), e.g.
+ *   "Aluno Exemplo_BDI - Atividade 01". When omitted the runner falls
+ *   back to a generic "lxp-submit-<timestamp>-<itemId>" name.
  *
  * Quiz request JSON:
  *   { "action": "quiz", "courseId": number, "itemId": number,
@@ -34,7 +38,7 @@ interface QuizItem {
 }
 
 type SubmitRequest =
-  | { action: "upload"; courseId: number; itemId: number; answer: string; ext?: "md" | "txt" }
+  | { action: "upload"; courseId: number; itemId: number; answer: string; ext?: "md" | "txt"; filename?: string }
   | { action: "quiz"; courseId: number; itemId: number; selections: QuizItem[] };
 
 interface SubmitResult {
@@ -63,6 +67,21 @@ function normalize(text: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+}
+
+/**
+ * Turn a requested attachment name into a safe basename. Keeps spaces, hyphens
+ * and accents; strips path separators and characters that are illegal on
+ * Windows/macOS filesystems, collapses whitespace and caps the length.
+ */
+function sanitizeFilename(name: string): string {
+  return name
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/[/\\:*?"<>|]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[.\s]+|[.\s]+$/g, "")
+    .slice(0, 120)
+    .trim();
 }
 
 async function clientNav(page: Page, pathName: string): Promise<void> {
@@ -425,7 +444,9 @@ async function main(): Promise<void> {
 
     // Build the answer file from the text and attach it.
     const ext = req.ext ?? "md";
-    const filePath = path.join(tmpdir(), `lxp-submit-${Date.now()}-${req.itemId}.${ext}`);
+    const fallbackName = `lxp-submit-${Date.now()}-${req.itemId}`;
+    const base = req.filename?.trim() ? sanitizeFilename(req.filename) : fallbackName;
+    const filePath = path.join(tmpdir(), `${base || fallbackName}.${ext}`);
     mkdirSync(path.dirname(filePath), { recursive: true });
     writeFileSync(filePath, req.answer, "utf-8");
 
