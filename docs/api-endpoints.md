@@ -128,7 +128,7 @@ x-notice-show-modal: false
 
 | Verb | Path | Notes |
 |---|---|---|
-| POST | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}/progress` | ⏳ marks a reading item read (`src/actions.ts::markRead`) |
+| POST | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}/progress` | ✅ "Mark as completed": empty body → `204`; bearer only, no WAF (`src/actions.ts::markRead`) |
 
 ## Static assets
 

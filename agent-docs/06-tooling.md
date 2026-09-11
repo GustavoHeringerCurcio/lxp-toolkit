@@ -21,7 +21,7 @@ cp .env.example .env    # then fill LXP_USERNAME (RA) and LXP_PASSWORD
 | `dump-surfaces` | `scripts/dump-surfaces.ts` | scrape grades, calendar, notices, messages, achievements, communities, LTI → `docs/*.md` + `docs/raw/surfaces.json` |
 | `crawl-routes` | `scripts/crawl-routes.ts` | capture SPA pages via client-side nav → `docs/routes/**` + `docs/portal-map.md` |
 | `capture-api` | `scripts/capture-api.ts` | record network traffic → `docs/api-captured.md` + `docs/raw/api-calls.json` |
-| `agent` | `scripts/agent.ts` | list actionable items; `--read` auto-completes undone readings; `--dry-run` previews |
+| `agent` | `scripts/agent.ts` | list actionable items; `--read`/`--complete` auto-completes undone readings **and** all "Mark as completed" content (pdf/link/rich); `--dry-run` previews |
 | `index` | `scripts/build-homework-index.ts` | build `docs/raw/homework-index.json` (topic-linked: upload ↔ section ↔ sibling content ↔ local files) |
 | `homework` | `scripts/homework.ts` | friendly terminal board of open homework (grouped by section, sorted by due date); `--fresh`, `--json` |
 | `exercises` | `scripts/exercises.ts` | read-only: `npm run exercises -- <itemId>` prints a quiz's questions or an upload's info |

@@ -37,7 +37,7 @@ All requests carry the headers from `02-auth.md`. Query params shown are real ex
 | GET | `/v2/plataforma/content/academics-main/{courseId}/topics/{sectionId}` | section detail (children html) |
 | GET | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}` | **item/topic detail** — richest source (`topics.content` + `context`) |
 | GET | `/v1/plataforma/content/lti/tool/list-by-alias/student` | LTI tool list |
-| POST | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}/progress` | mark read (write; body not confirmed) |
+| POST | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}/progress` | "Mark as completed" (write). Empty body → `204`; bearer only, no WAF. See `04-topic-types.md` + `src/content.ts::isMarkable` |
 
 ## Grades
 

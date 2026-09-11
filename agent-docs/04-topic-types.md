@@ -46,6 +46,17 @@ is "vibecoded".
 - **quiz** (types 15, 29, 30, 37) — has `content.questions[]`.
 - **file_upload** (type 8) — has `content.hasFileUpload`, `content.maxFilesLimit`.
 
+## Which kinds have a "Mark as completed" button
+
+The portal shows **"Mark as completed"** on content-type items with
+`isRecordProgress === true` and no submission flow: `pdf`, `reading`, `link`, and every
+rich "other" type (apresentação 10, infográfico 12, livro 13, na prática 16, dica 22,
+saiba mais 49, desafio 11). Clicking it sends an **empty-body** `POST .../topics/{id}/progress`
+→ `204`. Quizzes, file-upload tasks and forums are **not** manually markable.
+
+`src/content.ts::isMarkable(item)` captures this; `npm run agent -- --read` (alias
+`--complete`) marks all pending ones. See `docs/gaps.md` §3.
+
 ## How the code classifies (`src/content.ts::classify`)
 
 ```ts

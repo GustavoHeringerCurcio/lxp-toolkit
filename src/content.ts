@@ -208,6 +208,24 @@ export function isDone(item: {
 
 export const ACTIONABLE_KINDS: ContentKind[] = ["pdf", "reading", "quiz", "file_upload"];
 
+/**
+ * Kinds that the portal lets the student complete with a manual
+ * "Mark as completed" button. Quizzes, file-upload tasks and forums are NOT
+ * here — they are completed by real work (answering/uploading/posting).
+ */
+export const MARKABLE_KINDS: ContentKind[] = ["pdf", "reading", "link", "other"];
+
+/**
+ * Whether an item exposes the portal's "Mark as completed" action and is still
+ * pending. The SPA shows the button on content-type items that record progress
+ * (`isRecordProgress === true`) and have no submission flow. Confirmed live:
+ * the button POSTs an empty body to `.../topics/{id}/progress` and returns 204.
+ */
+export function isMarkable(item: Pick<ContentItem, "kind" | "isRecordProgress" | "done">): boolean {
+  if (!item.isRecordProgress || item.done) return false;
+  return MARKABLE_KINDS.includes(item.kind);
+}
+
 interface RawLeaf {
   courseId: number;
   courseName: string;

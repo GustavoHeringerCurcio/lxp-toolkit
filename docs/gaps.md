@@ -28,10 +28,22 @@ communities, and LTI tools. Only the **write** side (mutating the academic recor
 **Missing:** the multipart upload endpoint (`POST .../topics/{topicId}/upload` or `/attempts`).
 AWS WAF (`aws-waf-token` cookie) may be required for writes.
 
-## 3. Reading progress (MEDIUM — mostly solved)
+## 3. "Mark as completed" progress (SOLVED)
 
-`POST /v2/plataforma/content/academics-main/{courseId}/topics/{topicId}/progress` marks items read
-(`src/actions.ts::markRead`). Request body not yet captured — verify live.
+`POST /v2/plataforma/content/academics-main/{courseId}/topics/{topicId}/progress` is the endpoint
+behind the portal's **"Mark as completed"** button (`src/actions.ts::markRead`). Confirmed live
+(2026-09-11, headful capture of a manual click):
+
+- **Request body: empty** (no `content-type`, no payload).
+- **Response: `204 No Content`**.
+- Works with the bearer token alone — **no AWS WAF challenge** needed for this write.
+- The same button/endpoint applies to every content kind that records progress: readings (`3`),
+  PDFs (`3`), links (`7`) and the rich "other" types (apresentação `10`, infográfico `12`, livro
+  `13`, na prática `16`, dica `22`, saiba mais `49`, desafio `11`). Quiz/file-upload/forum do
+  **not** use it — they complete via real submissions.
+
+`src/content.ts::isMarkable` enumerates these; `npm run agent -- --read` (alias `--complete`)
+marks them all in one pass.
 
 ## 4. Forum post/reply (LOW)
 
