@@ -6,7 +6,7 @@ import { extractPdfText } from "../src/pdf.js";
 import { generateAnswer } from "../src/ai.js";
 import { exportAnswer } from "../src/export.js";
 import { assist } from "../src/paths.js";
-import { parseAiRequest, parseQuizSelections } from "../src/prompt.js";
+import { parseQuizSelections } from "../src/prompt.js";
 import { isTTY, color, typeChip, deadlineChip, deadlineLabel, contextLine, icon } from "./render.js";
 
 function usage(): void {
@@ -104,9 +104,14 @@ async function answerCmd(id: number, modelOverride?: string): Promise<void> {
   }
   const profile = loadProfile();
   console.log(`\n🤖 Gerando resposta (modelo: ${cfg.model}) para "${v.title}"…\n`);
-  const text = await generateAnswer(cfg, v, v.aiRequestJson, profile, {
-    onDelta: (d) => process.stdout.write(d),
-  });
+  const text = await generateAnswer(
+    cfg,
+    v,
+    v.aiRequestJson,
+    profile,
+    { onDelta: (d) => process.stdout.write(d) },
+    v.notes,
+  );
   console.log(`\n`);
   const selections = v.kind === "quiz" ? parseQuizSelections(text, v.questions) : [];
   saveAnswerVersion(id, text, "ai", undefined, selections);
@@ -117,17 +122,7 @@ async function answerCmd(id: number, modelOverride?: string): Promise<void> {
 function noteCmd(id: number, text: string): void {
   const overrides = loadOverrides();
   const entry = { ...(overrides[String(id)] ?? {}) };
-  // keep legacy notes in sync with the aiRequest.contexto when an override exists
   entry.notes = text;
-  if (typeof entry.aiRequest === "string") {
-    const req = parseAiRequest(entry.aiRequest);
-    // A free-form prompt takes precedence, so appending contexto would be ignored.
-    if (req.prompt?.trim()) {
-      entry.aiRequest = `${req.prompt.trim()}\n\n${text}`;
-    } else {
-      entry.aiRequest = JSON.stringify({ ...req, contexto: text }, null, 2);
-    }
-  }
   overrides[String(id)] = entry;
   saveOverrides(overrides);
   console.log(`note saved for ${id}.`);
@@ -162,8 +157,10 @@ function configCmd(): void {
   const cfg = loadAiConfig();
   console.log(`AI config → ${assist("config", "ai-config.json")}`);
   console.log(`  model: ${cfg.model} | temperature: ${cfg.temperature} | max_output_tokens: ${cfg.max_output_tokens ?? 2200}`);
-  console.log(`message_template (editável):`);
-  console.log(cfg.message_template);
+  console.log(`style:`);
+  console.log(JSON.stringify(cfg.style, null, 2));
+  console.log(`activitySections:`);
+  console.log(JSON.stringify(cfg.activitySections, null, 2));
 }
 
 async function main(): Promise<void> {

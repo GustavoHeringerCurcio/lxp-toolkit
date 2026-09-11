@@ -1,57 +1,71 @@
 # Prompt (regras de escrita)
 
-A resposta é gerada por uma única mensagem `user` enviada ao modelo. Essa mensagem é
-montada em `src/prompt.ts` (`buildMessages`) juntando três blocos, nesta ordem:
+A resposta é gerada por **duas mensagens** montadas em `src/prompt.ts` (`buildMessages`):
 
-1. **Identidade** — `Nome:` e `Matrícula:` (de `config/profile.json`).
-2. **Estilo** — o `message_template` de `config/ai-config.json`.
-3. **Esqueleto da atividade** — o `activity_template`, com os placeholders preenchidos.
+1. **`system`** — as regras de escrita, compiladas a partir do `style` estruturado
+   (`buildStylePrompt`), mais as instruções extras da atividade.
+2. **`user`** — o conteúdo da atividade (`buildActivityPrompt`), com os placeholders preenchidos.
 
-Não existe system prompt nem nada injetado escondido: o que está na config é exatamente
-o que o modelo recebe.
+Não existe um esqueleto editável cheio de marcadores `=== … ===`. O conteúdo é montado pelo
+código com rótulos simples, e as regras de sistema dizem explicitamente para a IA **não repetir
+esses rótulos** — por isso o modelo não devolve mais o scaffolding.
 
-## Regras de estilo (message_template)
+## Regras de estilo (config `style`)
+
+As regras são estruturadas, editadas por cards em **IA Ajustes**:
+
+| Campo              | Tipo                          | Efeito                                            |
+| ------------------ | ----------------------------- | ------------------------------------------------- |
+| `persona`          | texto                         | quem a IA está sendo                              |
+| `voice`            | texto                         | tom/idioma                                        |
+| `includeIdentity`  | bool                          | começar com `Nome:` / `Matrícula:`                |
+| `mcqMode`          | `letter` \| `letter_text`     | objetivas: só a letra ou letra + justificativa    |
+| `numbering`        | bool                          | numerar cada resposta                             |
+| `associateInline`  | bool                          | associação na mesma linha (`1. item - resposta`)  |
+| `noIntroOutro`     | bool                          | sem introdução/despedida                          |
+| `noMetaLabels`     | bool                          | não repetir rótulos de contexto                   |
+| `extraRules`       | texto (uma regra por linha)   | regras livres adicionais                          |
+
+`buildStylePrompt` compila isso em algo assim:
 
 ```
-Instruções de escrita:
-- Você é o aluno entregando a atividade. Escreva em primeira pessoa, como estudante.
-- Nunca mencione que é uma IA e nunca use linguagem de assistente.
-- Siga exatamente a estrutura da atividade: responda na mesma ordem e repita os títulos das seções exatamente como aparecem na atividade (ex: Parte 1, Parte 2, ...).
-- Responda todas as partes e todas as questões, sem pular nenhuma. Só termine depois da última.
-- Para cada questão, comece com o número dela.
-- Nas questões de associação, escreva cada item com a resposta na mesma linha (ex: 1. item - resposta).
-- Nas questões objetivas, responda só com a letra, sem justificar.
-- Comece direto nas respostas, sem introdução nem despedida. Não ofereça ajuda extra.
-- Escreva em português simples e natural, sem parecer robótico.
-- Evite símbolos, emojis e negrito; pode usar os títulos das seções da própria atividade.
+Você é o aluno entregando esta atividade.
+Escreva em português simples e natural, como um estudante de faculdade — não como um assistente.
+
+Formato da resposta:
+- Comece a resposta com duas linhas: "Nome: {nome}" e "Matrícula: {matricula}".
+- Numere cada resposta com o número da questão, na ordem em que aparecem.
+- Questões de múltipla escolha: escreva só a letra da alternativa (exemplo: 2. A).
+- Questões de associação: escreva cada item com a resposta na mesma linha (exemplo: 1. item - resposta).
+
+Regras:
+- Nunca diga que é uma IA e nunca use linguagem de assistente.
+- Não repita os rótulos de contexto da atividade (Atividade, Tipo, Módulo, Enunciado, Arquivos, Questões, Observações).
+- Sem introdução, sem despedida e sem oferecer ajuda extra.
+- Escreva em texto simples, sem símbolos, emojis ou negrito.
 ```
 
-## Esqueleto da atividade (activity_template)
+## Conteúdo da atividade (config `activitySections`)
+
+Os toggles `enunciado`, `arquivos`, `questoes` e `observacoes` decidem o que entra na mensagem
+`user`, sempre com `Atividade`, `Tipo` e `Módulo` no topo:
 
 ```
-ATIVIDADE: {atividade}
-TIPO: {tipo}
-MÓDULO: {modulo}
-PRAZO: {prazo}
+Atividade: {atividade}
+Tipo: {tipo}
+Módulo: {modulo}
 
-=== ENUNCIADO / INSTRUÇÕES ===
+Enunciado:
 {enunciado}
 
-=== ARQUIVOS ANEXADOS ===
+Arquivos anexados:
 {arquivos}
 
-=== QUESTÕES ===
+Questões:
 {questoes}
 
-=== OBSERVAÇÕES DO ALUNO ===
+Observações do aluno:
 {observacoes}
-
-=== PEDIDO ===
-Responda a atividade inteira como o aluno, seguindo as regras de escrita acima. Entregue só as respostas, sem introdução nem despedida. Não mencione que é uma IA.
-
-Ao começo da atividade adicione:
-Nome: {nome}
-Matrícula: {matricula}
 ```
 
 ## Placeholders disponíveis
@@ -64,11 +78,11 @@ Matrícula: {matricula}
 
 ## Como editar
 
-- **Global:** `config/ai-config.json` (`message_template` e `activity_template`).
+- **Global:** `config/ai-config.json` (`style` e `activitySections`) ou a tela **IA Ajustes**.
 - **Por atividade:** `config/overrides.json` (campo `aiRequest`) ou o painel
-  "O que a IA recebe" na tela da atividade.
-- Os mesmos textos têm cópia em `src/config.ts` (`DEFAULT_STYLE_TEMPLATE`,
-  `DEFAULT_ACTIVITY_TEMPLATE`) usada quando a config não existe. Ao mudar um, mude o
+  "O que a IA recebe" na tela da atividade. Aceita texto livre; JSON legado ainda é lido.
+- Os mesmos textos têm cópia em `src/config.ts` (`DEFAULT_STYLE`,
+  `DEFAULT_ACTIVITY_SECTIONS`) e em `web/src/lib/prompt-preview.ts`. Ao mudar um, mude o
   outro para não divergir.
 
 ## Regras de ouro
@@ -76,5 +90,4 @@ Matrícula: {matricula}
 - Sem voz de IA, sem despedida, sem oferecer ajuda.
 - Responder todas as partes e questões.
 - Objetivas: só a letra.
-- Genérico: não citar nome de parte/questão específica do prompt; o texto vale para
-  qualquer atividade.
+- Não enviar scaffolding: a IA não deve ver (nem devolver) rótulos `=== … ===`.

@@ -1,5 +1,4 @@
 import type { AiRequest, Exercise, Answers, Overrides, QuizSelection } from "./types.js";
-import { loadAiConfig } from "./config.js";
 import { parseAiRequest } from "./prompt.js";
 
 export interface ExerciseView extends Exercise {
@@ -20,37 +19,22 @@ export interface ExerciseView extends Exercise {
 }
 
 /**
- * Resolve the effective message template for an exercise: the stored override
- * (overrides[id].aiRequest) wins; otherwise the global ai-config default. When a
- * legacy plain-text `notes` exists and there is no override yet, it is folded
- * into the template's {observacoes} slot so no prior context is silently dropped.
+ * Resolve the per-exercise extra instructions. Only a stored override
+ * (`overrides[id].aiRequest`) contributes; there is no global default anymore,
+ * so exercises without an override get an empty string. Notes are sent
+ * separately through the `{observacoes}` activity section.
  */
-export function effectiveAiRequestJson(exercises: { id: number }[], overrides: Overrides): Record<string, string> {
-  const cfg = loadAiConfig();
-  const defaultRaw = cfg.message_template;
+export function effectiveExtraInstructions(exercises: { id: number }[], overrides: Overrides): Record<string, string> {
   const map: Record<string, string> = {};
   for (const e of exercises) {
     const o = overrides[String(e.id)] ?? {};
-    const key = String(e.id);
-    if (typeof o?.aiRequest === "string") {
-      map[key] = o.aiRequest;
-      continue;
-    }
-    const legacy = typeof o?.notes === "string" && o.notes.trim() ? o.notes.trim() : "";
-    if (legacy) {
-      // Fold old free-form notes into the message template so nothing is lost.
-      map[key] = defaultRaw.includes("{observacoes}")
-        ? defaultRaw.replaceAll("{observacoes}", legacy)
-        : `${defaultRaw}\n\n${legacy}`;
-      continue;
-    }
-    map[key] = defaultRaw;
+    map[String(e.id)] = typeof o?.aiRequest === "string" ? o.aiRequest : "";
   }
   return map;
 }
 
 export function enrich(exercises: Exercise[], answers: Answers, overrides: Overrides): ExerciseView[] {
-  const requests = effectiveAiRequestJson(exercises, overrides);
+  const requests = effectiveExtraInstructions(exercises, overrides);
   return exercises.map((e) => {
     const o = overrides[String(e.id)] ?? {};
     const a = answers[String(e.id)];

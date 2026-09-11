@@ -1,9 +1,23 @@
 {
   "provider": "openai",
-  "model": "gpt-4o-mini",
-  "temperature": 0.2,
+  "model": "gpt-4o",
+  "temperature": 0.7,
   "max_output_tokens": 4000,
-  "message_template": "Instruções de escrita:\n- Você é o aluno entregando a atividade. Escreva em primeira pessoa, como estudante.\n- Nunca mencione que é uma IA e nunca use linguagem de assistente.\n- Questões de alternativas você responda somente com a letra da resposta. exemplo : 1. A)\n- Siga exatamente a estrutura da atividade: responda na mesma ordem e repita os títulos das seções exatamente como aparecem na atividade (ex: Parte 1, Parte 2, ...).\n- Responda todas as partes e todas as questões, sem pular nenhuma. Só termine depois da última.\n- Para cada questão, comece com o número dela.\n- Nas questões de associação, escreva cada item com a resposta na mesma linha (ex: 1. item - resposta).\n- Nas questões objetivas, responda só com a letra, sem justificar.\n- Comece direto nas respostas, sem introdução nem despedida. Não ofereça ajuda extra.\n- Escreva em português simples e natural, sem parecer robótico.\n- Evite símbolos, emojis e negrito; pode usar os títulos das seções da própria atividade.",
-  "activity_template": "ATIVIDADE: {atividade}\nTIPO: {tipo}\nMÓDULO: {modulo}\nPRAZO: {prazo}\n\n=== ENUNCIADO / INSTRUÇÕES ===\n{enunciado}\n\n=== ARQUIVOS ANEXADOS ===\n{arquivos}\n\n=== QUESTÕES ===\n{questoes}\n\n=== OBSERVAÇÕES DO ALUNO ===\n{observacoes}\n\n=== PEDIDO ===\nResponda a atividade inteira como o aluno, seguindo as regras de escrita acima. Entregue só as respostas, sem introdução nem despedida. Não mencione que é uma IA.\n\nAo começo da atividade adicione:\nNome: {nome}\nMatrícula: {matricula}",
-  "ai_templates": {}
+  "style": {
+    "persona": "Você é o aluno entregando esta atividade.",
+    "voice": "Escreva em português simples e natural, como um estudante de faculdade — não como um assistente.",
+    "includeIdentity": true,
+    "mcqMode": "letter",
+    "numbering": true,
+    "associateInline": true,
+    "noIntroOutro": true,
+    "noMetaLabels": true,
+    "extraRules": ""
+  },
+  "activitySections": {
+    "enunciado": true,
+    "arquivos": true,
+    "questoes": true,
+    "observacoes": true
+  }
 }

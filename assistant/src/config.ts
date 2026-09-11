@@ -1,9 +1,10 @@
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { assist } from "./paths.js";
 import type {
+  AiActivitySections,
   AiConfig,
   AiProfile,
-  AiRequest,
+  AiStyle,
   AnswerEntry,
   AnswerRecord,
   AnswerSource,
@@ -14,69 +15,37 @@ import type {
 } from "./types.js";
 
 /**
- * The style rules the student edits on the activity screen ("Como escrever").
- * Kept separate from the activity scaffolding so the UI stays simple.
+ * The writing rules sent as the `system` message. Structured so "IA Ajustes"
+ * can edit each rule with a card/input instead of a free-text blob.
  */
-export const DEFAULT_STYLE_TEMPLATE = `Instruções de escrita:
-- Você é o aluno entregando a atividade. Escreva em primeira pessoa, como estudante.
-- Nunca mencione que é uma IA e nunca use linguagem de assistente.
-- Siga exatamente a estrutura da atividade: responda na mesma ordem e repita os títulos das seções exatamente como aparecem na atividade (ex: Parte 1, Parte 2, ...).
-- Responda todas as partes e todas as questões, sem pular nenhuma. Só termine depois da última.
-- Para cada questão, comece com o número dela.
-- Nas questões de associação, escreva cada item com a resposta na mesma linha (ex: 1. item - resposta).
-- Nas questões objetivas, responda só com a letra, sem justificar.
-- Comece direto nas respostas, sem introdução nem despedida. Não ofereça ajuda extra.
-- Escreva em português simples e natural, sem parecer robótico.
-- Evite símbolos, emojis e negrito; pode usar os títulos das seções da própria atividade.`;
-
-/**
- * The activity scaffolding: the fixed sections and {placeholders} the model
- * receives after the style rules. Edited only in "IA Ajustes".
- */
-export const DEFAULT_ACTIVITY_TEMPLATE = `ATIVIDADE: {atividade}
-TIPO: {tipo}
-MÓDULO: {modulo}
-PRAZO: {prazo}
-
-=== ENUNCIADO / INSTRUÇÕES ===
-{enunciado}
-
-=== ARQUIVOS ANEXADOS ===
-{arquivos}
-
-=== QUESTÕES ===
-{questoes}
-
-=== OBSERVAÇÕES DO ALUNO ===
-{observacoes}
-
-=== PEDIDO ===
-Responda a atividade inteira como o aluno, seguindo as regras de escrita acima. Entregue só as respostas, sem introdução nem despedida. Não mencione que é uma IA.`;
-
-export const DEFAULT_AI_REQUEST: AiRequest = {
-  perfil: "",
-  instrucoes: [
-    "responda como um aluno de faculdade",
-    "escreva como um humano, em português simples",
-    "evite símbolos e formatações",
-    "não pareça com uma IA, não escreva de forma robótica",
-  ],
-  contexto: "",
-  prompt: DEFAULT_STYLE_TEMPLATE,
+export const DEFAULT_STYLE: AiStyle = {
+  persona: "Você é o aluno entregando esta atividade.",
+  voice:
+    "Escreva em português simples e natural, como um estudante de faculdade — não como um assistente.",
+  includeIdentity: true,
+  mcqMode: "letter",
+  numbering: true,
+  associateInline: true,
+  noIntroOutro: true,
+  noMetaLabels: true,
+  extraRules: "",
 };
 
-export function defaultAiRequestJson(): string {
-  return DEFAULT_STYLE_TEMPLATE;
-}
+/** Which activity sections are sent as the `user` message. */
+export const DEFAULT_ACTIVITY_SECTIONS: AiActivitySections = {
+  enunciado: true,
+  arquivos: true,
+  questoes: true,
+  observacoes: true,
+};
 
 const DEFAULT_AI_CONFIG: AiConfig = {
   provider: "openai",
-  model: "gpt-4o-mini",
-  temperature: 0.2,
+  model: "gpt-4o",
+  temperature: 0.7,
   max_output_tokens: 4000,
-  message_template: DEFAULT_STYLE_TEMPLATE,
-  activity_template: DEFAULT_ACTIVITY_TEMPLATE,
-  ai_templates: {},
+  style: { ...DEFAULT_STYLE },
+  activitySections: { ...DEFAULT_ACTIVITY_SECTIONS },
 };
 
 export function openaiKey(): string {
@@ -89,31 +58,30 @@ export function openaiKey(): string {
   return k;
 }
 
+function freshDefaultConfig(): AiConfig {
+  return {
+    ...DEFAULT_AI_CONFIG,
+    style: { ...DEFAULT_STYLE },
+    activitySections: { ...DEFAULT_ACTIVITY_SECTIONS },
+  };
+}
+
 export function loadAiConfig(): AiConfig {
   const file = assist("config", "ai-config.json");
-  if (!existsSync(file)) return DEFAULT_AI_CONFIG;
+  if (!existsSync(file)) return freshDefaultConfig();
   try {
     const raw = JSON.parse(readFileSync(file, "utf-8")) as Partial<AiConfig>;
-    let messageTemplate =
-      raw.message_template ?? raw.ai_request_default ?? DEFAULT_AI_CONFIG.message_template;
-    let activityTemplate = raw.activity_template ?? DEFAULT_AI_CONFIG.activity_template;
-    // Migrate legacy configs where the whole message (style + scaffolding) lived
-    // in message_template: split the activity sections out into activity_template.
-    if (!raw.activity_template && messageTemplate.includes("{enunciado}")) {
-      const idx = messageTemplate.search(/^ATIVIDADE:/m);
-      if (idx >= 0) {
-        activityTemplate = messageTemplate.slice(idx).trim();
-        messageTemplate = messageTemplate.slice(0, idx).trim();
-      }
-    }
+    // Structured fields are merged over the defaults; legacy free-text fields
+    // (`message_template` / `activity_template`) are intentionally ignored — the
+    // old scaffolding is exactly what made the model echo section markers.
     return {
       ...DEFAULT_AI_CONFIG,
       ...raw,
-      message_template: messageTemplate,
-      activity_template: activityTemplate,
+      style: { ...DEFAULT_STYLE, ...(raw.style ?? {}) },
+      activitySections: { ...DEFAULT_ACTIVITY_SECTIONS, ...(raw.activitySections ?? {}) },
     };
   } catch {
-    return DEFAULT_AI_CONFIG;
+    return freshDefaultConfig();
   }
 }
 

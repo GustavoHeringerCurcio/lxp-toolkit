@@ -1,4 +1,12 @@
-import type { AiConfigDto, AiProfile, AnswerEntry, AnswerState, ExercisesPayload } from "./types";
+import type {
+  AiActivitySections,
+  AiConfigDto,
+  AiProfile,
+  AiStyle,
+  AnswerEntry,
+  AnswerState,
+  ExercisesPayload,
+} from "./types";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
@@ -52,40 +60,16 @@ export async function saveAiRequest(id: number, raw: string | null): Promise<AiR
   return (await post("/api/ai-request", { id, raw })) as AiRequestSaveResult;
 }
 
-export async function saveMessageTemplate(raw: string): Promise<void> {
-  await post("/api/message-template", { raw });
-}
-
-export async function saveActivityTemplate(raw: string): Promise<void> {
-  await post("/api/activity-template", { raw });
-}
-
 export interface AiConfigSavePatch {
   model?: string;
   temperature?: number;
   max_output_tokens?: number;
+  style?: Partial<AiStyle>;
+  activitySections?: Partial<AiActivitySections>;
 }
 
 export async function saveAiConfig(patch: AiConfigSavePatch): Promise<void> {
   await post("/api/ai-config", patch);
-}
-
-export async function fetchAiTemplates(): Promise<Record<string, string>> {
-  const res = await req<{ templates?: Record<string, string> }>("/api/ai-templates");
-  return res.templates ?? {};
-}
-
-export async function saveAiTemplate(name: string, text: string): Promise<Record<string, string>> {
-  const res = (await post("/api/ai-templates", { name, text })) as { templates?: Record<string, string> };
-  return res.templates ?? {};
-}
-
-export async function deleteAiTemplate(name: string): Promise<Record<string, string>> {
-  const res = await req<{ templates?: Record<string, string> }>(
-    `/api/ai-templates?name=${encodeURIComponent(name)}`,
-    { method: "DELETE" },
-  );
-  return res.templates ?? {};
 }
 
 export interface RefreshStatus {

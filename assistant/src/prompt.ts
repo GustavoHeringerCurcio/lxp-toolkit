@@ -1,5 +1,5 @@
-import type { AiProfile, AiRequest, Exercise, QuizQ, QuizSelection } from "./types.js";
-import { DEFAULT_AI_REQUEST } from "./config.js";
+import type { AiActivitySections, AiProfile, AiStyle, Exercise, QuizQ, QuizSelection } from "./types.js";
+import { DEFAULT_ACTIVITY_SECTIONS } from "./config.js";
 import { extractFileText } from "./pdf.js";
 
 export function isPlaceholder(value: string): boolean {
@@ -7,8 +7,9 @@ export function isPlaceholder(value: string): boolean {
 }
 
 /**
- * Every value that can be injected into the message template. These are the
- * only things the user does not type by hand; everything else is editable.
+ * Every value that can be injected into the compiled messages. These are the
+ * only things the user does not type by hand; everything else is structured
+ * config or fixed code.
  */
 export interface PromptVars {
   nome: string;
@@ -23,7 +24,7 @@ export interface PromptVars {
   observacoes: string;
 }
 
-/** Replace every supported {placeholder} in the message template. */
+/** Replace every supported {placeholder} in the given text. */
 export function renderTemplate(text: string, vars: PromptVars): string {
   return text
     .replaceAll("{nome}", vars.nome)
@@ -40,12 +41,16 @@ export function renderTemplate(text: string, vars: PromptVars): string {
 }
 
 /**
- * Parse a stored AiRequest. Accepts either the legacy/default JSON object or a
- * plain-text prompt. A JSON string that is not an object (or is invalid) is
- * treated as free-form prompt text. Never throws.
+ * Parse a stored per-exercise override. Accepts either a legacy JSON object or
+ * plain text. Never throws.
  */
-export function parseAiRequest(raw: string): AiRequest {
-  if (!raw || !raw.trim()) return { ...DEFAULT_AI_REQUEST, contexto: "", perfil: "" };
+export function parseAiRequest(raw: string): {
+  perfil: string;
+  instrucoes: string[];
+  contexto: string;
+  prompt?: string;
+} {
+  if (!raw || !raw.trim()) return { perfil: "", instrucoes: [], contexto: "" };
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -56,42 +61,111 @@ export function parseAiRequest(raw: string): AiRequest {
     return { perfil: "", instrucoes: [], contexto: "", prompt: raw.trim() };
   }
   const o = parsed as Record<string, unknown>;
-  const str = (v: unknown): string => (typeof v === "string" ? v : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : "");
-  const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map((i) => str(i)).filter(Boolean) : []);
-  const instrucoes = arr(o.instrucoes);
+  const str = (v: unknown): string =>
+    typeof v === "string" ? v : typeof v === "number" ? String(v) : typeof v === "boolean" ? String(v) : "";
+  const arr = (v: unknown): string[] =>
+    Array.isArray(v) ? v.map((i) => str(i)).filter(Boolean) : [];
   const prompt = str(o.prompt).trim();
   return {
     perfil: str(o.perfil),
-    instrucoes: instrucoes.length ? instrucoes : [...DEFAULT_AI_REQUEST.instrucoes],
+    instrucoes: arr(o.instrucoes),
     contexto: str(o.contexto),
     ...(prompt ? { prompt } : {}),
   };
 }
 
 /**
- * Render the legacy structured AiRequest (perfil/instrucoes/contexto) into the
- * base message. A free-form `prompt` is returned as-is; its content placeholders
- * are resolved later by renderTemplate.
+ * Turn a stored per-exercise override into plain extra instructions. Handles
+ * both the new free-text format and legacy JSON (prompt / instrucoes / contexto).
  */
-export function renderRequestBlock(req: AiRequest, profile: AiProfile): string {
-  if (req.prompt?.trim()) return req.prompt;
+export function resolveExtraInstructions(raw: string): string {
+  if (!raw || !raw.trim()) return "";
+  const req = parseAiRequest(raw);
+  if (req.prompt?.trim()) return req.prompt.trim();
   const lines: string[] = [];
-  if (profile.nome) lines.push(`Quem sou: ${profile.nome}`);
-  if (req.instrucoes.length) {
-    lines.push("Como escrever:");
-    for (const ins of req.instrucoes) lines.push(`- ${ins}`);
+  for (const ins of req.instrucoes) lines.push(`- ${ins}`);
+  if (req.contexto.trim()) lines.push(req.contexto.trim());
+  return lines.join("\n").trim();
+}
+
+/**
+ * Compile the structured style into the `system` message. This is what tells
+ * the model *how* to answer; the activity content comes separately as the
+ * `user` message, so the model never has a reason to echo the scaffolding.
+ */
+export function buildStylePrompt(style: AiStyle, extraInstructions = ""): string {
+  const parts: string[] = [];
+  if (style.persona.trim()) parts.push(style.persona.trim());
+  if (style.voice.trim()) parts.push(style.voice.trim());
+
+  const format: string[] = [];
+  if (style.includeIdentity)
+    format.push('- Comece a resposta com duas linhas: "Nome: {nome}" e "Matrícula: {matricula}".');
+  if (style.numbering)
+    format.push("- Numere cada resposta com o número da questão, na ordem em que aparecem.");
+  if (style.mcqMode === "letter")
+    format.push("- Questões de múltipla escolha: escreva só a letra da alternativa (exemplo: 2. A).");
+  else
+    format.push(
+      "- Questões de múltipla escolha: escreva a letra da alternativa e uma breve justificativa.",
+    );
+  if (style.associateInline)
+    format.push(
+      "- Questões de associação: escreva cada item com a resposta na mesma linha (exemplo: 1. item - resposta).",
+    );
+  if (format.length) parts.push(`Formato da resposta:\n${format.join("\n")}`);
+
+  const rules: string[] = ["- Nunca diga que é uma IA e nunca use linguagem de assistente."];
+  if (style.noMetaLabels)
+    rules.push(
+      "- Não repita os rótulos de contexto da atividade (Atividade, Tipo, Módulo, Enunciado, Arquivos, Questões, Observações).",
+    );
+  if (style.noIntroOutro) rules.push("- Sem introdução, sem despedida e sem oferecer ajuda extra.");
+  rules.push("- Escreva em texto simples, sem símbolos, emojis ou negrito.");
+  for (const raw of style.extraRules.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    rules.push(line.startsWith("-") ? line : `- ${line}`);
   }
-  if (req.contexto.trim()) lines.push(`Contexto extra:\n${req.contexto}`);
-  return lines.join("\n");
+  parts.push(`Regras:\n${rules.join("\n")}`);
+
+  if (extraInstructions.trim()) {
+    parts.push(`Instruções específicas desta atividade:\n${extraInstructions.trim()}`);
+  }
+  return parts.join("\n\n");
+}
+
+/**
+ * Compile the activity content into the `user` message (plain labels only).
+ * Empty sections are skipped so the model never sees a dangling "Questões:".
+ */
+export function buildActivityPrompt(vars: PromptVars, sections: AiActivitySections): string {
+  const blocks: string[] = [
+    `Atividade: ${vars.atividade}`,
+    `Tipo: ${vars.tipo}`,
+    `Módulo: ${vars.modulo}`,
+  ];
+  if (sections.enunciado && vars.enunciado.trim()) blocks.push(`Enunciado:\n${vars.enunciado.trim()}`);
+  if (sections.arquivos && vars.arquivos.trim())
+    blocks.push(`Arquivos anexados:\n${vars.arquivos.trim()}`);
+  if (sections.questoes && vars.questoes.trim()) blocks.push(`Questões:\n${vars.questoes.trim()}`);
+  if (sections.observacoes && vars.observacoes.trim())
+    blocks.push(`Observações do aluno:\n${vars.observacoes.trim()}`);
+  return blocks.join("\n\n");
 }
 
 /** Build the placeholder values for one exercise (extracts PDF text on the server). */
-export async function buildPromptVars(e: Exercise, profile: AiProfile, notes = ""): Promise<PromptVars> {
+export async function buildPromptVars(
+  e: Exercise,
+  profile: AiProfile,
+  notes = "",
+  sections: AiActivitySections = DEFAULT_ACTIVITY_SECTIONS,
+): Promise<PromptVars> {
   const tipo = e.kind === "upload" ? "tarefa com envio de arquivo" : "questionário/quiz";
   const modulo = e.moduleTitle + (e.sectionTitle ? ` — ${e.sectionTitle}` : "");
 
   let arquivos = "";
-  if (e.kind === "upload") {
+  if (e.kind === "upload" && sections.arquivos) {
     const chunks: string[] = [];
     for (const f of e.files) {
       chunks.push(`--- Arquivo: ${f.name} ---`);
@@ -100,17 +174,21 @@ export async function buildPromptVars(e: Exercise, profile: AiProfile, notes = "
         const max = 30_000;
         chunks.push(text.length > max ? text.slice(0, max) + "\n…[truncado]" : text);
       } else {
-        chunks.push("(Arquivo sem texto extraível — provavelmente imagem/escaneado ou conversão indisponível; veja o arquivo).");
+        chunks.push(
+          "(Arquivo sem texto extraível — provavelmente imagem/escaneado ou conversão indisponível; veja o arquivo).",
+        );
       }
     }
     if (e.remoteFiles.length) {
-      chunks.push(`Links dos arquivos no portal:\n${e.remoteFiles.map((r) => `- ${r.filename ?? r.url} (${r.url})`).join("\n")}`);
+      chunks.push(
+        `Links dos arquivos no portal:\n${e.remoteFiles.map((r) => `- ${r.filename ?? r.url} (${r.url})`).join("\n")}`,
+      );
     }
     arquivos = chunks.join("\n");
   }
 
   let questoes = "";
-  if (e.kind === "quiz" && e.questions.length) {
+  if (e.kind === "quiz" && e.questions.length && sections.questoes) {
     const lines: string[] = [];
     for (const q of e.questions) {
       lines.push(`Q${q.id}: ${q.text}`);
@@ -134,47 +212,39 @@ export async function buildPromptVars(e: Exercise, profile: AiProfile, notes = "
 }
 
 export interface ChatMessage {
-  role: "user";
+  role: "system" | "user";
   content: string;
 }
 
 /**
- * Identity header placed at the top of every message, built from the profile.
- * Only the fields that are filled in are included.
- */
-export function buildIdentityHeader(profile: AiProfile): string {
-  const lines: string[] = [];
-  if (profile.nome?.trim()) lines.push(`Nome: ${profile.nome.trim()}`);
-  if (profile.matricula?.trim()) lines.push(`Matrícula: ${profile.matricula.trim()}`);
-  return lines.join("\n");
-}
-
-/**
- * Build the exact messages sent to the model. The style rules come from the
- * stored request and the activity scaffolding from `activityTemplate`; the
- * activity content is substituted into the placeholders. There is no system
- * message and nothing else is injected.
+ * Build the exact messages sent to the model: a `system` message with the
+ * structured style rules (plus per-exercise extra instructions) and a `user`
+ * message with the activity content. No scaffolding markers are ever sent, so
+ * the model has nothing to echo back.
  */
 export async function buildMessages(
   e: Exercise,
-  requestRaw: string,
   profile: AiProfile,
+  style: AiStyle,
+  sections: AiActivitySections,
+  extraInstructions = "",
   notes = "",
-  activityTemplate = "",
 ): Promise<ChatMessage[]> {
-  const req = parseAiRequest(requestRaw);
-  const header = buildIdentityHeader(profile);
-  const style = renderRequestBlock(req, profile).trim();
-  const activity = activityTemplate.trim();
-  const template = [header, style, activity].filter((s) => s.trim()).join("\n\n");
-  const vars = await buildPromptVars(e, profile, notes);
-  let content = renderTemplate(template, vars);
+  const vars = await buildPromptVars(e, profile, notes, sections);
+  const messages: ChatMessage[] = [];
+
+  const system = renderTemplate(buildStylePrompt(style, extraInstructions), vars).trim();
+  if (system) messages.push({ role: "system", content: system });
+
+  let user = buildActivityPrompt(vars, sections).trim();
   if (e.kind === "quiz" && e.questions.length) {
-    content +=
+    user +=
       `\n\nFormato da resposta: uma linha por questão, no formato "Q<id>: <letra>", sem texto extra.` +
       ` Exemplo: Q${e.questions[0].id}: B`;
   }
-  return [{ role: "user", content }];
+  if (user) messages.push({ role: "user", content: user });
+
+  return messages;
 }
 
 /**

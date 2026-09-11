@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import type { AiConfig, AiProfile, Exercise } from "./types.js";
 import { openaiKey } from "./config.js";
-import { buildMessages } from "./prompt.js";
+import { buildMessages, resolveExtraInstructions } from "./prompt.js";
 
 let _client: OpenAI | null = null;
 function client(): OpenAI {
@@ -14,19 +14,26 @@ export interface GenerateOpts {
 }
 
 /**
- * Generate an answer for an exercise. The entire model input is the stored
- * message template rendered with the activity's placeholders — a single `user`
- * message, with no hidden system prompt or injected rules.
+ * Generate an answer for an exercise. The model receives a `system` message with
+ * the structured style rules (plus the per-exercise extra instructions) and a
+ * `user` message with the activity content — never the prompt scaffolding.
  */
 export async function generateAnswer(
   cfg: AiConfig,
   e: Exercise,
-  requestRaw: string,
+  extraInstructions: string,
   profile: AiProfile,
   opts: GenerateOpts = {},
   notes = "",
 ): Promise<string> {
-  const messages = await buildMessages(e, requestRaw, profile, notes, cfg.activity_template);
+  const messages = await buildMessages(
+    e,
+    profile,
+    cfg.style,
+    cfg.activitySections,
+    resolveExtraInstructions(extraInstructions),
+    notes,
+  );
 
   const stream = await client().chat.completions.create({
     model: cfg.model,

@@ -83,13 +83,31 @@ export interface AnswerState {
   history: AnswerEntry[];
 }
 
+export interface AiStyle {
+  persona: string;
+  voice: string;
+  includeIdentity: boolean;
+  mcqMode: "letter" | "letter_text";
+  numbering: boolean;
+  associateInline: boolean;
+  noIntroOutro: boolean;
+  noMetaLabels: boolean;
+  extraRules: string;
+}
+
+export interface AiActivitySections {
+  enunciado: boolean;
+  arquivos: boolean;
+  questoes: boolean;
+  observacoes: boolean;
+}
+
 export interface AiConfigDto {
   model: string;
   configPath: string;
   max_output_tokens?: number;
   temperature?: number;
-  message_template: string;
-  activity_template: string;
-  ai_templates?: Record<string, string>;
+  style: AiStyle;
+  activitySections: AiActivitySections;
   profile: AiProfile;
 }

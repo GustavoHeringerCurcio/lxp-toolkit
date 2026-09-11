@@ -33,9 +33,10 @@
 
 - `src/build.ts` + `src/load.ts` — transformam o `docs/` raspado em
   `data/exercises.json` (uploads e quizzes, com prazo, arquivos e questões).
-- `src/view.ts` — enriquece cada atividade com resposta salva, override e o template
-  efetivo de IA.
-- `src/prompt.ts` — monta a única mensagem enviada ao modelo.
+- `src/view.ts` — enriquece cada atividade com resposta salva, override e as instruções
+  extras de IA.
+- `src/prompt.ts` — compila as mensagens `system` (regras estruturadas) e `user`
+  (conteúdo da atividade) enviadas ao modelo.
 - `src/ai.ts` — chama a OpenAI (`chat.completions`, streaming) e devolve o texto.
 - `src/config.ts` — lê/grava config, respostas (com histórico), overrides e envios.
 - `src/send.ts` — grava o request JSON, dá `spawn` no `scripts/submit-task.ts` da raiz
@@ -48,9 +49,10 @@
 
 ## Dados
 
-- `config/ai-config.json` — modelo, temperatura, tokens e o prompt.
+- `config/ai-config.json` — modelo, temperatura, tokens, regras (`style`) e seções
+  enviadas (`activitySections`).
 - `config/profile.json` — nome e matrícula (entram no começo da resposta).
-- `config/overrides.json` — por atividade: nota, ocultar, prompt próprio.
+- `config/overrides.json` — por atividade: nota, ocultar, instruções extras de IA.
 - `data/exercises.json` — lista normalizada (gerada pelo index).
 - `data/answers.json` — resposta atual + histórico (máx. 20 versões).
 - `data/submissions.json` — histórico de envios e status.

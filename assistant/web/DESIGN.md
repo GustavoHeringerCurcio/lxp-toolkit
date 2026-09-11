@@ -131,8 +131,8 @@ distinguishable — deliberately independent from the brand palette.
 | `ActivityCard` | `components/activity-card.tsx` | list row: title, professor/module chips, type + status badges, quick-action overflow menu |
 | `DashboardPage` | `pages/dashboard.tsx` | route `/` — hero, KPIs, module chips, scoped list |
 | `ExercisePage` | `pages/exercise.tsx` | route `/tarefa/:id` — full detail + answer workbench (streaming, history, send) |
-| `AiRequestPanel` | `components/ai-request-panel.tsx` | "O que a IA recebe": editable per-exercise JSON prompt, placeholders, live preview |
-| `AiSettingsDialog` | `components/ai-settings-dialog.tsx` | sheet: profile nome/matrícula + global default AI-request JSON |
+| `AiRequestPanel` | `components/ai-request-panel.tsx` | "O que a IA recebe": free-text extra instructions for this activity + compiled system/user preview |
+| `AiSettingsDialog` | `components/ai-settings-dialog.tsx` | sheet: profile nome/matrícula (link to IA Ajustes) |
 | `TypeBadge` / `StatusBadge` | `components/status-badges.tsx` | kind chip (teal/neutral) and tone pill |
 | `AccChips` | `components/prof-chip.tsx` | per-professor accent chips |
 | `AppProviders` | `lib/app-state.tsx` | data + scope context shared by shell/pages |

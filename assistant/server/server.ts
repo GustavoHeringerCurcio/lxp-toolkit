@@ -20,7 +20,8 @@ import {
 } from "../src/config.js";
 import { enrich } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
-import { parseAiRequest, parseQuizSelections } from "../src/prompt.js";
+import { parseQuizSelections } from "../src/prompt.js";
+import type { AiActivitySections, AiStyle } from "../src/types.js";
 import { launchUploadSubmit, launchQuizSubmit, lastSubmission, sendEnv, submissionsFor } from "../src/send.js";
 import { officeToPdf, previewCacheDir } from "../src/office.js";
 
@@ -230,9 +231,8 @@ const server = createServer(async (req, res) => {
         max_output_tokens: cfg.max_output_tokens,
         temperature: cfg.temperature,
         configPath: assist("config", "ai-config.json"),
-        message_template: cfg.message_template,
-        activity_template: cfg.activity_template,
-        ai_templates: cfg.ai_templates ?? {},
+        style: cfg.style,
+        activitySections: cfg.activitySections,
         profile: loadProfile(),
       });
     }
@@ -245,17 +245,6 @@ const server = createServer(async (req, res) => {
         finishedAt: refresh.finishedAt,
         log: refresh.log,
       });
-    }
-    if (url === "/api/ai-templates" && method === "GET") {
-      return json(res, 200, { templates: loadAiConfig().ai_templates ?? {} });
-    }
-    if (url === "/api/ai-templates" && method === "DELETE") {
-      const name = new URL(req.url ?? "/", "http://local").searchParams.get("name") ?? "";
-      const cfg = loadAiConfig();
-      const templates = { ...(cfg.ai_templates ?? {}) };
-      delete templates[name];
-      saveAiConfig({ ...cfg, ai_templates: templates });
-      return json(res, 200, { ok: true, templates });
     }
     if (url === "/api/profile" && method === "GET") {
       return json(res, 200, loadProfile());
@@ -334,9 +323,7 @@ const server = createServer(async (req, res) => {
         if (b.raw == null) {
           delete entry.aiRequest;
         } else {
-          const raw = String(b.raw);
-          parseAiRequest(raw); // validate
-          entry.aiRequest = raw;
+          entry.aiRequest = String(b.raw);
         }
         overrides[String(id)] = entry;
         saveOverrides(overrides);
@@ -349,21 +336,6 @@ const server = createServer(async (req, res) => {
           nome: String(b.nome ?? "").trim(),
           matricula: String(b.matricula ?? "").trim(),
         });
-        return json(res, 200, { ok: true });
-      }
-      if (url === "/api/message-template") {
-        const b = await readBody(req);
-        const raw = String(b.raw ?? "");
-        parseAiRequest(raw); // validate (accepts JSON or plain text)
-        const cfg = loadAiConfig();
-        saveAiConfig({ ...cfg, message_template: raw });
-        return json(res, 200, { ok: true });
-      }
-      if (url === "/api/activity-template") {
-        const b = await readBody(req);
-        const raw = String(b.raw ?? "");
-        const cfg = loadAiConfig();
-        saveAiConfig({ ...cfg, activity_template: raw });
         return json(res, 200, { ok: true });
       }
       if (url === "/api/refresh") {
@@ -384,23 +356,24 @@ const server = createServer(async (req, res) => {
           const m = Number(b.max_output_tokens);
           if (!Number.isNaN(m) && m > 0) next.max_output_tokens = m;
         }
+        if (b.style && typeof b.style === "object" && !Array.isArray(b.style)) {
+          next.style = { ...next.style, ...(b.style as Partial<AiStyle>) };
+        }
+        if (b.activitySections && typeof b.activitySections === "object" && !Array.isArray(b.activitySections)) {
+          next.activitySections = {
+            ...next.activitySections,
+            ...(b.activitySections as Partial<AiActivitySections>),
+          };
+        }
         saveAiConfig(next);
         return json(res, 200, {
           ok: true,
           model: next.model,
           temperature: next.temperature,
           max_output_tokens: next.max_output_tokens,
+          style: next.style,
+          activitySections: next.activitySections,
         });
-      }
-      if (url === "/api/ai-templates") {
-        const b = await readBody(req);
-        const name = String(b.name ?? "").trim();
-        const text = String(b.text ?? "").trim();
-        if (!name || !text) return json(res, 400, { error: "nome e texto são obrigatórios" });
-        const cfg = loadAiConfig();
-        const templates = { ...(cfg.ai_templates ?? {}), [name]: text };
-        saveAiConfig({ ...cfg, ai_templates: templates });
-        return json(res, 200, { ok: true, templates });
       }
       if (url === "/api/answer/manual") {
         const b = await readBody(req);
@@ -417,7 +390,7 @@ const server = createServer(async (req, res) => {
         const id = Number(b.id);
         const view = findView(id);
         const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
-        const answer = await generateAnswer(cfg, view, view.aiRequestJson, loadProfile());
+        const answer = await generateAnswer(cfg, view, view.aiRequestJson, loadProfile(), {}, view.notes);
         const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
         const rec = saveAnswerVersion(id, answer, "ai", undefined, selections);
         return json(res, 200, { answer, current: rec, history: rec.history, updatedAt: rec.updatedAt });
@@ -448,7 +421,7 @@ const server = createServer(async (req, res) => {
                 }
               }
             },
-          });
+          }, view.notes);
           const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
           const rec = saveAnswerVersion(id, answer, "ai", undefined, selections);
           sendEvent({ type: "done", answer, current: rec, history: rec.history });
@@ -497,9 +470,9 @@ const server = createServer(async (req, res) => {
       return res.end(md);
     }
 
-    // /docs/** → study repo data + downloaded files (PDFs open natively)
-    if (url.startsWith("/docs/")) {
-      const rel = url.replace(/^\/docs\/?/, "");
+    // /scraped/** → local study data + downloaded files (PDFs open natively)
+    if (url.startsWith("/scraped/")) {
+      const rel = url.replace(/^\/scraped\/?/, "");
       const file = path.normalize(path.join(dataDir(), rel));
       if (!file.startsWith(path.normalize(dataDir()))) {
         res.writeHead(403).end("forbidden");

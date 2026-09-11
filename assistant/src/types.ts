@@ -70,22 +70,53 @@ export interface Exercise {
   ai: { status: "none" | "generating" | "done" | "error"; answer: string | null; updatedAt: string | null };
 }
 
+/**
+ * The writing rules sent as the `system` message. Structured so the UI can edit
+ * it with cards/inputs instead of a free-text blob full of section markers.
+ */
+export interface AiStyle {
+  /** Who the model is pretending to be. */
+  persona: string;
+  /** Tone/language guidance. */
+  voice: string;
+  /** Start the answer with "Nome: ..." and "Matrícula: ...". */
+  includeIdentity: boolean;
+  /** How to answer multiple-choice questions. */
+  mcqMode: "letter" | "letter_text";
+  /** Prefix each answer with its question number. */
+  numbering: boolean;
+  /** Association questions: "item - answer" on the same line. */
+  associateInline: boolean;
+  /** No greeting, closing or extra offers. */
+  noIntroOutro: boolean;
+  /** Do not repeat the activity context labels in the answer. */
+  noMetaLabels: boolean;
+  /** Extra free-form rules, one per line. */
+  extraRules: string;
+}
+
+/** Which parts of the activity are sent as the `user` message. */
+export interface AiActivitySections {
+  enunciado: boolean;
+  arquivos: boolean;
+  questoes: boolean;
+  observacoes: boolean;
+}
+
 export interface AiConfig {
   provider: "openai";
   model: string;
   temperature: number;
   max_output_tokens?: number;
-  /**
-   * The style rules ("Como escrever") edited on the activity screen. Combined
-   * with `activity_template` to form the single `user` message sent to the model.
-   */
-  message_template: string;
-  /**
-   * The activity scaffolding (sections + {placeholders}) appended after the style
-   * rules. Edited only in "IA Ajustes".
-   */
-  activity_template: string;
-  /** Named message templates: display name -> full plain-text message. */
+  /** Structured writing rules (system message). */
+  style: AiStyle;
+  /** Which activity sections are included in the user message. */
+  activitySections: AiActivitySections;
+  /** @deprecated legacy free-text style; replaced by `style`. */
+  message_template?: string;
+  /** @deprecated legacy free-text scaffolding; replaced by `activitySections`. */
+  activity_template?: string;
+  /** @deprecated named-templates feature removed. */
   ai_templates?: Record<string, string>;
   /** @deprecated ignored; kept only so old config files load without errors. */
   language?: string;
