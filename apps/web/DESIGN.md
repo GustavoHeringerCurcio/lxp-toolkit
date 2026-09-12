@@ -36,34 +36,37 @@ tints via `color-mix(in oklab, …)`. Tailwind utilities come from the `@theme i
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| `--background` | warm paper `oklch(.977 .007 85)` | espresso `oklch(.215 .013 60)` | page |
-| `--card` | `oklch(.995 .003 85)` | `oklch(.253 .014 60)` | raised surfaces |
-| `--popover` | = card | = popover dark | overlays |
-| `--primary` | sienna `oklch(.52 .11 42)` | sienna bright `oklch(.705 .115 48)` | CTA fill, active nav |
+| `--background` | warm paper `oklch(.977 .007 85)` | near-black espresso `oklch(.165 .012 60)` | page |
+| `--card` | `oklch(.995 .003 85)` | `oklch(.205 .013 60)` | raised surfaces |
+| `--popover` | = card | `oklch(.215 .013 60)` | overlays |
+| `--primary` | sienna `oklch(.52 .125 42)` | sienna bright `oklch(.71 .145 48)` | CTA fill, active nav |
 | `--secondary` / `--muted` / `--accent` | warm greys | warm greys | support surfaces |
-| `--border` / `--input` | `oklch(.905 .012 78)` | `white / 10–14%` | lines, inputs |
+| `--border` / `--input` | `oklch(.89 .013 78)` | `white / 12–16%` | lines, inputs |
 | `--ring` | = primary | = primary | focus |
-| `--destructive` | red `oklch(.51 .17 25)` | `oklch(.66 .15 25)` | errors |
+| `--destructive` | red `oklch(.51 .17 25)` | `oklch(.67 .18 25)` | errors |
 
 Note (dark): `--primary` is bright with **dark** `--primary-foreground` — dark-on-sienna buttons.
+**Contrast pass:** dark surfaces sit at L .165–.215 (near-black), foreground at .95, and all accents
+carry high chroma (C .11–.18) — the palette must never read "greyed". When adding tokens, keep
+text ≥ .74 L and accents ≥ .10 C in dark.
 
 ### 3.2 Brand / accents
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| `--brand` | = primary light | `oklch(.705 .115 48)` | sienna accent — links, tint text, chips |
-| `--brand-2` | `oklch(.6 .11 46)` | `oklch(.765 .105 52)` | hover/edge variant |
-| `--info` | `oklch(.5 .075 245)` dusty blue | `oklch(.72 .07 245)` | quiz-type chip, informational |
+| `--brand` | = primary light | `oklch(.71 .145 48)` | sienna accent — links, tint text, chips |
+| `--brand-2` | `oklch(.6 .125 46)` | `oklch(.78 .13 52)` | hover/edge variant |
+| `--info` | `oklch(.5 .095 245)` dusty blue | `oklch(.725 .11 245)` | quiz-type chip, informational |
 
 ### 3.3 Status tones (semantics preserved from v1)
 
 | Tone | State | Label (pt-BR) | Token (light → dark) |
 |---|---|---|---|
-| ok | done | `Concluída` | green `oklch(.51 .1 150)` → `oklch(.71 .12 150)` |
-| late | expired | `Atrasada / Atrasada Nd` | red `oklch(.51 .155 25)` → `oklch(.67 .14 25)` |
-| soon | due ≤ 3d | `Vence hoje/amanhã/em Nd` | amber `oklch(.55 .105 75)` → `oklch(.76 .115 80)` |
-| coming | open, > 3d | `Vence em Nd` | dusty blue `oklch(.5 .075 245)` → `oklch(.72 .07 245)` |
-| none | no deadline | `Sem prazo` | grey `oklch(.55 .012 75)` → `oklch(.66 .012 78)` |
+| ok | done | `Concluída` | green `oklch(.51 .12 150)` → `oklch(.72 .155 150)` |
+| late | expired | `Atrasada / Atrasada Nd` | red `oklch(.51 .17 25)` → `oklch(.67 .175 25)` |
+| soon | due ≤ 3d | `Vence hoje/amanhã/em Nd` | amber `oklch(.55 .125 75)` → `oklch(.775 .14 80)` |
+| coming | open, > 3d | `Vence em Nd` | dusty blue `oklch(.5 .095 245)` → `oklch(.725 .11 245)` |
+| none | no deadline | `Sem prazo` | grey `oklch(.55 .015 75)` → `oklch(.68 .014 78)` |
 
 Each tone exposes `--{tone}-bg` (`color-mix` 13–18%). `TONE_CLS` in `lib/status.ts` maps tone → pill
 classes. Status is **never color-only** (icon + label always).
@@ -165,6 +168,9 @@ State shared across routes (scope, module/type filter) lives in `lib/app-state.t
 
 ## History
 
+- **v2.1 (2026-09):** contrast pass — dark surfaces dropped to near-black (L .165), foreground
+  raised to .95, all accent/status chroma lifted (+20–40%) so nothing reads grey; light-mode ink
+  darkened to match. Brand and semantics unchanged.
 - **v2 (2026-09):** full rebrand to "Folio" (warm paper / sienna / Fraunces–Inter–JetBrains Mono),
   product named **Pauta** (by LXP ToolKit), light+dark day one, motion tokens, command palette,
   6-route IA, /design showcase. Retired: crimson-on-ink skin, Poppins/Lato, dark-only hardcode.
