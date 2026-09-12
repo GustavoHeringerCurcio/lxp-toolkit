@@ -10,7 +10,7 @@
 
 ```
 1. GET https://unifoa.lyceum.com.br/aluno/#/login
-     fill #username (RA: REDACTED_RA) and #password
+     fill #username (your RA) and #password
      submit form button[type=submit]
      (reCAPTCHA #g-recaptcha appears only intermittently — often absent)
 

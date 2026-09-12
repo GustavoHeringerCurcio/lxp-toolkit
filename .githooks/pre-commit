@@ -1,0 +1,22 @@
+#!/bin/sh
+# Pre-commit guard: block accidental commits of personal data or secrets.
+# Enable once with:  git config core.hooksPath .githooks
+# Bypass once with:  git commit --no-verify
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+bad=$(printf '%s\n' "$staged" | grep -Ei \
+  '(^|/)(\.env|\.env\.local|profile\.json|overrides\.json|answers\.json|submissions\.json|storageState\.json)$|(^|/)scraped/|(^|/)data/' \
+  || true)
+
+if [ -n "$bad" ]; then
+  echo "" >&2
+  echo "Commit blocked: these paths look like personal data or secrets:" >&2
+  printf '    %s\n' $bad >&2
+  echo "" >&2
+  echo "  Unstage with:        git restore --staged <file>" >&2
+  echo "  Or bypass once with: git commit --no-verify" >&2
+  echo "" >&2
+  exit 1
+fi
