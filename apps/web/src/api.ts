@@ -7,6 +7,10 @@ import type {
   AnswerState,
   ExercisesPayload,
   QuizSelection,
+  TrainingQuiz,
+  TrainingQuizMode,
+  TrainingStats,
+  TrainingSubject,
 } from "./types";
 import { getLang, localeFor, translate } from "./lib/i18n";
 
@@ -285,6 +289,101 @@ export async function fetchSubmissions(id: number): Promise<SubmissionDto[]> {
   } catch {
     return [];
   }
+}
+
+// ── Training ("Treino") ─────────────────────────────────────────────────────
+
+export async function fetchTrainingSubjects(): Promise<TrainingSubject[]> {
+  const body = await req<{ subjects: TrainingSubject[] }>("/api/training/subjects");
+  return body.subjects ?? [];
+}
+
+export interface TrainingQuizRequest {
+  courseId: number;
+  moduleId?: number | null;
+  mode: TrainingQuizMode;
+  count: number;
+}
+
+export async function generateTrainingQuiz(body: TrainingQuizRequest): Promise<TrainingQuiz> {
+  return (await post("/api/training/quiz", body)) as TrainingQuiz;
+}
+
+export interface TrainingAnswerDto {
+  questionId: number;
+  chosenIndex: number | null;
+  isCorrect: boolean;
+}
+
+export async function completeTrainingQuiz(
+  id: number,
+  answers: TrainingAnswerDto[],
+  score: number,
+): Promise<void> {
+  await post(`/api/training/quiz/${id}/complete`, { answers, score });
+}
+
+export async function fetchTrainingStats(): Promise<TrainingStats> {
+  return req<TrainingStats>("/api/training/stats");
+}
+
+export interface StudyEvent {
+  type: "start" | "delta" | "done" | "error";
+  delta?: string;
+  answer?: string;
+  error?: string;
+}
+
+export interface StudyRequest {
+  courseId: number;
+  moduleId?: number | null;
+  query: string;
+}
+
+/** Stream a study-guide answer via SSE. Resolves with the full text. */
+export async function streamStudyGuide(
+  body: StudyRequest,
+  onEvent: (e: StudyEvent) => void,
+): Promise<string> {
+  const res = await fetch("/api/training/study", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    let detail = "";
+    try {
+      const parsed = JSON.parse(text) as { error?: string };
+      if (parsed?.error) detail = ` · ${parsed.error}`;
+    } catch {
+      // ignore
+    }
+    throw new Error(`POST /api/training/study → HTTP ${res.status}${detail}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+    for (const chunk of chunks) {
+      const line = chunk.trim();
+      if (!line.startsWith("data:")) continue;
+      const payload = JSON.parse(line.slice(5).trim()) as StudyEvent;
+      onEvent(payload);
+      if (payload.type === "delta" && payload.delta) full += payload.delta;
+      if (payload.type === "done") return payload.answer ?? full;
+      if (payload.type === "error") {
+        throw new Error(payload.error ?? translate(getLang(), "api.genFail"));
+      }
+    }
+  }
+  return full;
 }
 
 export function fmtVersionDate(iso: string, locale = localeFor(getLang())): string {

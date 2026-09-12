@@ -218,6 +218,76 @@ export interface AnswerRecord extends AnswerEntry {
 
 export type Answers = Record<string, AnswerRecord>;
 
+// ── Training ("Treino") ─────────────────────────────────────────────────────
+
+export type TrainingQuizMode = "ai" | "mixed";
+
+export interface TrainingOption {
+  letter: string;
+  text: string;
+}
+
+export interface TrainingQuestion {
+  /** Local (DB) question id. */
+  id: number;
+  position: number;
+  text: string;
+  options: TrainingOption[];
+  answerIndex: number;
+  explanation: string | null;
+  /** Portal content_item this question was sourced from (portal mode). */
+  sourceItemId: number | null;
+  sourceKind: string | null;
+}
+
+export interface TrainingQuiz {
+  id: number;
+  mode: TrainingQuizMode;
+  title: string;
+  subjectLabel: string;
+  courseId: number;
+  moduleId: number | null;
+  total: number;
+  score: number | null;
+  completedAt: string | null;
+  createdAt: string;
+  questions: TrainingQuestion[];
+}
+
+export interface TrainingModuleInfo {
+  moduleId: number;
+  moduleName: string;
+  itemCount: number;
+  quizCount: number;
+  readingCount: number;
+}
+
+export interface TrainingSubject {
+  courseId: number;
+  courseName: string;
+  itemCount: number;
+  quizCount: number;
+  readingCount: number;
+  modules: TrainingModuleInfo[];
+}
+
+export interface TrainingSubjectStats {
+  courseId: number;
+  courseName: string;
+  attempts: number;
+  bestPct: number;
+  lastPct: number;
+  lastAt: string;
+}
+
+export interface TrainingStats {
+  attempts: number;
+  bestPct: number | null;
+  lastPct: number | null;
+  lastAt: string | null;
+  bySubject: TrainingSubjectStats[];
+}
+
 export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
 
 export type SendMode = "text" | "txt" | "pdf";

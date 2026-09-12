@@ -7,6 +7,7 @@ import { spawnCommand } from "../src/exec.js";
 import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import { healthCheck, query, runMigrations } from "../src/db.js";
 import { importAll } from "../src/import.js";
+import { ensureContentText } from "../src/extract.js";
 import { getCatalogVersion, readProjectionMeta, writeProjection } from "../src/project.js";
 import {
   clearAnswerHistory,
@@ -24,6 +25,19 @@ import {
   saveNote,
   saveProfile,
 } from "../src/store.js";
+import {
+  buildSubjectContext,
+  generateStudyGuide,
+  generateTrainingQuiz,
+  listTrainingSubjects,
+  subjectLabel,
+} from "../src/training.js";
+import {
+  completeTrainingQuiz,
+  createTrainingQuiz,
+  getTrainingStats,
+  type TrainingAnswerInput,
+} from "../src/training-store.js";
 import { enrich, type ExerciseView } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
 import { humanizeQuizAnswer, parseQuizSelections } from "../src/prompt.js";
@@ -409,6 +423,113 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    // training ("Treino")
+    if (url === "/api/training/subjects" && method === "GET") {
+      return json(res, 200, { subjects: await listTrainingSubjects() });
+    }
+    if (url === "/api/training/stats" && method === "GET") {
+      return json(res, 200, await getTrainingStats());
+    }
+    if (url === "/api/training/quiz" && method === "POST") {
+      const b = await readBody(req);
+      const courseId = Number(b.courseId);
+      if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
+      const moduleId = b.moduleId != null && b.moduleId !== "" ? Number(b.moduleId) : null;
+      const mode = b.mode === "mixed" ? "mixed" : "ai";
+      const count = Math.min(30, Math.max(5, Number(b.count) || 10));
+      const startedAt = Date.now();
+      const ctx = await buildSubjectContext(courseId, moduleId);
+      const generated = await generateTrainingQuiz(ctx, mode, count);
+      const quiz = await createTrainingQuiz({
+        courseId,
+        moduleId: moduleId ?? null,
+        mode,
+        title: generated.title,
+        subjectLabel: subjectLabel(ctx),
+        questions: generated.questions,
+      });
+      for (const p of generated.provenances) {
+        await recordAiRun({
+          contentItemId: null,
+          prompt: p.prompt,
+          promptHash: p.promptHash,
+          completion: JSON.stringify({ title: generated.title, count: generated.questions.length }),
+          model: p.model,
+          tokensIn: p.tokensIn,
+          tokensOut: p.tokensOut,
+          latencyMs: Date.now() - startedAt,
+          answerAttemptId: null,
+        }).catch(() => undefined);
+      }
+      return json(res, 200, quiz);
+    }
+    if (url.startsWith("/api/training/quiz/") && url.endsWith("/complete") && method === "POST") {
+      const id = Number(url.split("/")[4]);
+      if (!id) return json(res, 400, { error: "id obrigatório" });
+      const b = await readBody(req);
+      const answers: TrainingAnswerInput[] = Array.isArray(b.answers)
+        ? b.answers
+            .filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
+            .map((a) => ({
+              questionId: Number(a.questionId),
+              chosenIndex: a.chosenIndex == null ? null : Number(a.chosenIndex),
+              isCorrect: a.isCorrect === true,
+            }))
+            .filter((a) => Number.isFinite(a.questionId))
+        : [];
+      const score = Math.max(0, Number(b.score) || 0);
+      await completeTrainingQuiz(id, answers, score);
+      return json(res, 200, { ok: true });
+    }
+    if (url === "/api/training/study" && method === "POST") {
+      const b = await readBody(req);
+      const courseId = Number(b.courseId);
+      const question = String(b.query ?? "").trim();
+      if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
+      if (!question) return json(res, 400, { error: "Escreva uma pergunta." });
+      const moduleId = b.moduleId != null && b.moduleId !== "" ? Number(b.moduleId) : null;
+
+      res.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache",
+        connection: "keep-alive",
+      });
+      const sendEvent = (payload: unknown) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      sendEvent({ type: "start" });
+      const startedAt = Date.now();
+      try {
+        const ctx = await buildSubjectContext(courseId, moduleId);
+        const result = await generateStudyGuide(ctx, question, (delta) => {
+          sendEvent({ type: "delta", delta });
+          if (typeof (res as import("node:http").ServerResponse & { flush?: () => void }).flush === "function") {
+            try {
+              (res as import("node:http").ServerResponse & { flush?: () => void }).flush?.();
+            } catch {
+              /* ignore */
+            }
+          }
+        });
+        await recordAiRun({
+          contentItemId: null,
+          prompt: result.provenance.prompt,
+          promptHash: result.provenance.promptHash,
+          completion: result.text,
+          model: result.provenance.model,
+          tokensIn: result.provenance.tokensIn,
+          tokensOut: result.provenance.tokensOut,
+          latencyMs: Date.now() - startedAt,
+          answerAttemptId: null,
+        }).catch(() => undefined);
+        sendEvent({ type: "done", answer: result.text });
+        res.end();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        sendEvent({ type: "error", error: message });
+        res.end();
+      }
+      return;
+    }
+
     // portal send support
     if (url === "/api/send/config") {
       const env = sendEnv();
@@ -732,6 +853,16 @@ async function bootstrap(): Promise<void> {
   await runMigrations();
   await ensureImported();
   await ensureProjection();
+  try {
+    const extracted = await ensureContentText();
+    if (extracted) {
+      console.log(
+        `   text: extracted ${extracted.withText}/${extracted.items} item(s) (${extracted.totalChars} chars).`,
+      );
+    }
+  } catch (err) {
+    console.warn(`   text: could not extract material (${err instanceof Error ? err.message : String(err)})`);
+  }
   server.listen(PORT, () => {
     console.log(`\n📝 Pauta (LXP ToolKit) → http://localhost:${PORT}`);
     console.log(`   data: ${dataDir()}`);

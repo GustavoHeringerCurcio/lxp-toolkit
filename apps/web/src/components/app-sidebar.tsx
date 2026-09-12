@@ -2,10 +2,12 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   ChartColumn,
   ChevronLeft,
+  GraduationCap,
   ListChecks,
   Palette,
   RefreshCw,
   SlidersHorizontal,
+  Sparkles,
   Sunrise,
   UserRound,
 } from "lucide-react";
@@ -33,6 +35,11 @@ const NAV = [
   { to: "/", key: "nav.now", icon: Sunrise, end: true },
   { to: "/tarefas", key: "nav.tasks", icon: ListChecks, match: ["/tarefa/"] },
   { to: "/progresso", key: "nav.progress", icon: ChartColumn },
+] as const;
+
+const TRAINING_NAV = [
+  { to: "/treino/quiz", key: "nav.trainingQuiz", icon: GraduationCap },
+  { to: "/treino/estudo", key: "nav.trainingStudy", icon: Sparkles },
 ] as const;
 
 const SYSTEM_NAV = [
@@ -109,6 +116,27 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>{t("nav.groupTraining")}</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {TRAINING_NAV.map((n) => (
+                <SidebarMenuItem key={n.to}>
+                  <SidebarMenuButton
+                    isActive={location.pathname.startsWith(n.to)}
+                    tooltip={t(n.key)}
+                    onClick={() => navigate(n.to)}
+                    className="group-data-[collapsible=icon]:!px-2"
+                  >
+                    <n.icon />
+                    <span>{t(n.key)}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

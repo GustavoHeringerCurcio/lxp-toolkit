@@ -2,16 +2,24 @@ import { importAll } from "./import.js";
 import { writeProjection } from "./project.js";
 import { loadExercises } from "./build.js";
 import { closePool } from "./db.js";
+import { extractAllContentText } from "./extract.js";
 
 /**
  * `npm run index` — the full data pipeline:
- *   migrate → import scraped content into Postgres → project the DB to exercises.json.
+ *   migrate → import scraped content into Postgres → extract material text →
+ *   project the DB to exercises.json.
  * Postgres is required; there is no JSON fallback.
  */
 async function main(): Promise<void> {
   const summary = await importAll();
   console.log(
     `db: imported ${summary.courses} course(s), ${summary.items} item(s), ${summary.professors} professor(s).`,
+  );
+
+  const extracted = await extractAllContentText();
+  console.log(
+    `text: ${extracted.withText}/${extracted.items} item(s) with text (${extracted.totalChars} chars) · ` +
+      `unsupported ${extracted.unsupported} · empty ${extracted.empty} · skipped ${extracted.skipped}`,
   );
 
   const { file, count } = await writeProjection();

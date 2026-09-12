@@ -27,6 +27,9 @@ import { ProgressoPage } from "@/pages/progresso";
 import { ExercisePage } from "@/pages/exercise";
 import { SettingsPage } from "@/pages/settings";
 import { DesignPage } from "@/pages/design";
+import { TrainingQuizPage } from "@/pages/training-quiz";
+import { TrainingStudyPage } from "@/pages/training-study";
+import { TrainingProvider } from "@/lib/training-state";
 import { ErrorState } from "@/components/state-screens";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -40,6 +43,8 @@ function pageTitle(
   if (pathname === "/progresso") return t("nav.progress");
   if (pathname === "/ajustes") return t("nav.settings");
   if (pathname === "/design") return t("nav.design");
+  if (pathname === "/treino/quiz") return t("nav.trainingQuiz");
+  if (pathname === "/treino/estudo") return t("nav.trainingStudy");
   if (pathname.startsWith("/tarefa/")) {
     const id = Number(pathname.split("/")[2]);
     return items.find((x) => x.id === id)?.title ?? t("app.activityFallback");
@@ -116,15 +121,19 @@ function Shell() {
               <Skeleton className="mt-4 h-[28rem] w-full rounded-xl" />
             </div>
           ) : (
-            <Routes>
-              <Route path="/" element={<AgoraPage />} />
-              <Route path="/tarefas" element={<TarefasPage />} />
-              <Route path="/progresso" element={<ProgressoPage />} />
-              <Route path="/tarefa/:id" element={<ExercisePage />} />
-              <Route path="/ajustes" element={<SettingsPage />} />
-              <Route path="/design" element={<DesignPage />} />
-              <Route path="*" element={<AgoraPage />} />
-            </Routes>
+            <TrainingProvider>
+              <Routes>
+                <Route path="/" element={<AgoraPage />} />
+                <Route path="/tarefas" element={<TarefasPage />} />
+                <Route path="/progresso" element={<ProgressoPage />} />
+                <Route path="/tarefa/:id" element={<ExercisePage />} />
+                <Route path="/treino/quiz" element={<TrainingQuizPage />} />
+                <Route path="/treino/estudo" element={<TrainingStudyPage />} />
+                <Route path="/ajustes" element={<SettingsPage />} />
+                <Route path="/design" element={<DesignPage />} />
+                <Route path="*" element={<AgoraPage />} />
+              </Routes>
+            </TrainingProvider>
           )}
         </SidebarInset>
         <CommandPalette />

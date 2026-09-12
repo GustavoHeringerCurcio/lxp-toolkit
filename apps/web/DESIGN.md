@@ -107,6 +107,8 @@ Self-hosted via `@fontsource-variable/*` (no runtime Google Fonts):
 | Nav — Progresso | `ChartColumn` |
 | Nav — Ajustes | `SlidersHorizontal` |
 | Nav — Design | `Palette` |
+| Nav — Treino de quiz | `GraduationCap` |
+| Nav — Perguntar à IA | `Sparkles` |
 | Command palette | `Command` |
 | Theme toggle | `Sun` / `Moon` |
 | Activity type — quiz | `ListChecks` (info chip) |
@@ -122,7 +124,7 @@ theme tokens** — the one documented exception to the "no raw hex" rule (they m
 distinguishable across themes). Folio palette: terracotta / olive / teal / plum / rose, chosen to
 sit harmoniously on warm paper.
 
-## 8. IA (information architecture) — 6 routes
+## 8. IA (information architecture) — 8 routes
 
 | Route | Page | Content |
 |---|---|---|
@@ -130,6 +132,8 @@ sit harmoniously on warm paper.
 | `/tarefas` | **Tarefas** | scope tabs (Abertas/Atrasadas/Concluídas/Todas) + module/type chips + list |
 | `/progresso` | **Progresso** | per-module progress bars, status/type distribution (CSS bars, `chart-*` tokens) |
 | `/tarefa/:id` | **Atividade** | reading column (prose width) + sticky workbench; focus mode; version timeline; 3-step send flow |
+| `/treino/quiz` | **Treino de quiz** | gamified practice quiz (AI-generated or portal-sourced), one question at a time with feedback, score + readiness verdict + history |
+| `/treino/estudo` | **Perguntar à IA** | free-text study Q&A scoped to the selected subject; streamed markdown |
 | `/ajustes` | **Ajustes** | IA config, generation params, preview |
 | `/design` | **Design** | living style guide: tokens, type ramp, components, states |
 
@@ -137,6 +141,17 @@ Global: **⌘K / Ctrl+K command palette** — navigate, jump to any tarefa, filt
 theme, refresh content.
 
 State shared across routes (scope, module/type filter) lives in `lib/app-state.tsx`.
+
+**Training pattern.** Both Treino routes share `TrainingSubjectPicker` + `lib/training-state.tsx`
+(persisted course/module = the "switch the data" that scopes the AI's knowledge pack). The pack is
+built server-side from Postgres — catalog + question bank + the **precomputed `content_text`**
+(material extracted once at index time, since the portal exposes very few quizzes and reading
+`html` is empty). Quiz practice is **material-first**: `ai` writes new questions from the material;
+`mixed` uses the real portal questions that exist and fills the rest with AI (never errors when a
+module has none). It is gamified: one question at a time, immediate correct/wrong reveal with
+rationale, then a score ring and a 3-tier **self-check** verdict (`lib/training.ts`); sessions and
+scores persist in Postgres (`training_quiz`/`training_question`/`training_answer`). Ask AI is
+free-text and streams markdown.
 
 **Agora progress pattern.** `ProgressSummary` is the page's top line: a single segmented bar
 (`ok`/`late`/`coming`) with the overall `ProgressRing` on the right, a labelled legend, and a
