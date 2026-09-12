@@ -1,67 +1,75 @@
-# 🎓 UniFOA / Grupoa LXP — Study Toolkit
+# 🎓 lxp-toolkit — UniFOA / Grupoa LXP
 
-Your own little helper for the **UniFOA / Grupoa LXP** portal. It logs in with **your** account,
-saves every material / quiz / homework as readable markdown so you can study offline, and adds
-friendly dashboards + AI study help on top.
+A monorepo for studying the **UniFOA / Grupoa LXP** portal. It has **two cores**:
 
-> No black magic — just a Playwright login + a bunch of small scripts that talk to the same JSON
-> API the website uses. See `docs/README.md` and `agent-docs/` if you want the deep dive.
+| Core | Lives in | What it is |
+|---|---|---|
+| **Portal toolkit** | `packages/portal/` | Reverse-engineering + scraper: logs in with your account, maps the API, and dumps every reading / quiz / assignment to readable markdown under `scraped/`. |
+| **LXP Homework** (main product) | `apps/web/` + `apps/server/` | A web app that reads the scraped data: an ordered task board, deadlines, and AI-generated answer drafts. |
 
-## What you can do with it
-
-- 📚 **Read everything offline** — every reading, slide, exercise and quiz saved as `.md` files.
-- ✅ **See what's due** — a terminal board of your open homework, sorted by deadline.
-- 🤖 **Get answer drafts** — the LXP Homework generates natural pt-BR answers with a cheap AI
-  model (you still decide what to actually submit).
+> No black magic — a Playwright login plus a set of small scripts talking to the same JSON API the
+> website uses. See `packages/portal/docs/` and `agent-docs/` for the deep dive.
 
 ## Quick start (first time)
 
 ```bash
 npm install
 npx playwright install chromium
-cp .env.example .env     # then edit .env
+cp packages/portal/.env.example packages/portal/.env   # LXP_USERNAME + LXP_PASSWORD
+cp apps/server/.env.example apps/server/.env           # OPENAI_API_KEY
 ```
 
-Open `.env` and fill in just two things:
+Open `packages/portal/.env` and fill in your portal credentials:
 
 ```ini
 LXP_USERNAME=seu_ra
 LXP_PASSWORD=sua_senha
 ```
 
-That's it — the rest of `.env` already has sensible defaults.
+Then open `apps/server/.env` and set your OpenAI key (the rest has sensible defaults).
 
 ## Everyday commands
 
+All commands run from the **repo root** (they delegate to the right workspace).
+
 | Command | What it does |
 |---|---|
-| `npm run dump` | Full re-scrape of **your** course content (readings, quizzes, uploads, links) + download attachments → `scraped/courses/**` |
-| `npm run dump-surfaces` | Scrape your grades, calendar, notices, messages → `scraped/*.md` |
-| `npm run homework` | Friendly terminal board of open homework, deadline-first (`-- --fresh` rebuilds the index first) |
-| `npm run exercises -- <itemId>` | Read one quiz's questions or an upload's info |
+| `npm run dump` | Full re-scrape of **your** course content + attachments → `scraped/courses/**` |
+| `npm run dump-surfaces` | Scrape grades, calendar, notices, messages → `scraped/*.md` |
+| `npm run homework` | Terminal board of open homework, deadline-first |
 | `npm run index` | Build the offline homework index (`scraped/raw/homework-index.json`) |
+| `npm run exercises -- <itemId>` | Read one quiz's questions or an upload's info |
 | `npm run agent` | List / auto-complete leftover readings |
-| `npm run typecheck` | Check the code after you edit it |
+| `npm run web` | Build the web app and serve it → `http://localhost:4174` |
+| `npm run web:dev` | Vite dev server (hot reload) for the web app |
+| `npm run typecheck` | Type-check every workspace |
 
-Deeper reverse-engineering tools for studying how the site works: `crawl-routes`,
-`capture-api`, `login` — details in `docs/README.md`.
+Deeper reverse-engineering tools: `crawl-routes`, `capture-api`, `login` — see
+`packages/portal/docs/README.md`.
 
-## Friendly dashboards
+## The LXP Homework web app
 
-- **Terminal:** `npm run homework` → open homework grouped by section, sorted by due date.
-- **Browser (LXP Homework):** in `assistant/`, run `npm run web` → dashboard at
-  `http://localhost:4174` with done/expired badges and an AI answer panel. Or stay in the terminal
-  with `npm run assistant -- list`. See `assistant/README.md`.
+```bash
+npm run web        # builds apps/web, then starts apps/server → http://localhost:4174
+```
+
+- **List** ordered by deadline with done/expired/due-soon badges and quick actions.
+- **Activity detail** (`/tarefa/:id`): instructions, files, quiz questions, per-activity AI
+  instructions, and an answer workbench with version history.
+- **Atualizar** scrapes fresh portal content and rebuilds the list.
+- **Perfil** / **IA Ajustes** set your name/matrícula and the writing rules.
+
+See `apps/server/README.md` for the full feature tour.
 
 ## Where things live
 
-| Folder | What's inside |
+| Path | What's inside |
 |---|---|
-| `scraped/courses/` | **Your** course materials — one `.md` per item + downloaded attachments (local only, gitignored) |
-| `scraped/raw/` | Raw JSON captures (`content-tree.json`, `homework-index.json`, …) — local only |
-| `docs/` | Reverse-engineering knowledge base (auth, API endpoints, topic types) — committed |
-| `src/` + `scripts/` | The code: auth, API client, and one script per command |
-| `assistant/` | The friendly CLI + web dashboard + AI answers |
+| `packages/portal/` | The scraper toolkit (`src/`, `scripts/`) + human RE notes (`docs/`) |
+| `packages/portal/docs/` | Reverse-engineering knowledge base (auth, API endpoints, topic types) |
+| `apps/web/` | The React web app (main product) |
+| `apps/server/` | Backend: exercise index, AI answers, portal submission bridge, static server |
+| `scraped/` | **Your** course materials + raw JSON captures (local only, gitignored) |
 | `agent-docs/` | Distilled notes for working on this repo |
 
 > 🔒 Everything under `scraped/` is **your account's data** and is gitignored on purpose. Each
@@ -70,11 +78,12 @@ Deeper reverse-engineering tools for studying how the site works: `crawl-routes`
 
 ## Good to know (the gotchas)
 
-- 🔑 The login token is **single-use** — every run logs in fresh. That's normal; just keep request
+- 🔑 The login token is **single-use** — every run logs in fresh. That's normal; keep request
   volume low so you don't trip rate-limits.
 - 🚫 Don't fully reload the LXP page mid-run — it kills the token. Navigate with
   `$nuxt.$router.push()`.
-- 🛑 Auto-submitting quizzes/assignments isn't wired up on purpose — see `docs/gaps.md`.
+- 🛑 Auto-submitting quizzes/assignments is gated behind explicit confirmation — see
+  `packages/portal/docs/gaps.md`.
 
 ## Fair use
 

@@ -35,12 +35,12 @@ If scraped data already answers the question (`scraped/`), use it instead of hit
 - Login is **direct** on Lyceum (username = RA). No Microsoft SAML redirect for this tenant.
 - The API is behind AWS WAF: GET reads work with the token; writes (POST/PUT) likely need a real
   browser to solve the challenge.
-- `src/session.ts::createSession()` returns `{ client, page, auth, … }` and always fresh-logins —
+- `packages/portal/src/session.ts::createSession()` returns `{ client, page, auth, … }` and always fresh-logins —
   prefer it over hand-rolled auth.
 
 ## After reading the docs
 
 Answer from the actual documented facts (auth flow, endpoint list, schemas, scraped data
-locations). If you intend to write code, match the repo conventions (`src/*.ts`, ESM with `.js`
+locations). If you intend to write code, match the repo conventions (`packages/portal/src/*.ts`, ESM with `.js`
 import specifiers, run `npm run typecheck`). Prefer extending the existing scripts
 (`dump-content`, `dump-surfaces`, `agent`) over new parallel tools.

@@ -72,7 +72,7 @@ reads observed so far; may be required for writes (POST/PUT).
 
 ## Code reference
 
-- `src/session.ts::createSession()` — launches Chromium, ALWAYS fresh-logins, waits for the token
+- `packages/portal/src/session.ts::createSession()` — launches Chromium, ALWAYS fresh-logins, waits for the token
   exchange, returns `{ browser, context, page, client, auth }`.
-- `src/client.ts::ApiClient` — authenticated `fetch` wrapper (retry/backoff, exact headers).
-- `src/auth.ts::authenticate` / `waitForExchangedToken` — the login + exchange logic.
+- `packages/portal/src/client.ts::ApiClient` — authenticated `fetch` wrapper (retry/backoff, exact headers).
+- `packages/portal/src/auth.ts::authenticate` / `waitForExchangedToken` — the login + exchange logic.

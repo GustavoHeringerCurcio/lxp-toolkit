@@ -19,18 +19,20 @@ If the task is narrow (e.g. "why did grades come back empty"), read the one rele
 ## Map of the repo
 
 ```
-agent-docs/         ← THIS knowledge base (read this first)
-docs/                ← human reverse-engineering notes (committed)
-├── auth.md, api-endpoints.md, topic-types.md, gaps.md, README.md, PLAN.md
-scraped/             ← YOUR scraped data (gitignored; never commit)
+agent-docs/                 ← THIS knowledge base (read this first)
+packages/portal/            ← CORE 1: reverse-engineering toolkit
+├── src/                    ← TypeScript source (config, client, auth, session, network, content, actions, exercises)
+├── scripts/                ← runnable entry points (login, dump, dump-surfaces, crawl-routes, capture-api,
+│                              agent, index, homework, exercises, submit-task)
+└── docs/                   ← human reverse-engineering notes (committed): auth.md, api-endpoints.md, …
+scraped/                    ← YOUR scraped data (gitignored; never commit)
 ├── courses/{courseId}-{slug}/   ← per-item .md dumps + downloaded files/
-├── raw/            ← content-tree.json, homework-index.json, surfaces.json, topic-types.json …
-├── routes/         ← SPA route DOM captures
+├── raw/                    ← content-tree.json, homework-index.json, surfaces.json, topic-types.json …
+├── routes/                 ← SPA route DOM captures
 └── grades-*.md, calendar.md, notices.md, messages.md, achievements.md, lti-tools.md …
-src/                ← TypeScript source (config, client, auth, session, network, content, actions, exercises)
-scripts/            ← runnable entry points (login, dump, dump-surfaces, crawl-routes, capture-api,
-                      agent, index, homework, exercises)
-assistant/          ← LXP Homework: CLI + web app (npm run web inside assistant/)
+apps/                       ← CORE 2: the LXP Homework web app (main product)
+├── web/                    ← React UI
+└── server/                 ← backend API + AI (serves the web build)
 ```
 
 ## Golden rules (always true)

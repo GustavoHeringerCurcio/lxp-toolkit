@@ -54,10 +54,10 @@ rich "other" type (apresentação 10, infográfico 12, livro 13, na prática 16,
 saiba mais 49, desafio 11). Clicking it sends an **empty-body** `POST .../topics/{id}/progress`
 → `204`. Quizzes, file-upload tasks and forums are **not** manually markable.
 
-`src/content.ts::isMarkable(item)` captures this; `npm run agent -- --read` (alias
-`--complete`) marks all pending ones. See `docs/gaps.md` §3.
+`packages/portal/src/content.ts::isMarkable(item)` captures this; `npm run agent -- --read` (alias
+`--complete`) marks all pending ones. See `packages/portal/docs/gaps.md` §3.
 
-## How the code classifies (`src/content.ts::classify`)
+## How the code classifies (`packages/portal/src/content.ts::classify`)
 
 ```ts
 8        -> "file_upload"

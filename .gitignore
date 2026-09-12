@@ -15,10 +15,9 @@ storageState.json
 # Scraped user data (per-account; never commit)
 scraped/
 
-# Legacy scraped locations (belt & suspenders)
-docs/courses/
-docs/raw/
-docs/routes/
+# Personal assistant config (name, matrícula, per-item overrides)
+apps/server/config/profile.json
+apps/server/config/overrides.json
 
 # Playwright artifacts (screenshots, snapshots, traces)
 .playwright-mcp/

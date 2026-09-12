@@ -33,8 +33,8 @@ re-scraping the live API.
 
 ## When producing work
 
-- Match repo conventions: TypeScript ESM, files under `src/` and `scripts/`, run
-  `npm run typecheck` before finishing.
+- Match repo conventions: TypeScript ESM, files under `packages/portal/src/` and
+  `packages/portal/scripts/`, run `npm run typecheck` before finishing.
 - Prefer extending existing scripts over adding parallel ones.
 - Keep the write side (auto-submitting quizzes/assignments) conceptual/documentary only — it is
   not part of this project's tooling.

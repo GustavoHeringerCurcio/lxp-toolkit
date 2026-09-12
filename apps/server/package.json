@@ -1,0 +1,28 @@
+{
+  "name": "@lxp-toolkit/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "LXP Homework backend — exercise index, AI answer generation, portal submission bridge, and static server for the web app.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "index": "tsx src/load.ts",
+    "start": "tsx server/server.ts",
+    "web": "npm run build -w @lxp-toolkit/web && tsx server/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "17.4.2",
+    "openai": "^4.77.0",
+    "pdf-parse": "^1.1.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@types/pdf-parse": "^1.1.4",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3"
+  }
+}
