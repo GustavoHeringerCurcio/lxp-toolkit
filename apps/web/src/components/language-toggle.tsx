@@ -70,8 +70,8 @@ export function LanguageToggle() {
         </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44">
-        <DropdownMenuLabel>{t("lang.title")}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={lang} onValueChange={(v) => setLang(v as Lang)}>
+          <DropdownMenuLabel>{t("lang.title")}</DropdownMenuLabel>
           {OPTIONS.map(({ value, nameKey, Flag }) => (
             <DropdownMenuRadioItem key={value} value={value} className="gap-2.5">
               <FlagChip>

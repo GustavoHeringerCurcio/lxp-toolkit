@@ -168,7 +168,11 @@ export function buildVars(
     const renderPost = (depth: number, p: ForumPost): void => {
       if (p.isDeleted) return;
       const indent = "  ".repeat(depth);
-      lines.push(`${indent}- ${p.postOwnerUsername} em ${p.createdAt}:`);
+      const who =
+        p.postOwnerSafeaRole && p.postOwnerSafeaRole !== "student"
+          ? `${p.postOwnerUsername} (${p.postOwnerRoleName ?? p.postOwnerSafeaRole})`
+          : p.postOwnerUsername;
+      lines.push(`${indent}- ${who} em ${p.createdAt}:`);
       lines.push(`${indent}  ${stripHtml(p.html)}`);
       for (const c of p.children) renderPost(depth + 1, c);
     };

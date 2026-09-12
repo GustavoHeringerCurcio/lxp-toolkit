@@ -62,6 +62,20 @@ const key = server?.OPENAI_API_KEY ?? "";
 const keyOk = key.length > 0 && key !== "sk-...";
 add("OpenAI API key (.env)", keyOk ? "ok" : "fail", keyOk ? "" : "missing OPENAI_API_KEY — run: npm run setup");
 
+// 5b. OpenAI key source: `.env` is authoritative (paths.ts loads it with
+// `override: true`), so a differing shell env var no longer shadows it.
+const shellKey = process.env.OPENAI_API_KEY ?? "";
+if (shellKey && keyOk && shellKey !== key) {
+  const tail = (k) => (k.length >= 4 ? `…${k.slice(-4)}` : "(curta)");
+  add(
+    "OpenAI key source",
+    "ok",
+    `shell OPENAI_API_KEY (${tail(shellKey)}) is overridden by ${path.relative(ROOT, SERVER_ENV)} (${tail(key)})`,
+  );
+} else if (shellKey && keyOk) {
+  add("OpenAI key source", "ok", "shell env matches .env");
+}
+
 // 6. Scraped content
 add(
   "Scraped content",

@@ -13,5 +13,5 @@
     "noEmit": true,
     "sourceMap": true
   },
-  "include": ["src/**/*.ts", "server/**/*.ts"]
+  "include": ["src/**/*.ts", "server/**/*.ts", "test/**/*.ts"]
 }

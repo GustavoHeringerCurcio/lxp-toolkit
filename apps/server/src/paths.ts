@@ -5,7 +5,29 @@ import path from "node:path";
 // This file is apps/server/src/paths.ts
 export const ASSISTANT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-loadEnv({ path: path.join(ASSISTANT_DIR, ".env") });
+const shellOpenAiKey = process.env.OPENAI_API_KEY;
+
+// `.env` is the source of truth: override any pre-existing shell variable so a
+// stale session/machine key cannot silently shadow the one in the file
+// (dotenv does not override by default). See setup/doctor.mjs.
+loadEnv({ path: path.join(ASSISTANT_DIR, ".env"), override: true });
+
+const effectiveOpenAiKey = process.env.OPENAI_API_KEY;
+
+export type OpenAiKeySource = "shell" | ".env" | "none";
+
+export function openaiKeySource(): OpenAiKeySource {
+  if (!effectiveOpenAiKey) return "none";
+  // With `override: true`, a value equal to the shell's means `.env` didn't
+  // provide one (or provided the identical key).
+  if (shellOpenAiKey && effectiveOpenAiKey === shellOpenAiKey) return "shell";
+  return ".env";
+}
+
+export function openaiKeyLast4(): string {
+  const k = process.env.OPENAI_API_KEY ?? "";
+  return k.length >= 4 ? k.slice(-4) : "----";
+}
 
 /** Directory that holds the scraped LXP data (the repo-root scraped/). */
 export function dataDir(): string {

@@ -28,6 +28,7 @@
     "web": "npm run web -w @lxp-toolkit/server",
     "web:dev": "npm run dev -w @lxp-toolkit/web",
     "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }

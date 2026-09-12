@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
-import { ASSISTANT_DIR, dataDir, assist, raw } from "../src/paths.js";
+import { ASSISTANT_DIR, dataDir, assist, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
 import { spawnCommand } from "../src/exec.js";
 import { loadExercises, buildExercises, writeExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import {
@@ -689,5 +689,6 @@ ensureIndex();
 server.listen(PORT, () => {
   console.log(`\n📝 Pauta (LXP ToolKit) → http://localhost:${PORT}`);
   console.log(`   data: ${dataDir()}`);
-  console.log(`   ai config: ${assist("config", "ai-config.json")}\n`);
+  console.log(`   ai config: ${assist("config", "ai-config.json")}`);
+  console.log(`   openai key: …${openaiKeyLast4()} (fonte: ${openaiKeySource()})\n`);
 });
