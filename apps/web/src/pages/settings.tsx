@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Check,
+  Camera,
   Eye,
   ListChecks,
   Loader2,
@@ -18,6 +19,7 @@ import {
 import { saveAiConfig, saveProfile } from "@/api";
 import { useAppData } from "@/lib/app-state";
 import { BackLink } from "@/components/app-sidebar";
+import { ProfessorPhotoList } from "@/components/professor-photo-list";
 import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_STYLE, renderStylePreview } from "@/lib/prompt-preview";
 import {
   ESTIMATED_GENERATION_TOKENS,
@@ -338,6 +340,11 @@ export function SettingsPage() {
                 ]}
               />
             </Field>
+          </Card>
+
+          <Card icon={<Camera className="size-4 text-brand" aria-hidden />} title={t("settings.professors")}>
+            <p className="text-xs text-muted-foreground">{t("settings.professorsHint")}</p>
+            <ProfessorPhotoList />
           </Card>
         </>
       )}

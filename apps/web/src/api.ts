@@ -6,6 +6,7 @@ import type {
   AnswerEntry,
   AnswerState,
   ExercisesPayload,
+  ProfessorLink,
   QuizSelection,
   TrainingQuiz,
   TrainingQuizMode,
@@ -54,6 +55,34 @@ export async function fetchConfig(): Promise<AiConfigDto> {
 
 export async function saveProfile(profile: AiProfile): Promise<void> {
   await post("/api/profile", profile);
+}
+
+// ── Professor photos ────────────────────────────────────────────────────────
+
+export async function fetchProfessorLinks(): Promise<ProfessorLink[]> {
+  const body = await req<{ links: ProfessorLink[] }>("/api/professor-links");
+  return body.links ?? [];
+}
+
+export interface SaveProfessorPhotoInput {
+  professorId: number;
+  linkedinUrl?: string | null;
+  imageUrl?: string | null;
+}
+
+export interface SaveProfessorPhotoResult {
+  ok: boolean;
+  resolved?: boolean;
+  removed?: boolean;
+  link: ProfessorLink | null;
+}
+
+export async function saveProfessorPhoto(input: SaveProfessorPhotoInput): Promise<SaveProfessorPhotoResult> {
+  return (await post("/api/professor-link", input)) as SaveProfessorPhotoResult;
+}
+
+export async function deleteProfessorPhoto(professorId: number): Promise<void> {
+  await req(`/api/professor-link/${professorId}`, { method: "DELETE" });
 }
 
 export interface AiRequestSaveResult {

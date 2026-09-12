@@ -288,6 +288,23 @@ export interface TrainingStats {
   bySubject: TrainingSubjectStats[];
 }
 
+// ── Professor photos (per student) ──────────────────────────────────────────
+
+export type ProfessorLinkSource = "linkedin" | "manual";
+export type ProfessorLinkStatus = "pending" | "ok" | "failed";
+
+export interface ProfessorLink {
+  professorId: number;
+  linkedinUrl: string | null;
+  imageUrl: string | null;
+  source: ProfessorLinkSource;
+  status: ProfessorLinkStatus;
+  fetchedAt: string | null;
+  updatedAt: string;
+  /** Relative URL the UI uses for the avatar (`/api/professor-avatar/:id?v=…`). */
+  photoUrl: string;
+}
+
 export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
 
 export type SendMode = "text" | "txt" | "pdf";

@@ -1,4 +1,4 @@
-import type { AiRequest, Exercise, Answers, Overrides, QuizSelection } from "./types.js";
+import type { AiRequest, Exercise, Answers, Overrides, ProfessorLink, QuizSelection } from "./types.js";
 import { humanizeQuizAnswer, parseAiRequest } from "./prompt.js";
 
 export interface ExerciseView extends Exercise {
@@ -16,6 +16,8 @@ export interface ExerciseView extends Exercise {
   hasAiOverride: boolean;
   /** Raw JSON (override or default) that produced aiRequest. */
   aiRequestJson: string;
+  /** Configured professor photo URL (`/api/professor-avatar/…`), or null. */
+  professorPhotoUrl: string | null;
 }
 
 /**
@@ -33,8 +35,14 @@ export function effectiveExtraInstructions(exercises: { id: number }[], override
   return map;
 }
 
-export function enrich(exercises: Exercise[], answers: Answers, overrides: Overrides): ExerciseView[] {
+export function enrich(
+  exercises: Exercise[],
+  answers: Answers,
+  overrides: Overrides,
+  professorLinks: ProfessorLink[] = [],
+): ExerciseView[] {
   const requests = effectiveExtraInstructions(exercises, overrides);
+  const linksById = new Map(professorLinks.map((l) => [l.professorId, l]));
   return exercises.map((e) => {
     const o = overrides[String(e.id)] ?? {};
     const a = answers[String(e.id)];
@@ -46,6 +54,8 @@ export function enrich(exercises: Exercise[], answers: Answers, overrides: Overr
       rawAnswer && e.kind === "quiz" && e.questions.length
         ? humanizeQuizAnswer(rawAnswer, e.questions)
         : rawAnswer;
+    const professorPhotoUrl =
+      e.professorId != null ? linksById.get(e.professorId)?.photoUrl ?? null : null;
     return {
       ...e,
       status,
@@ -60,6 +70,7 @@ export function enrich(exercises: Exercise[], answers: Answers, overrides: Overr
       aiRequest: parseAiRequest(requests[String(e.id)]),
       hasAiOverride: typeof o?.aiRequest === "string",
       aiRequestJson: requests[String(e.id)],
+      professorPhotoUrl,
     };
   });
 }

@@ -188,7 +188,14 @@ export function DesignPage() {
         <Card>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center gap-4">
-              {["Cálculo", "Álgebra Linear", "Programação", "Física", "Estatística"].map((m) => (
+              {[
+                "Cálculo",
+                "Programação",
+                "Banco de Dados",
+                "Arquitetura de Software",
+                "Enfermagem",
+                "Metodologia Científica",
+              ].map((m) => (
                 <span key={m} className="flex items-center gap-2">
                   <SubjectAvatar moduleName={m} />
                   <SubjectLabel moduleName={m} className="text-xs" />

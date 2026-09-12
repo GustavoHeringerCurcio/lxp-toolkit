@@ -175,6 +175,7 @@ export const pt = {
   "menu.open": "Abrir atividade",
   "menu.openPortal": "Abrir no portal",
   "menu.copyLink": "Copiar link",
+  "menu.professorPhoto": "Foto do professor",
   "menu.downloadMd": "Baixar resposta .md",
 
   // badges
@@ -301,6 +302,8 @@ export const pt = {
   // shared
   "common.hidePreview": "esconder prévia",
   "common.showPreview": "ver prévia",
+  "common.cancel": "Cancelar",
+  "common.save": "Salvar",
 
   // settings page
   "settings.saving": "Salvando…",
@@ -383,6 +386,33 @@ export const pt = {
   "profile.saved": "Perfil salvo.",
   "profile.saving": "Salvando…",
   "profile.save": "Salvar perfil",
+
+  // professor photo
+  "profPhoto.title": "Foto do professor",
+  "profPhoto.desc":
+    "Cole o LinkedIn de {{name}} para usar a foto do perfil no cartão de {{module}}. Você também pode colar uma URL de imagem.",
+  "profPhoto.linkedinLabel": "LinkedIn",
+  "profPhoto.linkedinHint": "Ex.: https://www.linkedin.com/in/nome-sobrenome",
+  "profPhoto.imageLabel": "URL da imagem (alternativa)",
+  "profPhoto.imageHint":
+    "Usada quando o LinkedIn não retorna uma foto. Precisa ser um link https de imagem.",
+  "profPhoto.save": "Buscar e salvar",
+  "profPhoto.saving": "Buscando…",
+  "profPhoto.remove": "Remover foto",
+  "profPhoto.saved": "Foto do professor atualizada.",
+  "profPhoto.removed": "Foto removida.",
+  "profPhoto.unresolved":
+    "Não encontramos uma foto nesse LinkedIn. Você pode colar uma URL de imagem como alternativa.",
+  "profPhoto.privacy":
+    "Buscamos apenas a foto pública do perfil e guardamos uma cópia local. O LinkedIn pode não liberar a imagem.",
+
+  // settings — professor photos
+  "settings.professors": "Fotos dos professores",
+  "settings.professorsHint":
+    "Opcional. A foto aparece no lugar do ícone da matéria nos cartões e ao lado do nome do professor.",
+  "settings.professorsEmpty": "Nenhum professor com matéria aberta no momento.",
+  "settings.professorsNone": "Sem foto",
+  "settings.professorsSave": "Salvar",
 
   // ai request panel
   "aiPanel.title": "O que a IA recebe",

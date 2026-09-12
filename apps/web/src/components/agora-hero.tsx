@@ -47,7 +47,13 @@ export function NextHero({ next, onClick }: { next: Exercise; onClick: () => voi
         "transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       )}
     >
-      <SubjectAvatar moduleName={next.moduleName} kind={next.kind} className="size-12 rounded-xl text-base" />
+      <SubjectAvatar
+        moduleName={next.moduleName}
+        kind={next.kind}
+        imageUrl={next.professorPhotoUrl}
+        iconClassName="size-5"
+        className="size-12 rounded-xl text-base"
+      />
 
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-semibold uppercase tracking-widest text-brand">{t("hero.next")}</span>

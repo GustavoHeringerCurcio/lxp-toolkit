@@ -171,6 +171,7 @@ export const en: Dict = {
   "menu.open": "Open activity",
   "menu.openPortal": "Open in portal",
   "menu.copyLink": "Copy link",
+  "menu.professorPhoto": "Professor photo",
   "menu.downloadMd": "Download .md answer",
 
   // badges
@@ -297,6 +298,8 @@ export const en: Dict = {
   // shared
   "common.hidePreview": "hide preview",
   "common.showPreview": "show preview",
+  "common.cancel": "Cancel",
+  "common.save": "Save",
 
   // settings page
   "settings.saving": "Saving…",
@@ -379,6 +382,32 @@ export const en: Dict = {
   "profile.saved": "Profile saved.",
   "profile.saving": "Saving…",
   "profile.save": "Save profile",
+
+  // professor photo
+  "profPhoto.title": "Professor photo",
+  "profPhoto.desc":
+    "Paste {{name}}'s LinkedIn to use their profile photo on the {{module}} card. You can also paste an image URL.",
+  "profPhoto.linkedinLabel": "LinkedIn",
+  "profPhoto.linkedinHint": "E.g. https://www.linkedin.com/in/first-last",
+  "profPhoto.imageLabel": "Image URL (fallback)",
+  "profPhoto.imageHint": "Used when LinkedIn doesn't return a photo. Must be an https image link.",
+  "profPhoto.save": "Fetch and save",
+  "profPhoto.saving": "Fetching…",
+  "profPhoto.remove": "Remove photo",
+  "profPhoto.saved": "Professor photo updated.",
+  "profPhoto.removed": "Photo removed.",
+  "profPhoto.unresolved":
+    "We couldn't find a photo for that LinkedIn. You can paste an image URL as a fallback.",
+  "profPhoto.privacy":
+    "We only fetch the public profile photo and keep a local copy. LinkedIn may not release the image.",
+
+  // settings — professor photos
+  "settings.professors": "Professor photos",
+  "settings.professorsHint":
+    "Optional. The photo replaces the subject icon on cards and appears next to the professor's name.",
+  "settings.professorsEmpty": "No professor with open subjects right now.",
+  "settings.professorsNone": "No photo",
+  "settings.professorsSave": "Save",
 
   // ai request panel
   "aiPanel.title": "What the AI receives",

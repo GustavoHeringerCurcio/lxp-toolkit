@@ -146,13 +146,21 @@ caps/joins, `currentColor` + `fillOpacity .12` on body shapes): submit, warning,
 
 ## 7. Subject identity & neutral professors
 
-`SubjectAvatar` + `lib/subject.ts`: deterministic identity per **module** (the only per-card color,
-see §3.5). Color comes from the `--subject-1..8` theme tokens, so there is no raw color in TSX and
-the old "no raw hex" exception is retired. The avatar shows the module monogram and, optionally, a
-small monochrome type icon as a corner badge. `SubjectLabel` repeats the color on the module name.
+`SubjectAvatar` + `lib/subject.ts` + `lib/subject-icon.ts`: deterministic identity per **module**
+(the only per-card color, see §3.5). Color comes from the `--subject-1..8` theme tokens, so there is
+no raw color in TSX and the old "no raw hex" exception is retired. The tile shows a domain pictogram
+derived automatically from the module name (`subjectIcon`, accent-insensitive whole-phrase keywords;
+e.g. "Banco de Dados" → `Database`, "Arquitetura de Software" → `Network`), falling back to the
+2-letter monogram (`subjectInitials`) when nothing matches. A small monochrome type icon sits in the
+corner as a badge. `SubjectLabel` repeats the color on the module name.
 
-`ProfessorTag` + `lib/prof.ts`: professors are secondary identity. A neutral initials avatar + name,
-never a competing color. The sidebar "Professores" list uses the same neutral treatment.
+`SubjectAvatar` also accepts an optional `imageUrl` — the professor's photo configured per student
+(§8, Ajustes). When present it fills the tile (`object-cover`) while the subject-colored frame and
+the type badge stay; a broken/failed image falls back to the pictogram, then the monogram.
+
+`ProfessorTag` + `lib/prof.ts`: professors are secondary identity. A neutral initials avatar + name
+(optionally the configured photo), never a competing color. The sidebar "Professores" list uses the
+same neutral treatment.
 
 ## 8. IA (information architecture) — 8 routes
 
@@ -224,6 +232,10 @@ grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid;
 
 ## History
 
+- **v3.3 (2026-09):** subject tiles show an automatic domain pictogram (`lib/subject-icon.ts`,
+  monogram fallback); professor photos can be configured per student from a LinkedIn URL (resolved
+  via unavatar, proxied/cached server-side) or a manual image URL, shown on the subject tile and
+  `ProfessorTag`; managed in Ajustes → Pessoal and the card ⋯ menu.
 - **v3.2 (2026-09):** send modal decluttered to a minimal confirm (title + one warning line + one
   action line); format becomes a segmented control; all modal icons replaced by the custom duotone
   `send-icons` family.

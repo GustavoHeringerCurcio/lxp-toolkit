@@ -16,6 +16,7 @@ import type {
   ExerciseStatus,
   Overrides,
   OverridesEntry,
+  ProfessorLink,
   QuizSelection,
   SubmissionEntry,
   Submissions,
@@ -55,6 +56,101 @@ export async function saveProfile(profile: AiProfile): Promise<void> {
     id,
     profile.nome,
     profile.matricula,
+  ]);
+}
+
+// ── Professor photos (per student) ──────────────────────────────────────────
+
+interface ProfessorLinkRow {
+  professor_id: string;
+  linkedin_url: string | null;
+  image_url: string | null;
+  source: string;
+  status: string;
+  fetched_at: Date | null;
+  updated_at: Date;
+}
+
+function toProfessorLink(r: ProfessorLinkRow): ProfessorLink {
+  const updatedAt = iso(r.updated_at);
+  const professorId = Number(r.professor_id);
+  return {
+    professorId,
+    linkedinUrl: r.linkedin_url,
+    imageUrl: r.image_url,
+    source: r.source === "manual" ? "manual" : "linkedin",
+    status: r.status === "ok" || r.status === "failed" ? r.status : "pending",
+    fetchedAt: r.fetched_at ? iso(r.fetched_at) : null,
+    updatedAt,
+    photoUrl: `/api/professor-avatar/${professorId}?v=${encodeURIComponent(updatedAt)}`,
+  };
+}
+
+const PROFESSOR_LINK_COLS = "professor_id, linkedin_url, image_url, source, status, fetched_at, updated_at";
+
+export async function getProfessorLinks(): Promise<ProfessorLink[]> {
+  const studentId = await getStudentId();
+  const rows = await query<ProfessorLinkRow>(
+    `SELECT ${PROFESSOR_LINK_COLS} FROM professor_link WHERE student_id = $1`,
+    [studentId],
+  );
+  return rows.map(toProfessorLink);
+}
+
+export async function getProfessorLink(professorId: number): Promise<ProfessorLink | null> {
+  const studentId = await getStudentId();
+  const rows = await query<ProfessorLinkRow>(
+    `SELECT ${PROFESSOR_LINK_COLS} FROM professor_link WHERE student_id = $1 AND professor_id = $2`,
+    [studentId, professorId],
+  );
+  return rows[0] ? toProfessorLink(rows[0]) : null;
+}
+
+export async function saveProfessorLink(
+  professorId: number,
+  input: { linkedinUrl?: string | null; imageUrl?: string | null },
+): Promise<ProfessorLink> {
+  const studentId = await getStudentId();
+  const linkedinUrl = (input.linkedinUrl ?? "").trim() || null;
+  const imageUrl = (input.imageUrl ?? "").trim() || null;
+  const source = imageUrl ? "manual" : "linkedin";
+  await query(
+    `INSERT INTO professor_link(student_id, professor_id, linkedin_url, image_url, source, status, updated_at)
+     VALUES ($1,$2,$3,$4,$5,'pending', now())
+     ON CONFLICT (student_id, professor_id) DO UPDATE SET
+       linkedin_url = EXCLUDED.linkedin_url,
+       image_url = EXCLUDED.image_url,
+       source = EXCLUDED.source,
+       status = 'pending',
+       fetched_at = NULL,
+       updated_at = now()`,
+    [studentId, professorId, linkedinUrl, imageUrl, source],
+  );
+  const link = await getProfessorLink(professorId);
+  if (!link) throw new Error(`falha ao salvar foto do professor ${professorId}`);
+  return link;
+}
+
+export async function setProfessorLinkStatus(
+  professorId: number,
+  status: "ok" | "failed",
+): Promise<void> {
+  const studentId = await getStudentId();
+  await query(
+    `UPDATE professor_link
+     SET status = $3,
+         fetched_at = CASE WHEN $3 = 'ok' THEN now() ELSE fetched_at END,
+         updated_at = now()
+     WHERE student_id = $1 AND professor_id = $2`,
+    [studentId, professorId, status],
+  );
+}
+
+export async function deleteProfessorLink(professorId: number): Promise<void> {
+  const studentId = await getStudentId();
+  await query("DELETE FROM professor_link WHERE student_id = $1 AND professor_id = $2", [
+    studentId,
+    professorId,
   ]);
 }
 

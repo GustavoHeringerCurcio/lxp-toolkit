@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { fetchConfig, fetchExercises } from "@/api";
-import type { AiConfigDto, Exercise, ExerciseKind } from "@/types";
+import { fetchConfig, fetchExercises, fetchProfessorLinks } from "@/api";
+import type { AiConfigDto, Exercise, ExerciseKind, ProfessorLink } from "@/types";
 
 export type Scope = "open" | "expired" | "done" | "all";
 
 interface AppDataValue {
   items: Exercise[];
   cfg: AiConfigDto | null;
+  professorLinks: ProfessorLink[];
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
@@ -31,6 +32,7 @@ const ScopeContext = createContext<ScopeValue | null>(null);
 export function AppProviders({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Exercise[]>([]);
   const [cfg, setCfg] = useState<AiConfigDto | null>(null);
+  const [professorLinks, setProfessorLinks] = useState<ProfessorLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState<Scope>("open");
@@ -41,9 +43,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const [p, c] = await Promise.all([fetchExercises(), fetchConfig()]);
+      const [p, c, links] = await Promise.all([
+        fetchExercises(),
+        fetchConfig(),
+        fetchProfessorLinks(),
+      ]);
       setItems(p.exercises);
       setCfg(c);
+      setProfessorLinks(links);
     } catch (x) {
       setError(x instanceof Error ? x.message : String(x));
     } finally {
@@ -53,9 +60,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [p, c] = await Promise.all([fetchExercises(), fetchConfig()]);
+      const [p, c, links] = await Promise.all([
+        fetchExercises(),
+        fetchConfig(),
+        fetchProfessorLinks(),
+      ]);
       setItems(p.exercises);
       setCfg(c);
+      setProfessorLinks(links);
     } catch (x) {
       setError(x instanceof Error ? x.message : String(x));
     }
@@ -74,8 +86,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, []);
 
   const dataValue = useMemo<AppDataValue>(
-    () => ({ items, cfg, loading, error, reload, refresh, patchExercise, patchConfig }),
-    [items, cfg, loading, error, reload, refresh, patchExercise, patchConfig],
+    () => ({ items, cfg, professorLinks, loading, error, reload, refresh, patchExercise, patchConfig }),
+    [items, cfg, professorLinks, loading, error, reload, refresh, patchExercise, patchConfig],
   );
 
   const scopeValue = useMemo<ScopeValue>(

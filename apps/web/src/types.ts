@@ -92,6 +92,8 @@ export interface Exercise {
   professor: string | null;
   /** Stable professor id (`context.teachers[].safeaUserId`); null when unresolved. */
   professorId: number | null;
+  /** Configured professor photo URL (`/api/professor-avatar/…`), or null. */
+  professorPhotoUrl?: string | null;
   sectionTitle: string | null;
   topicTypeId: number;
   status: ExerciseStatus;
@@ -160,8 +162,24 @@ export interface AiConfigDto {
   profile: AiProfile;
 }
 
-// ── Training ("Treino") ─────────────────────────────────────────────────────
+// ── Professor photos ────────────────────────────────────────────────────────
 
+export type ProfessorLinkSource = "linkedin" | "manual";
+export type ProfessorLinkStatus = "pending" | "ok" | "failed";
+
+export interface ProfessorLink {
+  professorId: number;
+  linkedinUrl: string | null;
+  imageUrl: string | null;
+  source: ProfessorLinkSource;
+  status: ProfessorLinkStatus;
+  fetchedAt: string | null;
+  updatedAt: string;
+  /** Relative URL the UI uses for the avatar. */
+  photoUrl: string;
+}
+
+// ── Training ("Treino") ─────────────────────────────────────────────────────
 export type TrainingQuizMode = "ai" | "mixed";
 
 export interface TrainingOption {

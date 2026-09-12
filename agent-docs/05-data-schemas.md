@@ -18,6 +18,7 @@ Domains (see `apps/server/db/migrations/0001_foundation.sql`):
   (immutable attempts; the shown one is `is_current`), `answer_selection`, `submission`,
   `submission_payload`, `item_annotation`.
 - **AI** — `ai_config`, `ai_run`.
+- **Customization** — `professor_link` (per-student professor photo; see below).
 - **Read model** — view `v_exercise_current` → projected to `apps/server/data/exercises.json`.
 
 Runtime writes go straight to the DB via `apps/server/src/store.ts` (answers, submissions,
@@ -39,6 +40,19 @@ normalizes it, and matches tokens against `professor.full_name`, storing
 { "userId": 8346005, "roleCourseName": "Professor1", "safeaRole": "teacher",
   "name": "DEBORA AMORIM DE CARVALHO", "safeaUserId": 5723877, "externalUserId": "d72d…" }
 ```
+
+### Professor photos (`professor_link`)
+
+Per-student customization (`0005_professor_link.sql`): the student pastes a LinkedIn profile URL
+(or a direct image URL fallback) and the server resolves the public photo via
+`unavatar.io/linkedin/<slug>` (`apps/server/src/linkedin.ts`), caching the bytes under
+`apps/server/data/avatars/` (gitignored). Keyed `(student_id, professor_id)` so one photo is reused
+across every module/card the professor teaches. unavatar's SVG placeholder is rejected; a failed
+resolution leaves `status = 'failed'` and the UI falls back to the subject pictogram/monogram. The
+runtime projection attaches `professorPhotoUrl` to each exercise in `view.ts::enrich` (never written
+to the `exercises.json` cache). Endpoints: `GET /api/professor-links`,
+`POST /api/professor-link`, `DELETE /api/professor-link/:professorId`,
+`GET /api/professor-avatar/:professorId`.
 
 ## Content item (normalized, in `scraped/raw/content-tree.json`)
 

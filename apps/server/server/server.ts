@@ -11,11 +11,14 @@ import { ensureContentText } from "../src/extract.js";
 import { getCatalogVersion, readProjectionMeta, writeProjection } from "../src/project.js";
 import {
   clearAnswerHistory,
+  deleteProfessorLink,
   getAiConfig,
   getAnswerRecord,
   getAnswers,
   getCurrentAttemptId,
   getOverrides,
+  getProfessorLink,
+  getProfessorLinks,
   getProfile,
   recordAiRun,
   restoreAnswerVersion,
@@ -23,7 +26,9 @@ import {
   saveAiRequest,
   saveAnswerVersion,
   saveNote,
+  saveProfessorLink,
   saveProfile,
+  setProfessorLinkStatus,
 } from "../src/store.js";
 import {
   buildSubjectContext,
@@ -55,6 +60,7 @@ import {
 } from "../src/send.js";
 import { officeToPdf, previewCacheDir } from "../src/office.js";
 import { answerToPdf } from "../src/pdf.js";
+import { loadProfessorAvatar, parseLinkedinUrl } from "../src/linkedin.js";
 
 const DIST = path.join(ASSISTANT_DIR, "..", "web", "dist");
 const PORT = Number(process.env.PORT || 4174);
@@ -273,10 +279,14 @@ async function servePreview(res: import("node:http").ServerResponse, rawUrl: str
   }
 }
 
-/** Load answers + overrides from Postgres and enrich the cached exercises. */
+/** Load answers + overrides + professor photos from Postgres and enrich the cached exercises. */
 async function loadViews(): Promise<ExerciseView[]> {
-  const [answers, overrides] = await Promise.all([getAnswers(), getOverrides()]);
-  return enrich(loadExercises(), answers, overrides);
+  const [answers, overrides, professorLinks] = await Promise.all([
+    getAnswers(),
+    getOverrides(),
+    getProfessorLinks(),
+  ]);
+  return enrich(loadExercises(), answers, overrides, professorLinks);
 }
 
 /** Look up an enriched, non-hidden exercise view or throw a clear error. */
@@ -397,6 +407,59 @@ const server = createServer(async (req, res) => {
     }
     if (url === "/api/profile" && method === "GET") {
       return json(res, 200, await getProfile());
+    }
+
+    // professor photos (per student, resolved + cached server-side)
+    if (url === "/api/professor-links" && method === "GET") {
+      return json(res, 200, { links: await getProfessorLinks() });
+    }
+    if (url === "/api/professor-link" && method === "POST") {
+      const b = await readBody(req);
+      const professorId = Number(b.professorId);
+      if (!professorId) return json(res, 400, { error: "professorId obrigatório" });
+      const rawLinkedin = b.linkedinUrl == null ? "" : String(b.linkedinUrl).trim();
+      const rawImage = b.imageUrl == null ? "" : String(b.imageUrl).trim();
+
+      let linkedinUrl: string | null = null;
+      if (rawLinkedin) {
+        const parsed = parseLinkedinUrl(rawLinkedin);
+        if (!parsed) return json(res, 400, { error: "URL do LinkedIn inválida." });
+        linkedinUrl = parsed.url;
+      }
+      if (!linkedinUrl && !rawImage) {
+        await deleteProfessorLink(professorId);
+        return json(res, 200, { ok: true, removed: true, link: null });
+      }
+
+      const saved = await saveProfessorLink(professorId, { linkedinUrl, imageUrl: rawImage || null });
+      const avatar = await loadProfessorAvatar(saved);
+      await setProfessorLinkStatus(professorId, avatar ? "ok" : "failed");
+      return json(res, 200, {
+        ok: true,
+        resolved: Boolean(avatar),
+        link: await getProfessorLink(professorId),
+      });
+    }
+    if (url.startsWith("/api/professor-link/") && method === "DELETE") {
+      const professorId = Number(url.split("/")[3]);
+      if (!professorId) return json(res, 400, { error: "professorId obrigatório" });
+      await deleteProfessorLink(professorId);
+      return json(res, 200, { ok: true });
+    }
+    if (url.startsWith("/api/professor-avatar/") && method === "GET") {
+      const professorId = Number(url.split("/")[3]);
+      if (!professorId) return json(res, 400, { error: "professorId obrigatório" });
+      const link = await getProfessorLink(professorId);
+      if (!link) return json(res, 404, { error: "sem foto" });
+      const avatar = await loadProfessorAvatar(link);
+      if (!avatar) return json(res, 404, { error: "foto indisponível" });
+      res.writeHead(200, {
+        "content-type": avatar.contentType,
+        "content-length": statSync(avatar.file).size,
+        "cache-control": "private, max-age=86400",
+      });
+      createReadStream(avatar.file).pipe(res);
+      return;
     }
 
     // answers / history
