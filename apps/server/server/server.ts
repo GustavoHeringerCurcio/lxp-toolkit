@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { ASSISTANT_DIR, dataDir, assist } from "../src/paths.js";
+import { spawnCommand } from "../src/exec.js";
 import { loadExercises } from "../src/build.js";
 import {
   loadAiConfig,
@@ -68,7 +68,7 @@ function runStep(args: string[], cwd: string, label: string): Promise<void> {
   return new Promise((resolve, reject) => {
     refresh.step = label;
     appendRefreshLog(`\n$ npm ${args.join(" ")}\n`);
-    const child = spawn(NPM, args, { cwd, env: process.env });
+    const child = spawnCommand(NPM, args, { cwd, env: process.env });
     child.stdout?.on("data", (d: Buffer) => appendRefreshLog(d.toString()));
     child.stderr?.on("data", (d: Buffer) => appendRefreshLog(d.toString()));
     child.on("error", (err) => reject(err));

@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ASSISTANT_DIR, assist } from "./paths.js";
+import { spawnCommand } from "./exec.js";
 import { loadOverrides, loadProfile, loadSubmissions, saveOverrides, saveSubmissions } from "./config.js";
 import type { QuizSelection, SendMode, SubmissionEntry } from "./types.js";
 
@@ -222,7 +222,7 @@ export function launchMarkComplete(view: { id: number; courseId: number; title: 
 
 /** Spawn the portal submit runner and mirror its result into the submission entry. */
 function spawnRunner(rootDir: string, reqFile: string, resFile: string, entry: SubmissionEntry): void {
-  const child = spawn(tsxBin(), [path.join(rootDir, "scripts", "submit-task.ts"), "--req", reqFile, "--result", resFile], {
+  const child = spawnCommand(tsxBin(), [path.join(rootDir, "scripts", "submit-task.ts"), "--req", reqFile, "--result", resFile], {
     cwd: rootDir,
     env: process.env,
     stdio: "ignore",
