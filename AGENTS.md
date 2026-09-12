@@ -26,6 +26,10 @@ Per-user scraped output lives in the gitignored `scraped/` folder (never commit 
   fallback). `npm run db:up` starts it via Docker, `npm run db:migrate` applies
   `apps/server/db/migrations/`. `npm run index:web` runs `migrate → import → project`, writing
   the UI cache `apps/server/data/exercises.json`. Schema details: `agent-docs/05-data-schemas.md`.
+- **Runtime activity writes straight to Postgres** via `apps/server/src/store.ts` (answers,
+  submissions, overrides, profile, AI config, `ai_run`). `answers.json`/`submissions.json`/
+  `overrides.json`/`profile.json` are **legacy** (read once by `import.ts`; never written).
+  `exercises.json` is a cache invalidated by its `catalogVersion`.
 - Commands (run from the repo root; they delegate to the workspaces): `npm run setup`
   (interactive onboarding: deps + browser + env files + database), `npm run doctor` (health check),
   `npm run db:up`, `npm run db:migrate`, `npm run dump`, `npm run dump-surfaces`,

@@ -92,16 +92,20 @@ describe("generateAnswer (mock HTTP da OpenAI)", () => {
     const payload = JSON.parse(req.body ?? "{}");
     expect(payload.model).toBe("gpt-4o");
     expect(payload.stream).toBe(true);
+    expect(payload.stream_options).toEqual({ include_usage: true });
     expect(payload.messages.some((m: { role: string }) => m.role === "system")).toBe(true);
     expect(payload.messages.some((m: { role: string }) => m.role === "user")).toBe(true);
   });
 
-  it("concatena os deltas do stream e devolve o texto completo", async () => {
+  it("concatena os deltas do stream e devolve o texto + proveniência", async () => {
     defaultSseHandler(["Olá", " mundo"]);
     const deltas: string[] = [];
-    const full = await generateAnswer(CFG, makeExercise(), "", PROFILE, { onDelta: (d) => deltas.push(d) });
+    const result = await generateAnswer(CFG, makeExercise(), "", PROFILE, { onDelta: (d) => deltas.push(d) });
     expect(deltas).toEqual(["Olá", " mundo"]);
-    expect(full).toBe("Olá mundo");
+    expect(result.text).toBe("Olá mundo");
+    expect(result.model).toBe("gpt-4o");
+    expect(result.promptHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.prompt).toContain("[system]");
   });
 
   it("propaga 401 da OpenAI com a mensagem de chave inválida", async () => {

@@ -2,7 +2,7 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ASSISTANT_DIR, assist } from "./paths.js";
 import { spawnCommand } from "./exec.js";
-import { loadOverrides, loadProfile, loadSubmissions, saveOverrides, saveSubmissions } from "./config.js";
+import { appendSubmission, getProfile, getSubmissions, setManualStatus } from "./store.js";
 import type { QuizSelection, SendMode, SubmissionEntry } from "./types.js";
 
 export type { SendMode };
@@ -15,8 +15,7 @@ const PORTAL_DIR = path.join(REPO_ROOT, "packages", "portal");
  * LXP submission transport: a gated browser-runner in the portal package
  * (`packages/portal/scripts/submit-task.ts`). The assistant server never holds
  * portal credentials — it writes a request JSON, spawns the runner (which
- * fresh-logs-in via the portal `.env`), and records the outcome in
- * `apps/server/data/submissions.json`.
+ * fresh-logs-in via the portal `.env`), and records the outcome in Postgres.
  */
 
 export interface SendEnv {
@@ -46,8 +45,9 @@ function tsxBin(): string {
 }
 
 /** Attachment/title base name for an upload: `<nome>_<título da atividade>`. */
-export function uploadBaseName(view: { title: string }): string {
-  return [loadProfile().nome, view.title]
+export async function uploadBaseName(view: { title: string }): Promise<string> {
+  const profile = await getProfile();
+  return [profile.nome, view.title]
     .map((part) => part?.trim() ?? "")
     .filter(Boolean)
     .join("_");
@@ -60,12 +60,12 @@ export function uploadBaseName(view: { title: string }): string {
  * entry immediately (status "running"); the entry is updated when the child
  * process exits.
  */
-export function launchUploadSubmit(
+export async function launchUploadSubmit(
   view: { id: number; courseId: number; title: string },
   answerText: string,
   mode: SendMode = "txt",
   filePath?: string,
-): SubmissionEntry {
+): Promise<SubmissionEntry> {
   const env = sendEnv();
   if (!env.enabled || !env.rootDir) {
     throw new Error(env.reason || "runner não configurado");
@@ -76,7 +76,7 @@ export function launchUploadSubmit(
   mkdirSync(dir, { recursive: true });
   const reqFile = path.join(dir, `req-${view.id}-${at}.json`);
   const resFile = path.join(dir, `res-${view.id}-${at}.json`);
-  const filename = uploadBaseName(view);
+  const filename = await uploadBaseName(view);
   const payload: Record<string, unknown> = {
     action: "upload",
     courseId: view.courseId,
@@ -97,7 +97,7 @@ export function launchUploadSubmit(
     answer: answerText,
     mode,
   };
-  pushSubmission(entry);
+  await pushSubmission(entry);
 
   spawnRunner(env.rootDir, reqFile, resFile, entry);
 
@@ -115,7 +115,7 @@ interface QuizQuestion {
  * selection is enriched with the question and option text so the runner can
  * locate the right radio/option on the page.
  */
-export function launchQuizSubmit(
+export async function launchQuizSubmit(
   view: {
     id: number;
     courseId: number;
@@ -125,7 +125,7 @@ export function launchQuizSubmit(
     questions: QuizQuestion[];
   },
   selections: QuizSelection[],
-): SubmissionEntry {
+): Promise<SubmissionEntry> {
   const env = sendEnv();
   if (!env.enabled || !env.rootDir) {
     throw new Error(env.reason || "runner não configurado");
@@ -177,7 +177,7 @@ export function launchQuizSubmit(
     detail: "aguardando login no portal…",
     answer: items.map((i) => `Q${i.questionId}: ${i.letter}`).join(", "),
   };
-  pushSubmission(entry);
+  await pushSubmission(entry);
 
   spawnRunner(env.rootDir, reqFile, resFile, entry);
 
@@ -189,10 +189,10 @@ export function launchQuizSubmit(
  * The runner fresh-logins, posts through the enrollment-scoped endpoint and
  * verifies against the thread; falls back to the SPA composer when rejected.
  */
-export function launchForumSubmit(
+export async function launchForumSubmit(
   view: { id: number; courseId: number; title: string; enrollmentId: number | null },
   answerText: string,
-): SubmissionEntry {
+): Promise<SubmissionEntry> {
   const env = sendEnv();
   if (!env.enabled || !env.rootDir) {
     throw new Error(env.reason || "runner não configurado");
@@ -228,7 +228,7 @@ export function launchForumSubmit(
     answer: answerText,
     mode: "text",
   };
-  pushSubmission(entry);
+  await pushSubmission(entry);
 
   spawnRunner(env.rootDir, reqFile, resFile, entry);
 
@@ -240,7 +240,11 @@ export function launchForumSubmit(
  * recordable content item (reading/pdf/link/other). The runner fresh-logins and
  * POSTs the progress endpoint; no answer is involved.
  */
-export function launchMarkComplete(view: { id: number; courseId: number; title: string }): SubmissionEntry {
+export async function launchMarkComplete(view: {
+  id: number;
+  courseId: number;
+  title: string;
+}): Promise<SubmissionEntry> {
   const env = sendEnv();
   if (!env.enabled || !env.rootDir) {
     throw new Error(env.reason || "runner não configurado");
@@ -264,7 +268,7 @@ export function launchMarkComplete(view: { id: number; courseId: number; title: 
     status: "running",
     detail: "aguardando login no portal…",
   };
-  pushSubmission(entry);
+  await pushSubmission(entry);
 
   spawnRunner(env.rootDir, reqFile, resFile, entry);
 
@@ -283,7 +287,7 @@ function spawnRunner(rootDir: string, reqFile: string, resFile: string, entry: S
   child.on("error", (err) => {
     entry.status = "failed";
     entry.detail = `não foi possível iniciar o runner: ${err.message}`;
-    pushSubmission(entry);
+    void pushSubmission(entry);
   });
 
   child.on("close", (code) => {
@@ -316,40 +320,34 @@ function spawnRunner(rootDir: string, reqFile: string, resFile: string, entry: S
       entry.detail = `runner terminou com código ${code} sem gerar resultado`;
     }
     entry.status = status;
-    if (status === "ok" || status === "already") markDone(entry.exerciseId);
-    pushSubmission(entry);
+    if (status === "ok" || status === "already") void markDone(entry.exerciseId);
+    void pushSubmission(entry);
   });
 }
 
 /** Persist "done" for an exercise so the UI keeps showing it as completed. */
-function markDone(exerciseId: number): void {
+async function markDone(exerciseId: number): Promise<void> {
   try {
-    const overrides = loadOverrides();
-    const key = String(exerciseId);
-    overrides[key] = { ...(overrides[key] ?? {}), manualStatus: "done" };
-    saveOverrides(overrides);
+    await setManualStatus(exerciseId, "done");
   } catch {
     /* ignore */
   }
 }
 
-export function lastSubmission(exerciseId: number): SubmissionEntry | null {
-  const subs = loadSubmissions();
+export async function lastSubmission(exerciseId: number): Promise<SubmissionEntry | null> {
+  const subs = await getSubmissions();
   const list = subs[String(exerciseId)] ?? [];
   return list.length ? list[list.length - 1] : null;
 }
 
-export function submissionsFor(exerciseId: number): SubmissionEntry[] {
-  return loadSubmissions()[String(exerciseId)] ?? [];
+export async function submissionsFor(exerciseId: number): Promise<SubmissionEntry[]> {
+  return (await getSubmissions())[String(exerciseId)] ?? [];
 }
 
-function pushSubmission(entry: SubmissionEntry): void {
-  const subs = loadSubmissions();
-  const key = String(entry.exerciseId);
-  const list = subs[key] ?? [];
-  const existing = list.findIndex((s) => s.at === entry.at);
-  if (existing >= 0) list[existing] = entry;
-  else list.push(entry);
-  subs[key] = list;
-  saveSubmissions(subs);
+async function pushSubmission(entry: SubmissionEntry): Promise<void> {
+  try {
+    await appendSubmission(entry);
+  } catch (err) {
+    console.error("[send] failed to persist submission:", err instanceof Error ? err.message : err);
+  }
 }

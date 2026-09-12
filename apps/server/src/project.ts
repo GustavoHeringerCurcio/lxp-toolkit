@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { query } from "./db.js";
 import { ASSISTANT_EXERCISES_FILE } from "./build.js";
@@ -167,13 +167,40 @@ export async function buildProjection(): Promise<Exercise[]> {
   return out;
 }
 
+/** Stable hash of the catalog + state snapshots the projection depends on. */
+export async function getCatalogVersion(): Promise<string> {
+  const rows = await query<{ version: string }>(
+    `SELECT md5(
+       (SELECT count(*)::text FROM content_item) || ':' ||
+       COALESCE((SELECT max(updated_at)::text FROM content_item), '') || ':' ||
+       (SELECT count(*)::text FROM item_state) || ':' ||
+       COALESCE((SELECT max(captured_at)::text FROM item_state), '')
+     ) AS version`,
+  );
+  return rows[0]?.version ?? "";
+}
+
+/** Read the cache metadata header without loading the exercises. */
+export function readProjectionMeta(): { generatedAt?: string; catalogVersion?: string } | null {
+  if (!existsSync(ASSISTANT_EXERCISES_FILE)) return null;
+  try {
+    return JSON.parse(readFileSync(ASSISTANT_EXERCISES_FILE, "utf-8")) as {
+      generatedAt?: string;
+      catalogVersion?: string;
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Project the DB read model to `apps/server/data/exercises.json` (the UI cache). */
 export async function writeProjection(): Promise<{ file: string; count: number }> {
   const exercises = await buildProjection();
+  const catalogVersion = await getCatalogVersion();
   mkdirSync(path.dirname(ASSISTANT_EXERCISES_FILE), { recursive: true });
   writeFileSync(
     ASSISTANT_EXERCISES_FILE,
-    JSON.stringify({ generatedAt: new Date().toISOString(), exercises }, null, 2),
+    JSON.stringify({ generatedAt: new Date().toISOString(), catalogVersion, exercises }, null, 2),
     "utf-8",
   );
   return { file: ASSISTANT_EXERCISES_FILE, count: exercises.length };

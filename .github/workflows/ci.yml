@@ -24,6 +24,7 @@ jobs:
           --health-retries 12
     env:
       DATABASE_URL: postgres://lxp:lxp@localhost:5433/lxp
+      LXP_TEST_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

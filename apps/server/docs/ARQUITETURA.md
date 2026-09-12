@@ -11,12 +11,12 @@
                                                    OpenAI ◄──── ai.ts ◄── prompt.ts
                                                                  │
                                                                  ▼
-                                                         data/answers.json ──► answer_attempt
+                                                    store.ts ──► answer_attempt / ai_run
                                                                  │
                         packages/portal/scripts/submit-task.ts ◄── send.ts
                                      (Playwright)               │
                                         │                        ▼
-                                        └── portal ◄──── data/submissions.json ──► submission
+                                        └── portal ◄──── store.ts ──► submission
 ```
 
 ## Camadas
@@ -37,19 +37,26 @@
   migrações versionadas (`schema_migrations`). O banco é **obrigatório** (sem fallback JSON);
   suba com `docker compose up -d db` e aplique com `npm run db:migrate`.
 - `src/import.ts` — importa `scraped/raw/content-tree.json` para o Postgres (idempotente) e faz
-  backfill do estado legado (`answers.json`, `submissions.json`, `overrides.json`, `ai-config.json`).
+  **reconciliação** do estado legado (`answers.json`, `submissions.json`, `overrides.json`,
+  `ai-config.json`) por chave natural (sem duplicar em re-execuções).
+- `src/store.ts` — **camada de escrita/leitura em runtime**: respostas, overrides, envios,
+  perfil, config de IA e `ai_run` vão direto para o Postgres. É a única fonte de verdade da
+  atividade do aluno.
 - `src/professor.ts` — resolve o sufixo do título do módulo ("… - Profa. Débora Amorim") para o
   `safeaUserId` estável de `context.teachers[]` e grava `module_professor` (fonte, confiança).
-- `src/project.ts` — projeta a view `v_exercise_current` para `data/exercises.json` (cache da UI).
+- `src/project.ts` — projeta a view `v_exercise_current` para `data/exercises.json` (cache da UI)
+  e calcula o `catalogVersion` que invalida o cache.
 - `src/load.ts` — orquestra `migrate → import → project` (`npm run index`).
 - `src/view.ts` — enriquece cada atividade com resposta salva, override e as instruções
   extras de IA.
 - `src/prompt.ts` — compila as mensagens `system` (regras estruturadas) e `user`
   (conteúdo da atividade) enviadas ao modelo.
-- `src/ai.ts` — chama a OpenAI (`chat.completions`, streaming) e devolve o texto.
-- `src/config.ts` — lê/grava config, respostas (com histórico), overrides e envios.
+- `src/ai.ts` — chama a OpenAI (`chat.completions`, streaming) e devolve texto + proveniência
+  (modelo, tokens, prompt) para gravar em `ai_run`.
+- `src/config.ts` — **legado**: só lê os JSON antigos para a importação e serve os testes.
 - `src/send.ts` — grava o request JSON, dá `spawn` no `submit-task.ts` do pacote do
-  portal e acompanha o resultado. É a única ponte entre o app e a escrita no portal.
+  portal, acompanha o resultado e persiste o envio em `submission`. É a única ponte entre o
+  app e a escrita no portal.
 - `server/server.ts` — API HTTP (exercícios, respostas, geração com streaming, envio,
   preview de arquivos) e serve o build do web na porta 4174.
 - `../web/` — interface React (painel, atividade, ajustes).
@@ -68,11 +75,11 @@ Postgres é a **fonte da verdade** (local, por usuário, `DATABASE_URL` gitignor
 - **IA** — `ai_config`, `ai_run`.
 - **Leitura** — view `v_exercise_current` (alimenta a projeção `/api/exercises`).
 
-Os arquivos JSON continuam existindo como **cache/legado** e são regravados pelo index:
+Os JSON antigos **não são mais escritos** pelo app — servem apenas para a importação única:
 
-- `config/ai-config.json`, `config/profile.json`, `config/overrides.json` — espelhados no banco.
 - `data/exercises.json` — projeção gerada a partir de `v_exercise_current` (cache da UI).
-- `data/answers.json`, `data/submissions.json` — legado; o banco guarda as tentativas/envios.
+- `config/ai-config.json`, `config/profile.json`, `config/overrides.json`,
+  `data/answers.json`, `data/submissions.json` — legado; a verdade está no banco.
 
 ## Envio (write side)
 
@@ -83,8 +90,7 @@ por um navegador real:
    `tsx packages/portal/scripts/submit-task.ts --req … --result …`.
 2. O runner faz login fresco, navega até a atividade, anexa o arquivo (upload) ou marca
    as alternativas (quiz) e clica em enviar.
-3. O resultado vira `data/send/res-<id>-<ts>.json` e é registrado em
-   `data/submissions.json`.
+3. O resultado vira `data/send/res-<id>-<ts>.json` e é persistido em `submission` (Postgres).
 
 ### Upload
 
@@ -101,16 +107,16 @@ botões "Save draft" e "Send reply", e o texto do botão pode aparecer em inglê
 O envio é considerado ok quando o portal registra a tentativa (campo `attempts` do
 tópico) com o anexo. Use `--dry-run` para validar os seletores sem enviar nada.
 
-Cada tentativa vira uma entrada em `data/submissions.json` (status `running`/`ok`/
+Cada tentativa vira uma linha em `submission` (status `running`/`ok`/
 `already`/`unknown`/`failed`, detalhe, anexo e horário). Quando o resultado é `ok` ou
-`already`, o servidor grava `manualStatus: "done"` no override da atividade, e o
+`already`, o servidor grava `manual_status = 'done'` em `item_annotation`, e o
 `enrich` passa a mostrá-la como concluída. A web usa o sonner para avisar o resultado.
 
 ### Quiz
 
 Para questionários a IA gera no formato `Q<id>: <letra>`. O servidor extrai as
-alternativas (`parseQuizSelections` em `src/prompt.ts`) e guarda em `data/answers.json`
-(campo `selections`). No envio, `launchQuizSubmit` manda `action: "quiz"` com as
+alternativas (`parseQuizSelections` em `src/prompt.ts`) e guarda em `answer_selection`
+(ligado à `answer_attempt`). No envio, `launchQuizSubmit` manda `action: "quiz"` com as
 seleções (id, índice, letra, texto da questão e da alternativa) e o runner marca cada
 alternativa e clica em enviar.
 

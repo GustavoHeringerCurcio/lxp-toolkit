@@ -20,6 +20,12 @@ Domains (see `apps/server/db/migrations/0001_foundation.sql`):
 - **AI** — `ai_config`, `ai_run`.
 - **Read model** — view `v_exercise_current` → projected to `apps/server/data/exercises.json`.
 
+Runtime writes go straight to the DB via `apps/server/src/store.ts` (answers, submissions,
+overrides, profile, AI config, `ai_run`). The old `answers.json` / `submissions.json` /
+`overrides.json` / `profile.json` are **legacy**: the app no longer writes them; they are read
+once by `import.ts` (reconciled by natural key) and then ignored. `exercises.json` is a cache
+invalidated by `catalogVersion`.
+
 ### Professor identity (stable ids)
 
 `context.teachers[]` is **course-wide** (the same faculty on every item), so it identifies who

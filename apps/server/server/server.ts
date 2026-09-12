@@ -2,28 +2,32 @@ import { createHash } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
-import { ASSISTANT_DIR, dataDir, assist, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
+import { ASSISTANT_DIR, dataDir, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
 import { spawnCommand } from "../src/exec.js";
 import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
-import { healthCheck, runMigrations } from "../src/db.js";
-import { writeProjection } from "../src/project.js";
+import { healthCheck, query, runMigrations } from "../src/db.js";
+import { importAll } from "../src/import.js";
+import { getCatalogVersion, readProjectionMeta, writeProjection } from "../src/project.js";
 import {
-  loadAiConfig,
-  loadAnswers,
-  loadOverrides,
-  saveOverrides,
-  saveProfile,
-  loadProfile,
-  saveAiConfig,
-  saveAnswerVersion,
-  getAnswerRecord,
-  restoreAnswerVersion,
   clearAnswerHistory,
-} from "../src/config.js";
-import { enrich } from "../src/view.js";
+  getAiConfig,
+  getAnswerRecord,
+  getAnswers,
+  getCurrentAttemptId,
+  getOverrides,
+  getProfile,
+  recordAiRun,
+  restoreAnswerVersion,
+  saveAiConfig,
+  saveAiRequest,
+  saveAnswerVersion,
+  saveNote,
+  saveProfile,
+} from "../src/store.js";
+import { enrich, type ExerciseView } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
 import { humanizeQuizAnswer, parseQuizSelections } from "../src/prompt.js";
-import type { AiActivitySections, AiStyle, QuizQ, QuizSelection } from "../src/types.js";
+import type { AiActivitySections, AiStyle, AnswerRecord, QuizQ, QuizSelection } from "../src/types.js";
 import {
   launchUploadSubmit,
   launchQuizSubmit,
@@ -255,15 +259,55 @@ async function servePreview(res: import("node:http").ServerResponse, rawUrl: str
   }
 }
 
+/** Load answers + overrides from Postgres and enrich the cached exercises. */
+async function loadViews(): Promise<ExerciseView[]> {
+  const [answers, overrides] = await Promise.all([getAnswers(), getOverrides()]);
+  return enrich(loadExercises(), answers, overrides);
+}
+
 /** Look up an enriched, non-hidden exercise view or throw a clear error. */
-function findView(id: number) {
-  const view = enrich(loadExercises(), loadAnswers(), loadOverrides()).find((x) => x.id === id && !x.hidden);
+async function findView(id: number): Promise<ExerciseView> {
+  const view = (await loadViews()).find((x) => x.id === id && !x.hidden);
   if (!view) throw new Error(`exercício ${id} não encontrado`);
   return view;
 }
 
-function allViews() {
-  return enrich(loadExercises(), loadAnswers(), loadOverrides()).filter((v) => !v.hidden);
+async function allViews(): Promise<ExerciseView[]> {
+  return (await loadViews()).filter((v) => !v.hidden);
+}
+
+/**
+ * Generate an AI answer, persist it as an immutable attempt (with model +
+ * prompt provenance) and record an `ai_run`.
+ */
+async function generateAndSave(
+  id: number,
+  view: ExerciseView,
+  opts: { onDelta?: (delta: string) => void; model?: string } = {},
+): Promise<{ shown: string; rec: AnswerRecord }> {
+  const cfg = { ...(await getAiConfig()), ...(opts.model ? { model: opts.model } : {}) };
+  const profile = await getProfile();
+  const startedAt = Date.now();
+  const gen = await generateAnswer(cfg, view, view.aiRequestJson, profile, { onDelta: opts.onDelta }, view.notes);
+  const selections = view.kind === "quiz" ? parseQuizSelections(gen.text, view.questions) : [];
+  const shown = view.kind === "quiz" ? humanizeQuizAnswer(gen.text, view.questions) : gen.text;
+  const rec = await saveAnswerVersion(id, shown, "ai", undefined, selections, {
+    model: gen.model,
+    promptHash: gen.promptHash,
+  });
+  const attemptId = await getCurrentAttemptId(id);
+  await recordAiRun({
+    contentItemId: id,
+    prompt: gen.prompt,
+    promptHash: gen.promptHash,
+    completion: shown,
+    model: gen.model,
+    tokensIn: gen.tokensIn,
+    tokensOut: gen.tokensOut,
+    latencyMs: Date.now() - startedAt,
+    answerAttemptId: attemptId,
+  }).catch(() => undefined);
+  return { shown, rec };
 }
 
 /** Tasks, quizzes and forums have AI-answerable content. */
@@ -308,7 +352,7 @@ const server = createServer(async (req, res) => {
 
   try {
     if (url === "/api/exercises") {
-      return json(res, 200, { generatedAt: new Date().toISOString(), exercises: allViews() });
+      return json(res, 200, { generatedAt: new Date().toISOString(), exercises: await allViews() });
     }
     if (url === "/api/preview" && (method === "GET" || method === "HEAD")) {
       const src = new URL(req.url ?? "/", "http://local").searchParams.get("url") ?? "";
@@ -316,15 +360,15 @@ const server = createServer(async (req, res) => {
       return await servePreview(res, src, method === "HEAD");
     }
     if (url === "/api/config") {
-      const cfg = loadAiConfig();
+      const cfg = await getAiConfig();
       return json(res, 200, {
         model: cfg.model,
         max_output_tokens: cfg.max_output_tokens,
         temperature: cfg.temperature,
-        configPath: assist("config", "ai-config.json"),
+        configPath: "Postgres · ai_config",
         style: cfg.style,
         activitySections: cfg.activitySections,
-        profile: loadProfile(),
+        profile: await getProfile(),
       });
     }
     if (url === "/api/refresh/status") {
@@ -338,7 +382,7 @@ const server = createServer(async (req, res) => {
       });
     }
     if (url === "/api/profile" && method === "GET") {
-      return json(res, 200, loadProfile());
+      return json(res, 200, await getProfile());
     }
 
     // answers / history
@@ -348,17 +392,17 @@ const server = createServer(async (req, res) => {
       const b = await readBody(req);
       const index = Number(b.index);
       if (!id || Number.isNaN(index)) return json(res, 400, { error: "id e index obrigatórios" });
-      const rec = restoreAnswerVersion(id, index);
+      const rec = await restoreAnswerVersion(id, index);
       return json(res, 200, { current: rec, history: rec.history });
     }
     if (url.startsWith("/api/answer/") && url.endsWith("/history") && method === "DELETE") {
       const id = Number(url.split("/")[3]);
-      const rec = clearAnswerHistory(id);
+      const rec = await clearAnswerHistory(id);
       return json(res, 200, { current: rec, history: rec.history });
     }
     if (url.startsWith("/api/answer/") && method === "GET") {
       const id = Number(url.split("/")[3]);
-      const rec = getAnswerRecord(id);
+      const rec = await getAnswerRecord(id);
       return json(res, 200, {
         current: rec ? { answer: rec.answer, updatedAt: rec.updatedAt, source: rec.source } : null,
         history: rec?.history ?? [],
@@ -372,7 +416,7 @@ const server = createServer(async (req, res) => {
     }
     if (url.startsWith("/api/send/preview")) {
       const id = Number(new URL(req.url ?? "/", "http://local").searchParams.get("id"));
-      const view = findView(id);
+      const view = await findView(id);
       const canSubmit =
         (view.kind === "upload" || view.kind === "quiz" || view.kind === "forum") && view.status !== "done";
       return json(res, 200, {
@@ -397,8 +441,8 @@ const server = createServer(async (req, res) => {
       const download = b.download === true;
       if (!id) return json(res, 400, { error: "id obrigatório" });
       if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de gerar o arquivo." });
-      const view = findView(id);
-      const baseName = uploadBaseName(view);
+      const view = await findView(id);
+      const baseName = await uploadBaseName(view);
       const ext = mode === "pdf" ? "pdf" : "txt";
       const filename = safeFilename(baseName, ext);
       const disposition = `${download ? "attachment" : "inline"}; filename="${filename}"`;
@@ -427,18 +471,16 @@ const server = createServer(async (req, res) => {
     }
     if (url.startsWith("/api/send/")) {
       const id = Number(url.split("/")[3]);
-      const last = lastSubmission(id);
-      return json(res, 200, { submission: last ?? null, submissions: submissionsFor(id) });
+      const [last, all] = await Promise.all([lastSubmission(id), submissionsFor(id)]);
+      return json(res, 200, { submission: last ?? null, submissions: all });
     }
 
     if (method === "POST") {
       if (url === "/api/note") {
         const b = await readBody(req);
-        const id = String(b.id);
+        const id = Number(b.id);
         if (!id) return json(res, 400, { error: "id required" });
-        const overrides = loadOverrides();
-        overrides[id] = { ...(overrides[id] ?? {}), notes: String(b.notes ?? "") };
-        saveOverrides(overrides);
+        await saveNote(id, String(b.notes ?? ""));
         return json(res, 200, { ok: true });
       }
       if (url === "/api/ai-request") {
@@ -446,21 +488,13 @@ const server = createServer(async (req, res) => {
         const b = await readBody(req);
         const id = Number(b.id);
         if (!id) return json(res, 400, { error: "id required" });
-        const overrides = loadOverrides();
-        const entry = { ...(overrides[String(id)] ?? {}) };
-        if (b.raw == null) {
-          delete entry.aiRequest;
-        } else {
-          entry.aiRequest = String(b.raw);
-        }
-        overrides[String(id)] = entry;
-        saveOverrides(overrides);
-        const view = findView(id);
+        await saveAiRequest(id, b.raw == null ? null : String(b.raw));
+        const view = await findView(id);
         return json(res, 200, { ok: true, aiRequestJson: view.aiRequestJson, hasAiOverride: view.hasAiOverride });
       }
       if (url === "/api/profile") {
         const b = await readBody(req);
-        saveProfile({
+        await saveProfile({
           nome: String(b.nome ?? "").trim(),
           matricula: String(b.matricula ?? "").trim(),
         });
@@ -473,7 +507,7 @@ const server = createServer(async (req, res) => {
       }
       if (url === "/api/ai-config") {
         const b = await readBody(req);
-        const cfg = loadAiConfig();
+        const cfg = await getAiConfig();
         const next = { ...cfg };
         if (b.model != null) next.model = String(b.model).trim() || cfg.model;
         if (b.temperature != null) {
@@ -493,7 +527,7 @@ const server = createServer(async (req, res) => {
             ...(b.activitySections as Partial<AiActivitySections>),
           };
         }
-        saveAiConfig(next);
+        await saveAiConfig(next);
         return json(res, 200, {
           ok: true,
           model: next.model,
@@ -508,32 +542,29 @@ const server = createServer(async (req, res) => {
         const id = Number(b.id);
         const answer = String(b.answer ?? "").trim();
         if (!id || !answer) return json(res, 400, { error: "answer required" });
-        const view = findView(id);
+        const view = await findView(id);
         if (!isAnswerable(view)) return json(res, 400, { error: "Esta atividade não aceita resposta por aqui." });
         const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
         const shown = view.kind === "quiz" ? humanizeQuizAnswer(answer, view.questions) : answer;
-        const rec = saveAnswerVersion(id, shown, "manual", undefined, selections);
+        const rec = await saveAnswerVersion(id, shown, "manual", undefined, selections);
         return json(res, 200, { ok: true, current: rec, history: rec.history, updatedAt: rec.updatedAt });
       }
       if (url === "/api/answer") {
         const b = await readBody(req);
         const id = Number(b.id);
-        const view = findView(id);
+        const view = await findView(id);
         if (!isAnswerable(view)) return json(res, 400, { error: "Esta atividade não aceita resposta por aqui." });
-        const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
-        const answer = await generateAnswer(cfg, view, view.aiRequestJson, loadProfile(), {}, view.notes);
-        const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
-        const shown = view.kind === "quiz" ? humanizeQuizAnswer(answer, view.questions) : answer;
-        const rec = saveAnswerVersion(id, shown, "ai", undefined, selections);
+        const { shown, rec } = await generateAndSave(id, view, {
+          model: b.model ? String(b.model) : undefined,
+        });
         return json(res, 200, { answer: shown, current: rec, history: rec.history, updatedAt: rec.updatedAt });
       }
       if (url === "/api/answer/stream") {
         // SSE: delta events while generating, then a final done event
         const b = await readBody(req);
         const id = Number(b.id);
-        const view = findView(id);
+        const view = await findView(id);
         if (!isAnswerable(view)) return json(res, 400, { error: "Esta atividade não aceita resposta por aqui." });
-        const cfg = { ...loadAiConfig(), ...(b.model ? { model: String(b.model) } : {}) };
 
         res.writeHead(200, {
           "content-type": "text/event-stream; charset=utf-8",
@@ -543,7 +574,8 @@ const server = createServer(async (req, res) => {
         const sendEvent = (payload: unknown) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
         sendEvent({ type: "start" });
         try {
-          const answer = await generateAnswer(cfg, view, view.aiRequestJson, loadProfile(), {
+          const { shown, rec } = await generateAndSave(id, view, {
+            model: b.model ? String(b.model) : undefined,
             onDelta: (delta) => {
               sendEvent({ type: "delta", delta });
               if (typeof (res as import("node:http").ServerResponse & { flush?: () => void }).flush === "function") {
@@ -554,10 +586,7 @@ const server = createServer(async (req, res) => {
                 }
               }
             },
-          }, view.notes);
-          const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
-          const shown = view.kind === "quiz" ? humanizeQuizAnswer(answer, view.questions) : answer;
-          const rec = saveAnswerVersion(id, shown, "ai", undefined, selections);
+          });
           sendEvent({ type: "done", answer: shown, current: rec, history: rec.history });
           res.end();
         } catch (err) {
@@ -573,7 +602,7 @@ const server = createServer(async (req, res) => {
         const answer = String(b.answer ?? "");
         const rawMode = String(b.mode ?? "");
         const mode: SendMode = rawMode === "text" || rawMode === "pdf" || rawMode === "txt" ? rawMode : "txt";
-        const view = findView(id);
+        const view = await findView(id);
         if (view.status === "done") return json(res, 400, { error: "Esta atividade já está concluída." });
         const env = sendEnv();
         if (!env.enabled) return json(res, 503, { error: env.reason });
@@ -586,28 +615,28 @@ const server = createServer(async (req, res) => {
             return json(res, 400, { error: "Não foi possível identificar as alternativas escolhidas na resposta." });
           const shown =
             answer.trim() || selections.map((s) => `Q${s.questionId}: ${s.letter}`).join(", ");
-          saveAnswerVersion(id, shown, "manual", undefined, selections);
+          await saveAnswerVersion(id, shown, "manual", undefined, selections);
         } else {
           if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de enviar." });
-          saveAnswerVersion(id, answer, "manual", undefined, []);
+          await saveAnswerVersion(id, answer, "manual", undefined, []);
         }
         try {
           let submission;
           if (view.kind === "quiz") {
-            submission = launchQuizSubmit(view, selections);
+            submission = await launchQuizSubmit(view, selections);
           } else if (view.kind === "forum") {
-            submission = launchForumSubmit(view, answer);
+            submission = await launchForumSubmit(view, answer);
           } else {
             let filePath: string | undefined;
             if (mode === "pdf") {
-              const pdf = await answerToPdf(answer, uploadBaseName(view));
+              const pdf = await answerToPdf(answer, await uploadBaseName(view));
               if (!pdf)
                 return json(res, 500, {
                   error: "Não foi possível gerar o PDF da resposta (LibreOffice indisponível?).",
                 });
               filePath = pdf;
             }
-            submission = launchUploadSubmit(view, answer, mode, filePath);
+            submission = await launchUploadSubmit(view, answer, mode, filePath);
           }
           return json(res, 200, {
             ok: true,
@@ -621,13 +650,13 @@ const server = createServer(async (req, res) => {
         const b = await readBody(req);
         const id = Number(b.id);
         if (!id) return json(res, 400, { error: "id obrigatório" });
-        const view = findView(id);
+        const view = await findView(id);
         if (view.kind !== "mark") return json(res, 400, { error: "Esta atividade não pode ser marcada por aqui." });
         if (view.status === "done") return json(res, 400, { error: "Esta atividade já está concluída." });
         const env = sendEnv();
         if (!env.enabled) return json(res, 503, { error: env.reason });
         try {
-          const submission = launchMarkComplete(view);
+          const submission = await launchMarkComplete(view);
           return json(res, 200, { ok: true, submission });
         } catch (err) {
           return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
@@ -637,7 +666,7 @@ const server = createServer(async (req, res) => {
 
     if (url.startsWith("/api/export/")) {
       const id = Number(url.split("/")[3]);
-      const view = enrich(loadExercises(), loadAnswers(), loadOverrides()).find((x) => x.id === id && !x.hidden);
+      const view = (await allViews()).find((x) => x.id === id);
       if (!view || !view.answer) return json(res, 404, { error: "no answer yet" });
       const md = `# ${view.title}\n\n${view.answer}\n`;
       res.writeHead(200, {
@@ -671,26 +700,42 @@ const server = createServer(async (req, res) => {
   }
 });
 
+/** Import the scraped catalog once, when the database has no content yet. */
+async function ensureImported(): Promise<void> {
+  const rows = await query<{ n: string }>("SELECT count(*)::text AS n FROM content_item");
+  if (Number(rows[0]?.n ?? "0") > 0) return;
+  if (!existsSync(raw("content-tree.json"))) return;
+  console.log("   db: no content imported yet — importing scraped data…");
+  const summary = await importAll();
+  console.log(`   db: imported ${summary.items} item(s), ${summary.professors} professor(s).`);
+}
+
+/** Rebuild `exercises.json` whenever the DB catalog version no longer matches. */
+async function ensureProjection(): Promise<void> {
+  const desired = await getCatalogVersion();
+  const meta = readProjectionMeta();
+  if (existsSync(ASSISTANT_EXERCISES_FILE) && meta?.catalogVersion === desired) return;
+  try {
+    const { count } = await writeProjection();
+    console.log(`   index: projected ${count} exercise(s) (cache ${meta ? "stale" : "missing"}).`);
+  } catch (err) {
+    console.warn(`   index: could not build (${err instanceof Error ? err.message : String(err)})`);
+  }
+}
+
 /**
- * Postgres is required: verify the connection, apply migrations, and build the
- * UI cache once when it is missing (fresh clone). Then start serving.
+ * Postgres is required: verify the connection, apply migrations, import the
+ * scraped catalog when empty, then (re)build the UI cache when stale. Start.
  */
 async function bootstrap(): Promise<void> {
   await healthCheck();
   await runMigrations();
-  if (!existsSync(ASSISTANT_EXERCISES_FILE) && existsSync(raw("content-tree.json"))) {
-    try {
-      console.log("   index: building exercises.json from the database…");
-      const { count } = await writeProjection();
-      console.log(`   index: ${count} exercise(s) projected.`);
-    } catch (err) {
-      console.warn(`   index: could not build (${err instanceof Error ? err.message : String(err)})`);
-    }
-  }
+  await ensureImported();
+  await ensureProjection();
   server.listen(PORT, () => {
     console.log(`\n📝 Pauta (LXP ToolKit) → http://localhost:${PORT}`);
     console.log(`   data: ${dataDir()}`);
-    console.log(`   ai config: ${assist("config", "ai-config.json")}`);
+    console.log(`   ai config: Postgres · ai_config`);
     console.log(`   openai key: …${openaiKeyLast4()} (fonte: ${openaiKeySource()})\n`);
   });
 }

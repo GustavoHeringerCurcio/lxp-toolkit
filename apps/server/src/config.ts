@@ -1,3 +1,12 @@
+/**
+ * LEGACY JSON layer.
+ *
+ * Runtime state (answers, submissions, overrides, profile, AI config) is now
+ * written to Postgres via `store.ts`. This module is kept for:
+ *   1. the one-time import (`import.ts`) that reads pre-existing personal data, and
+ *   2. the isolated unit tests of the old file format.
+ * The `save*` helpers below are no longer called by the application.
+ */
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { assist } from "./paths.js";
 import type {

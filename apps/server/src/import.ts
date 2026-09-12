@@ -116,12 +116,12 @@ async function ensureInstitution(): Promise<number> {
 async function ensureStudent(institutionId: number): Promise<number> {
   const existing = await query<{ id: string }>("SELECT id FROM student ORDER BY id LIMIT 1");
   if (existing.length > 0) {
+    // Postgres owns the profile now: never overwrite it from the legacy JSON.
     const id = Number(existing[0].id);
-    const profile = loadProfile();
-    await query(
-      "UPDATE student SET institution_id = $2, name = COALESCE(NULLIF($3,''), name), matricula = COALESCE(NULLIF($4,''), matricula), updated_at = now() WHERE id = $1",
-      [id, institutionId, profile.nome, profile.matricula],
-    );
+    await query("UPDATE student SET institution_id = $2, updated_at = now() WHERE id = $1", [
+      id,
+      institutionId,
+    ]);
     return id;
   }
   const profile = loadProfile();
@@ -412,14 +412,11 @@ async function appendStateIfChanged(client: PoolClient, item: RawItem, studentId
 
 // ── Legacy JSON backfill ────────────────────────────────────────────────────
 
-async function hasAttempts(itemId: number, studentId: number): Promise<boolean> {
-  const rows = await query<{ n: string }>(
-    "SELECT count(*)::text AS n FROM answer_attempt WHERE content_item_id = $1 AND student_id = $2",
-    [itemId, studentId],
-  );
-  return Number(rows[0]?.n ?? "0") > 0;
-}
-
+/**
+ * Reconcile the legacy `answers.json` into Postgres. Idempotent: attempts are
+ * matched by (item, content, created_at) so a re-run inserts nothing new; the
+ * version the JSON marks as current becomes `is_current`.
+ */
 async function backfillAnswers(studentId: number): Promise<number> {
   const answers = loadAnswers();
   let imported = 0;
@@ -431,35 +428,52 @@ async function backfillAnswers(studentId: number): Promise<number> {
       [itemId],
     );
     if (Number(exists[0]?.n ?? "0") === 0) continue;
-    if (await hasAttempts(itemId, studentId)) continue;
 
     const versions = [
       ...(rec.history ?? []).map((h) => ({ ...h, current: false })),
       { answer: rec.answer, updatedAt: rec.updatedAt, source: rec.source, selections: rec.selections, current: true },
     ];
+
+    let currentAttemptId: number | null = null;
     for (const v of versions) {
-      const inserted = await query<{ id: string }>(
-        `INSERT INTO answer_attempt(student_id, content_item_id, created_at, source, content, is_current)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-        [
-          studentId,
-          itemId,
-          v.updatedAt ? new Date(v.updatedAt) : new Date(),
-          v.source === "manual" ? "manual" : "ai",
-          v.answer ?? "",
-          v.current,
-        ],
+      const createdAt = v.updatedAt ? new Date(v.updatedAt) : new Date();
+      const content = v.answer ?? "";
+      const found = await query<{ id: string }>(
+        `SELECT id FROM answer_attempt
+         WHERE content_item_id = $1 AND student_id = $2 AND content = $3 AND created_at = $4
+         ORDER BY id LIMIT 1`,
+        [itemId, studentId, content, createdAt],
       );
-      const attemptId = Number(inserted[0].id);
-      for (let i = 0; i < (v.selections ?? []).length; i++) {
-        const s = v.selections![i];
-        await query(
-          `INSERT INTO answer_selection(answer_attempt_id, question_id, option_id, letter, position)
-           VALUES ($1,$2,$3,$4,$5)`,
-          [attemptId, s.questionId ?? null, s.optionId ?? null, s.letter ?? null, i],
+
+      let attemptId: number;
+      if (found[0]) {
+        attemptId = Number(found[0].id);
+      } else {
+        const inserted = await query<{ id: string }>(
+          `INSERT INTO answer_attempt(student_id, content_item_id, created_at, source, content, is_current)
+           VALUES ($1,$2,$3,$4,$5,false) RETURNING id`,
+          [studentId, itemId, createdAt, v.source === "manual" ? "manual" : "ai", content],
         );
+        attemptId = Number(inserted[0].id);
+        imported++;
+        for (let i = 0; i < (v.selections ?? []).length; i++) {
+          const s = v.selections![i];
+          await query(
+            `INSERT INTO answer_selection(answer_attempt_id, question_id, option_id, letter, position)
+             VALUES ($1,$2,$3,$4,$5)`,
+            [attemptId, s.questionId ?? null, s.optionId ?? null, s.letter ?? null, i],
+          );
+        }
       }
-      imported++;
+      if (v.current) currentAttemptId = attemptId;
+    }
+
+    if (currentAttemptId != null) {
+      await query(
+        `UPDATE answer_attempt SET is_current = (id = $3)
+         WHERE content_item_id = $1 AND student_id = $2`,
+        [itemId, studentId, currentAttemptId],
+      );
     }
   }
   return imported;
@@ -476,22 +490,23 @@ async function backfillSubmissions(studentId: number): Promise<number> {
       [itemId],
     );
     if (Number(exists[0]?.n ?? "0") === 0) continue;
-    const already = await query<{ n: string }>(
-      "SELECT count(*)::text AS n FROM submission WHERE content_item_id = $1 AND student_id = $2",
-      [itemId, studentId],
-    );
-    if (Number(already[0]?.n ?? "0") > 0) continue;
 
     for (const e of entries) {
+      const at = e.at ? new Date(e.at) : new Date();
+      const found = await query<{ id: string }>(
+        "SELECT id FROM submission WHERE content_item_id = $1 AND student_id = $2 AND at = $3 LIMIT 1",
+        [itemId, studentId, at],
+      );
+      if (found[0]) continue;
       await query(
         `INSERT INTO submission(
            student_id, content_item_id, at, status, mode, attachment_name,
-           attempt_number, detail, portal_detail, confirmation_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+           attempt_number, detail, portal_detail, confirmation_at, answer)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
         [
           studentId,
           itemId,
-          e.at ? new Date(e.at) : new Date(),
+          at,
           e.status,
           e.mode ?? null,
           e.attachmentName ?? null,
@@ -499,6 +514,7 @@ async function backfillSubmissions(studentId: number): Promise<number> {
           e.detail ?? null,
           e.portalDetail ?? null,
           e.confirmationAt ? new Date(e.confirmationAt) : null,
+          e.answer ?? null,
         ],
       );
       imported++;
@@ -556,18 +572,17 @@ async function backfillOverrides(studentId: number): Promise<number> {
 }
 
 async function importAiConfig(studentId: number): Promise<void> {
+  // Postgres is the source of truth: only seed from the legacy JSON file when
+  // the row is absent, so runtime edits are never clobbered by an index run.
+  const existing = await query<{ n: string }>(
+    "SELECT count(*)::text AS n FROM ai_config WHERE student_id = $1",
+    [studentId],
+  );
+  if (Number(existing[0]?.n ?? "0") > 0) return;
   const cfg = loadAiConfig();
   await query(
     `INSERT INTO ai_config(student_id, provider, model, temperature, max_output_tokens, style_json, sections_json, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7, now())
-     ON CONFLICT (student_id) DO UPDATE SET
-       provider = EXCLUDED.provider,
-       model = EXCLUDED.model,
-       temperature = EXCLUDED.temperature,
-       max_output_tokens = EXCLUDED.max_output_tokens,
-       style_json = EXCLUDED.style_json,
-       sections_json = EXCLUDED.sections_json,
-       updated_at = now()`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7, now())`,
     [
       studentId,
       cfg.provider,
