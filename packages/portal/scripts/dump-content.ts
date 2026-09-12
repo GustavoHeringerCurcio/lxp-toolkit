@@ -1,7 +1,13 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { createSession, closeSession } from "../src/session.js";
-import { collectContent, parseQuizQuestions, type ContentCourse, type ContentItem } from "../src/content.js";
+import {
+  collectContent,
+  parseForumInfo,
+  parseQuizQuestions,
+  type ContentCourse,
+  type ContentItem,
+} from "../src/content.js";
 import { downloadPdf } from "../src/actions.js";
 import { config, logger } from "../src/config.js";
 import { codeBlock, htmlToMarkdown, tableCell } from "../src/markdown.js";
@@ -63,14 +69,44 @@ function renderUploadDetails(item: ContentItem): string[] {
 }
 
 function renderLinks(item: ContentItem): string[] {
-  if (item.links.length === 0) return [];
-  const lines: string[] = [];
-  lines.push("## Links");
-  lines.push("");
-  for (const l of item.links) {
-    lines.push(`- [${l.title || l.url}](${l.url})${l.type ? ` — \`${l.type}\`` : ""}`);
+  if (item.links.length > 0) {
+    const lines: string[] = [];
+    lines.push("## Links");
+    lines.push("");
+    for (const l of item.links) {
+      lines.push(`- [${l.title || l.url}](${l.url})${l.type ? ` — \`${l.type}\`` : ""}`);
+    }
+    lines.push("");
+    return lines;
   }
+  return renderForumDetails(item);
+}
+
+function renderForumDetails(item: ContentItem): string[] {
+  const info = parseForumInfo(item.content);
+  if (item.kind !== "forum" || !info) return [];
+  const lines: string[] = [];
+  lines.push("## Forum details");
   lines.push("");
+  lines.push("| Field | Value |");
+  lines.push("|---|---|");
+  lines.push(`| countPosts | ${info.countPosts} (mine: ${info.countOfMyPosts}) |`);
+  lines.push(`| isAllowLikes | ${info.isAllowLikes} |`);
+  lines.push(`| isToLimitResponses | ${info.isToLimitResponses} (maxAnswerPerStudent=${info.maxAnswerPerStudent}) |`);
+  lines.push(`| isOnlyVisibleToPeopleWithPost | ${info.isOnlyVisibleToPeopleWithPost} |`);
+  lines.push(`| hasReachedPostLimit | ${info.hasReachedPostLimit} |`);
+  lines.push("");
+
+  const renderPost = (indent: string, p: (typeof info.posts)[number]): void => {
+    if (p.isDeleted) return;
+    const who = `${p.postOwnerUsername}${p.postOwnerSafeaRole && p.postOwnerSafeaRole !== "student" ? ` (${p.postOwnerRoleName ?? p.postOwnerSafeaRole})` : ""}`;
+    lines.push(`### ${indent}Post ${p.id} — ${who} — ${p.createdAt}${p.isEdited ? " (edited)" : ""}`);
+    lines.push("");
+    lines.push(htmlToMarkdown(p.html));
+    lines.push("");
+    for (const c of p.children) renderPost(`${indent}↳ `, c);
+  };
+  for (const p of info.posts) renderPost("", p);
   return lines;
 }
 

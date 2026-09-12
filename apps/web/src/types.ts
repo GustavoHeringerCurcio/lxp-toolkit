@@ -1,4 +1,4 @@
-export type ExerciseKind = "quiz" | "upload" | "mark" | "other";
+export type ExerciseKind = "quiz" | "upload" | "mark" | "forum" | "other";
 export type ContentKind = "pdf" | "reading" | "quiz" | "file_upload" | "link" | "forum" | "other";
 export type ExerciseStatus = "done" | "expired" | "open";
 export type AnswerSource = "ai" | "manual";
@@ -45,6 +45,38 @@ export interface QuizSelection {
   optionId: number;
 }
 
+/** One forum publication (top-level post or nested reply via `children`). */
+export interface ForumPost {
+  id: number;
+  topicId: number;
+  html: string;
+  createdAt: string;
+  updatedAt: string;
+  isEdited: boolean;
+  enrollmentId: number;
+  parentPostId: number | null;
+  isHidden: boolean;
+  isDeleted: boolean;
+  postOwnerUsername: string;
+  postOwnerProfilePhoto: string | null;
+  postOwnerSafeaRole: string | null;
+  postOwnerRoleName: string | null;
+  children: ForumPost[];
+  enrollmentIdsWhoLiked: number[];
+}
+
+/** Forum state (from the topic detail `content` + dump-time thread fetch). */
+export interface ForumInfo {
+  countPosts: number;
+  countOfMyPosts: number;
+  isAllowLikes: boolean;
+  isToLimitResponses: boolean;
+  maxAnswerPerStudent: number;
+  isOnlyVisibleToPeopleWithPost: boolean;
+  hasReachedPostLimit: boolean;
+  posts: ForumPost[];
+}
+
 export interface Exercise {
   id: number;
   title: string;
@@ -69,6 +101,8 @@ export interface Exercise {
   remoteFiles: RemoteFile[];
   instructionsText: string;
   questions: QuizQ[];
+  /** Forum state when `contentKind === "forum"`, else null. */
+  forum: ForumInfo | null;
   answer: string | null;
   answerSource: AnswerSource | null;
   selections: QuizSelection[];

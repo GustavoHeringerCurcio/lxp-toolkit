@@ -11,6 +11,7 @@ import { NoData } from "@/components/state-screens";
 const TYPE_COLOR: Record<ExerciseKind, string> = {
   quiz: "bg-info",
   upload: "bg-brand",
+  forum: "bg-coming",
   mark: "bg-ok",
   other: "bg-none",
 };
@@ -63,7 +64,7 @@ export function ProgressoPage() {
   }, [items]);
 
   const types = useMemo(() => {
-    const c: Record<ExerciseKind, number> = { quiz: 0, upload: 0, mark: 0, other: 0 };
+    const c: Record<ExerciseKind, number> = { quiz: 0, upload: 0, forum: 0, mark: 0, other: 0 };
     for (const e of items) c[e.kind] += 1;
     return KIND_ORDER.map((k) => ({ kind: k, count: c[k] }));
   }, [items]);

@@ -185,6 +185,57 @@ export function launchQuizSubmit(
 }
 
 /**
+ * Writes the request file and spawns the root runner to publish a forum reply.
+ * The runner fresh-logins, posts through the enrollment-scoped endpoint and
+ * verifies against the thread; falls back to the SPA composer when rejected.
+ */
+export function launchForumSubmit(
+  view: { id: number; courseId: number; title: string; enrollmentId: number | null },
+  answerText: string,
+): SubmissionEntry {
+  const env = sendEnv();
+  if (!env.enabled || !env.rootDir) {
+    throw new Error(env.reason || "runner não configurado");
+  }
+
+  const at = Date.now();
+  const dir = assist("data", "send");
+  mkdirSync(dir, { recursive: true });
+  const reqFile = path.join(dir, `req-${view.id}-${at}.json`);
+  const resFile = path.join(dir, `res-${view.id}-${at}.json`);
+
+  writeFileSync(
+    reqFile,
+    JSON.stringify(
+      {
+        action: "forum",
+        courseId: view.courseId,
+        itemId: view.id,
+        enrollmentId: view.enrollmentId ?? undefined,
+        answer: answerText,
+      },
+      null,
+      2,
+    ),
+    "utf-8",
+  );
+
+  const entry: SubmissionEntry = {
+    exerciseId: view.id,
+    at: new Date().toISOString(),
+    status: "running",
+    detail: "aguardando login no portal…",
+    answer: answerText,
+    mode: "text",
+  };
+  pushSubmission(entry);
+
+  spawnRunner(env.rootDir, reqFile, resFile, entry);
+
+  return entry;
+}
+
+/**
  * Writes the request file and spawns the root runner to "mark as completed" a
  * recordable content item (reading/pdf/link/other). The runner fresh-logins and
  * POSTs the progress endpoint; no answer is involved.

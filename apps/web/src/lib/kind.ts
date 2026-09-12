@@ -1,4 +1,4 @@
-import { CircleCheckBig, ListChecks, MessagesSquare, Upload, type LucideIcon } from "lucide-react";
+import { CircleCheckBig, ListChecks, MessagesSquare, Upload, FileQuestion, type LucideIcon } from "lucide-react";
 import type { ContentKind, ExerciseKind } from "@/types";
 import type { TranslateFn } from "./i18n";
 
@@ -46,10 +46,19 @@ export const KIND_META: Record<ExerciseKind, KindMeta> = {
     canAnswer: false,
     canMark: true,
   },
+  forum: {
+    label: "Fórum",
+    short: "Fórum",
+    icon: MessagesSquare,
+    badgeClass: "border-brand/25 bg-brand/10 text-brand",
+    tileClass: "bg-brand/15 text-brand",
+    canAnswer: true,
+    canMark: false,
+  },
   other: {
     label: "Outro",
     short: "Outro",
-    icon: MessagesSquare,
+    icon: FileQuestion,
     badgeClass: "border-border bg-muted/50 text-muted-foreground",
     tileClass: "bg-muted/50 text-muted-foreground",
     canAnswer: false,
@@ -57,7 +66,7 @@ export const KIND_META: Record<ExerciseKind, KindMeta> = {
   },
 };
 
-export const KIND_ORDER: ExerciseKind[] = ["quiz", "upload", "mark", "other"];
+export const KIND_ORDER: ExerciseKind[] = ["quiz", "upload", "forum", "mark", "other"];
 
 /** Finer label for the raw content classification. */
 export const CONTENT_LABEL: Record<ContentKind, string> = {

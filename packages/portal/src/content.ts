@@ -30,6 +30,40 @@ export interface LinkItem {
   html: string | null;
 }
 
+/** One forum publication (top-level post or nested reply via `children`). */
+export interface ForumPost {
+  id: number;
+  topicId: number;
+  html: string;
+  createdAt: string;
+  updatedAt: string;
+  isEdited: boolean;
+  /** Author enrollment — the id that appears in `enrollmentIdsWhoLiked`. */
+  enrollmentId: number;
+  /** `null` = top-level post; set = reply to another post. */
+  parentPostId: number | null;
+  isHidden: boolean;
+  isDeleted: boolean;
+  postOwnerUsername: string;
+  postOwnerProfilePhoto: string | null;
+  postOwnerSafeaRole: string | null;
+  postOwnerRoleName: string | null;
+  children: ForumPost[];
+  enrollmentIdsWhoLiked: number[];
+}
+
+/** Forum state as exposed by the topic detail `content` object. */
+export interface ForumInfo {
+  countPosts: number;
+  countOfMyPosts: number;
+  isAllowLikes: boolean;
+  isToLimitResponses: boolean;
+  maxAnswerPerStudent: number;
+  isOnlyVisibleToPeopleWithPost: boolean;
+  hasReachedPostLimit: boolean;
+  posts: ForumPost[];
+}
+
 export interface ContentItem {
   courseId: number;
   courseName: string;
@@ -170,6 +204,57 @@ export function parseLinks(content: Record<string, unknown> | null | undefined):
       html: raw.html != null ? String(raw.html) : null,
     };
   });
+}
+
+/** Count top-level + nested posts authored by the given enrollment. */
+export function countMyPosts(posts: ForumPost[], enrollmentId: number): number {
+  return posts.reduce(
+    (n, p) => n + (p.enrollmentId === enrollmentId && !p.isDeleted ? 1 : 0) + countMyPosts(p.children, enrollmentId),
+    0,
+  );
+}
+
+/** Parse the `content.posts[]` array of a forum topic detail. */
+export function parseForumPosts(raw: unknown): ForumPost[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((p) => {
+    const r = p as Record<string, unknown>;
+    return {
+      id: Number(r.id),
+      topicId: Number(r.topicId ?? 0),
+      html: String(r.html ?? ""),
+      createdAt: String(r.createdAt ?? ""),
+      updatedAt: String(r.updatedAt ?? ""),
+      isEdited: r.isEdited === true,
+      enrollmentId: Number(r.enrollmentId ?? 0),
+      parentPostId: r.parentPostId != null ? Number(r.parentPostId) : null,
+      isHidden: r.isHidden === true,
+      isDeleted: r.isDeleted === true,
+      postOwnerUsername: String(r.postOwnerUsername ?? ""),
+      postOwnerProfilePhoto: r.postOwnerProfilePhoto != null ? String(r.postOwnerProfilePhoto) : null,
+      postOwnerSafeaRole: r.postOwnerSafeaRole != null ? String(r.postOwnerSafeaRole) : null,
+      postOwnerRoleName: r.postOwnerRoleName != null ? String(r.postOwnerRoleName) : null,
+      children: parseForumPosts(r.children),
+      enrollmentIdsWhoLiked: Array.isArray(r.enrollmentIdsWhoLiked)
+        ? r.enrollmentIdsWhoLiked.map(Number)
+        : [],
+    };
+  });
+}
+
+/** Extract the forum state from a topic-detail `content` object (null when not a forum). */
+export function parseForumInfo(content: Record<string, unknown> | null | undefined): ForumInfo | null {
+  if (!content || !("countPosts" in content) || !("posts" in content)) return null;
+  return {
+    countPosts: Number(content.countPosts ?? 0),
+    countOfMyPosts: Number(content.countOfMyPosts ?? 0),
+    isAllowLikes: content.isAllowLikes === true,
+    isToLimitResponses: content.isToLimitResponses === true,
+    maxAnswerPerStudent: Number(content.maxAnswerPerStudent ?? 0),
+    isOnlyVisibleToPeopleWithPost: content.isOnlyVisibleToPeopleWithPost === true,
+    hasReachedPostLimit: content.hasReachedPostLimit === true,
+    posts: parseForumPosts(content.posts),
+  };
 }
 
 export function classify(topicTypeId: number, progressTypeId: number, hasPdf: boolean): ContentKind {
@@ -393,6 +478,37 @@ export async function collectContent(
       const done = isDone(leaf);
       return { ...leaf, kind, done, attachments, html, content, context, links, studentGrade };
     });
+
+    // Forum threads: the topic detail carries counts but the posts live at an
+    // enrollment-scoped endpoint (GET .../enrollment/{eid}/topic/{tid}/post —
+    // confirmed live, works with the bearer token alone, paginated).
+    for (const forum of items.filter((it) => it.kind === "forum")) {
+      const enrollmentId = forum.context?.enrollmentId;
+      if (enrollmentId == null) continue;
+      try {
+        const expected = Number(forum.content?.countPosts ?? 0);
+        const all: ForumPost[] = [];
+        for (let pageIdx = 1; pageIdx <= 10; pageIdx++) {
+          const res = await client.get<unknown>(
+            `/v1/plataforma/content/enrollment/${Number(enrollmentId)}/topic/${forum.itemId}/post?page=${pageIdx}&perPage=50`,
+          );
+          const batch = parseForumPosts(res.data);
+          all.push(...batch);
+          if (batch.length === 0 || (expected > 0 && all.length >= expected)) break;
+        }
+        const mine = countMyPosts(all, Number(enrollmentId));
+        forum.content = {
+          ...(forum.content ?? {}),
+          posts: all as unknown as Record<string, unknown>[],
+        };
+        // Posting is the forum's completion signal.
+        if (mine > 0 || Number(forum.content?.countOfMyPosts ?? 0) > 0) {
+          forum.done = true;
+        }
+      } catch (err) {
+        logger.warn({ itemId: forum.itemId, err }, "failed to fetch forum posts");
+      }
+    }
 
     result.push({ courseId: course.id, courseName: course.name, items });
     logger.info({ course: course.name, items: items.length }, "course content collected");

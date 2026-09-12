@@ -5,6 +5,7 @@ export const KIND_LABEL: Record<ExerciseKind, string> = {
   quiz: "Quiz",
   upload: "Tarefa (envio de arquivo)",
   mark: "Marcar como concluída",
+  forum: "Fórum",
   other: "Outro",
 };
 
@@ -23,7 +24,7 @@ export function kindLabel(kind: ExerciseKind): string {
   return KIND_LABEL[kind];
 }
 
-/** Only tasks/quizzes have AI-answerable content. */
+/** Tasks, quizzes and forums have AI-answerable content. */
 export function isAnswerable(kind: ExerciseKind): boolean {
-  return kind === "quiz" || kind === "upload";
+  return kind === "quiz" || kind === "upload" || kind === "forum";
 }

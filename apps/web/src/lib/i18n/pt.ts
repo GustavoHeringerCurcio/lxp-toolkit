@@ -183,6 +183,7 @@ export const pt = {
   "send.howSurvey":
     "Sua conta LXP abre e a resposta é enviada direto ao endpoint da pesquisa (sem tentativa/nota).",
   "send.howQuiz": "Sua conta LXP abre, as alternativas são marcadas e o questionário é enviado.",
+  "send.howForum": "Sua conta LXP abre e a resposta é publicada no fórum como uma nova publicação sua.",
   "send.howText": "Sua conta LXP abre e o texto é digitado direto no campo de resposta do portal.",
   "send.howPdf": "Sua conta LXP abre, o texto é convertido em PDF e anexado à resposta.",
   "send.howTxt": "Sua conta LXP abre, o texto é anexado como arquivo (.txt) e entregue.",
@@ -213,6 +214,8 @@ export const pt = {
   "draft.copy": "copiar",
   "draft.uploadPlaceholder":
     "Escreva a resposta para entregar — ou gere com a IA e revise antes de enviar.",
+  "draft.forumPlaceholder":
+    "Escreva sua publicação no fórum — ou gere com a IA e revise antes de publicar.",
   "draft.quizHint":
     "Clique em “Gerar rascunho” — a alternativa escolhida aparece destacada em verde nas questões.",
 
@@ -237,6 +240,13 @@ export const pt = {
   "exercise.instructions": "Enunciado",
   "exercise.files": "Arquivos",
   "exercise.questions": "Questões",
+
+  // forum thread
+  "forum.title": "Publicações",
+  "forum.count": "{{n}} publicações",
+  "forum.firstPost": "O fórum ainda não tem publicações — a sua será a primeira.",
+  "forum.notLoaded": "Sem publicações carregadas — atualize o conteúdo para sincronizar o tópico.",
+  "forum.edited": "editado",
 
   // file preview
   "files.previewUnavailable": "pré-visualização indisponível · abrir",
@@ -380,6 +390,8 @@ export const pt = {
   "kind.upload.short": "Tarefa",
   "kind.mark.label": "Marcar como concluída",
   "kind.mark.short": "Marcar",
+  "kind.forum.label": "Fórum",
+  "kind.forum.short": "Fórum",
   "kind.other.label": "Outro",
   "kind.other.short": "Outro",
 

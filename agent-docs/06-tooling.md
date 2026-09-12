@@ -17,15 +17,17 @@ cp packages/portal/.env.example packages/portal/.env    # then fill LXP_USERNAME
 | Script | File | What it does |
 |---|---|---|
 | `login` | `packages/portal/scripts/login.ts` | interactive login; saves a session to `data/storageState.json` (legacy; scripts re-login each run anyway) |
-| `dump` | `packages/portal/scripts/dump-content.ts` | scrape all your course content (quizzes, uploads, links) + download attachments → `scraped/courses/**` + `scraped/raw/content-tree.json` |
+| `dump` | `packages/portal/scripts/dump-content.ts` | scrape all your course content (quizzes, uploads, links, **forum threads**) + download attachments → `scraped/courses/**` + `scraped/raw/content-tree.json` |
 | `dump-surfaces` | `packages/portal/scripts/dump-surfaces.ts` | scrape grades, calendar, notices, messages, achievements, communities, LTI → `scraped/*.md` + `scraped/raw/surfaces.json` |
 | `crawl-routes` | `packages/portal/scripts/crawl-routes.ts` | capture SPA pages via client-side nav → `scraped/routes/**` + `scraped/portal-map.md` |
 | `capture-api` | `packages/portal/scripts/capture-api.ts` | record network traffic → `scraped/api-captured.md` + `scraped/raw/api-calls.json` |
+| `capture-forum` | `packages/portal/scripts/capture-forum.ts` | headful forum capture that finishes by itself (no Enter): polls until a write request is seen → `scraped/forum-captured.md` + `scraped/raw/api-calls-forum.json` |
+| `capture-forum-write` | `packages/portal/scripts/capture-forum-write.ts` | forum write-discovery: dumps the thread via the read action, spy-wraps all forum Vuex actions, waits for a manual UI post → `scraped/raw/forum-write-spy.json` + `api-calls-forum-write.json` |
 | `agent` | `packages/portal/scripts/agent.ts` | list actionable items; `--read`/`--complete` auto-completes undone readings **and** all "Mark as completed" content (pdf/link/rich); `--dry-run` previews |
 | `index` | `packages/portal/scripts/build-homework-index.ts` | build `scraped/raw/homework-index.json` (topic-linked: upload ↔ section ↔ sibling content ↔ local files) |
 | `homework` | `packages/portal/scripts/homework.ts` | friendly terminal board of open homework (grouped by section, sorted by due date); `--fresh`, `--json` |
 | `exercises` | `packages/portal/scripts/exercises.ts` | read-only: `npm run exercises -- <itemId>` prints a quiz's questions or an upload's info |
-| `submit-task` | `packages/portal/scripts/submit-task.ts` | gated browser runner (spawned by the server's `/api/send`): fresh login → SPA-nav to the task → deliver the answer. Uploads support `text` (typed into the portal's rich-text reply editor), `txt` and `pdf` attachments; quizzes select options. |
+| `submit-task` | `packages/portal/scripts/submit-task.ts` | gated browser runner (spawned by the server's `/api/send`): fresh login → SPA-nav to the task → deliver the answer. Uploads support `text` (typed into the portal's rich-text reply editor), `txt` and `pdf` attachments; quizzes select options; **forums** publish via the enrollment-scoped post endpoint (verified by re-reading the thread) with an SPA-composer fallback. |
 | `typecheck` | — | `tsc --noEmit` (run after any code change) |
 
 ## Architecture (packages/portal/src/)

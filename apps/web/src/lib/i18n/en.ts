@@ -179,6 +179,7 @@ export const en: Dict = {
   "send.howSurvey":
     "Your LXP account opens and the answer is sent straight to the survey endpoint (no attempt/grade).",
   "send.howQuiz": "Your LXP account opens, the choices are selected and the quiz is submitted.",
+  "send.howForum": "Your LXP account opens and the reply is posted to the forum as a new post of yours.",
   "send.howText": "Your LXP account opens and the text is typed straight into the portal's answer field.",
   "send.howPdf": "Your LXP account opens, the text is converted to PDF and attached to the answer.",
   "send.howTxt": "Your LXP account opens, the text is attached as a file (.txt) and delivered.",
@@ -209,6 +210,8 @@ export const en: Dict = {
   "draft.copy": "copy",
   "draft.uploadPlaceholder":
     "Write the answer to submit — or generate it with AI and review before sending.",
+  "draft.forumPlaceholder":
+    "Write your forum post — or generate it with AI and review before posting.",
   "draft.quizHint":
     "Click “Generate draft” — the selected option appears highlighted in green in the questions.",
 
@@ -232,6 +235,13 @@ export const en: Dict = {
   "exercise.collapseDetails": "Collapse details",
   "exercise.instructions": "Instructions",
   "exercise.files": "Files",
+
+  // forum thread
+  "forum.title": "Posts",
+  "forum.count": "{{n}} posts",
+  "forum.firstPost": "The forum has no posts yet — yours will be the first.",
+  "forum.notLoaded": "No posts loaded — refresh the content to sync the topic.",
+  "forum.edited": "edited",
   "exercise.questions": "Questions",
 
   // file preview
@@ -376,6 +386,8 @@ export const en: Dict = {
   "kind.upload.short": "Assignment",
   "kind.mark.label": "Mark as completed",
   "kind.mark.short": "Mark",
+  "kind.forum.label": "Forum",
+  "kind.forum.short": "Forum",
   "kind.other.label": "Other",
   "kind.other.short": "Other",
 

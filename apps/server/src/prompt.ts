@@ -1,4 +1,4 @@
-import type { AiActivitySections, AiProfile, AiStyle, Exercise, QuizQ, QuizSelection } from "./types.js";
+import type { AiActivitySections, AiProfile, AiStyle, Exercise, ForumPost, QuizQ, QuizSelection } from "./types.js";
 import { DEFAULT_ACTIVITY_SECTIONS } from "./config.js";
 import { kindLabel } from "./kind.js";
 import { extractFileText } from "./pdf.js";
@@ -23,6 +23,8 @@ export interface PromptVars {
   arquivos: string;
   questoes: string;
   observacoes: string;
+  /** Forum thread (question + existing posts); empty for non-forum items. */
+  forum: string;
 }
 
 /** Replace every supported {placeholder} in the given text. */
@@ -38,6 +40,7 @@ export function renderTemplate(text: string, vars: PromptVars): string {
     .replaceAll("{arquivos}", vars.arquivos)
     .replaceAll("{questoes}", vars.questoes)
     .replaceAll("{observacoes}", vars.observacoes)
+    .replaceAll("{forum}", vars.forum)
     .trim();
 }
 
@@ -147,6 +150,7 @@ export function buildActivityPrompt(vars: PromptVars, sections: AiActivitySectio
     `Módulo: ${vars.modulo}`,
   ];
   if (sections.enunciado && vars.enunciado.trim()) blocks.push(`Enunciado:\n${vars.enunciado.trim()}`);
+  if (vars.forum.trim()) blocks.push(`Publicações no fórum:\n${vars.forum.trim()}`);
   if (sections.arquivos && vars.arquivos.trim())
     blocks.push(`Arquivos anexados:\n${vars.arquivos.trim()}`);
   if (sections.questoes && vars.questoes.trim()) blocks.push(`Questões:\n${vars.questoes.trim()}`);
@@ -167,7 +171,9 @@ export async function buildPromptVars(
       ? "tarefa com envio de arquivo"
       : e.kind === "quiz"
         ? "questionário/quiz"
-        : kindLabel(e.kind);
+        : e.kind === "forum"
+          ? "publicação em fórum de discussão"
+          : kindLabel(e.kind);
   const modulo = e.moduleTitle + (e.sectionTitle ? ` — ${e.sectionTitle}` : "");
 
   let arquivos = "";
@@ -203,6 +209,33 @@ export async function buildPromptVars(
     questoes = lines.join("\n");
   }
 
+  // Forum thread: the professor's question (enunciado) + the existing posts,
+  // so the reply can be contextual (agree/complement, never duplicate).
+  let forum = "";
+  if (e.kind === "forum" && e.forum) {
+    const strip = (html: string): string =>
+      html
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/\s+/g, " ")
+        .trim();
+    const lines: string[] = [];
+    const renderPost = (depth: number, p: ForumPost): void => {
+      if (p.isDeleted) return;
+      const indent = "  ".repeat(depth);
+      const who = p.postOwnerSafeaRole && p.postOwnerSafeaRole !== "student"
+        ? `${p.postOwnerUsername} (${p.postOwnerRoleName ?? p.postOwnerSafeaRole})`
+        : p.postOwnerUsername;
+      lines.push(`${indent}- ${who} em ${p.createdAt}:`);
+      lines.push(`${indent}  ${strip(p.html)}`);
+      for (const c of p.children) renderPost(depth + 1, c);
+    };
+    for (const p of e.forum.posts) renderPost(0, p);
+    const header = lines.length ? "" : "(O fórum ainda não tem publicações — a sua será a primeira.)";
+    forum = (header ? header + "\n" : "") + lines.join("\n");
+  }
+
   return {
     nome: profile.nome ?? "",
     matricula: profile.matricula ?? "",
@@ -213,6 +246,7 @@ export async function buildPromptVars(
     enunciado: e.instructionsText ?? "",
     arquivos,
     questoes,
+    forum,
     observacoes: notes,
   };
 }
@@ -250,6 +284,13 @@ export async function buildMessages(
     user +=
       `\n\nFormato da resposta: uma linha por questão, no formato "Q<id>: <letra>", sem texto extra.` +
       ` Exemplo: Q${e.questions[0].id}: B`;
+  }
+  if (e.kind === "forum") {
+    user +=
+      `\n\nFormato da resposta: uma única publicação em primeira pessoa, pronta para colar no fórum.` +
+      ` Responda à pergunta do professor com naturalidade (linguagem simples, como um aluno escrevendo para a turma),` +
+      ` sem saudações longas, sem repetir o enunciado e sem se dirigir a colegas específicos.` +
+      ` Se já houver publicações parecidas, complemente o que falta em vez de repetir.`;
   }
   if (user) messages.push({ role: "user", content: user });
 

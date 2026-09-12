@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from 
 import path from "node:path";
 import { assist, dataDir, raw } from "./paths.js";
 import { computeStatus, daysLeft, refreshLive } from "./status.js";
-import type { ContentKind, Exercise, ExerciseKind, PdfRef, QuizQ } from "./types.js";
+import type { ContentKind, Exercise, ExerciseKind, ForumInfo, ForumPost, PdfRef, QuizQ } from "./types.js";
 
 interface TreeItem {
   courseId: number;
@@ -46,9 +46,50 @@ export function isSurveyItem(title: string, instructions: string): boolean {
 export function actionKindFor(item: Pick<TreeItem, "kind" | "isRecordProgress">): ExerciseKind | null {
   if (item.kind === "file_upload") return "upload";
   if (item.kind === "quiz") return "quiz";
-  if (item.kind === "forum") return "other";
+  if (item.kind === "forum") return "forum";
   if (item.isRecordProgress && MARKABLE_CONTENT.includes(item.kind)) return "mark";
   return null;
+}
+
+/** Parse the `content.posts[]` array fetched at dump time. */
+export function parseForumPosts(raw: unknown): ForumPost[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((p) => {
+    const r = p as Record<string, unknown>;
+    return {
+      id: Number(r.id),
+      topicId: Number(r.topicId ?? 0),
+      html: String(r.html ?? ""),
+      createdAt: String(r.createdAt ?? ""),
+      updatedAt: String(r.updatedAt ?? ""),
+      isEdited: r.isEdited === true,
+      enrollmentId: Number(r.enrollmentId ?? 0),
+      parentPostId: r.parentPostId != null ? Number(r.parentPostId) : null,
+      isHidden: r.isHidden === true,
+      isDeleted: r.isDeleted === true,
+      postOwnerUsername: String(r.postOwnerUsername ?? ""),
+      postOwnerProfilePhoto: r.postOwnerProfilePhoto != null ? String(r.postOwnerProfilePhoto) : null,
+      postOwnerSafeaRole: r.postOwnerSafeaRole != null ? String(r.postOwnerSafeaRole) : null,
+      postOwnerRoleName: r.postOwnerRoleName != null ? String(r.postOwnerRoleName) : null,
+      children: parseForumPosts(r.children),
+      enrollmentIdsWhoLiked: Array.isArray(r.enrollmentIdsWhoLiked) ? r.enrollmentIdsWhoLiked.map(Number) : [],
+    };
+  });
+}
+
+/** Extract forum state from a forum topic's `content` object (null when absent). */
+export function parseForumInfo(content: Record<string, unknown> | null | undefined): ForumInfo | null {
+  if (!content || !("countPosts" in content) || !("posts" in content)) return null;
+  return {
+    countPosts: Number(content.countPosts ?? 0),
+    countOfMyPosts: Number(content.countOfMyPosts ?? 0),
+    isAllowLikes: content.isAllowLikes === true,
+    isToLimitResponses: content.isToLimitResponses === true,
+    maxAnswerPerStudent: Number(content.maxAnswerPerStudent ?? 0),
+    isOnlyVisibleToPeopleWithPost: content.isOnlyVisibleToPeopleWithPost === true,
+    hasReachedPostLimit: content.hasReachedPostLimit === true,
+    posts: parseForumPosts(content.posts),
+  };
 }
 
 interface Course {
@@ -174,6 +215,7 @@ export function buildExercises(): Exercise[] {
         remoteFiles: it.attachments.map((a) => ({ filename: a.filename, url: a.url })),
         instructionsText: stripHtml(it.html),
         questions: kind === "quiz" ? parseQuestions(it.content) : [],
+        forum: kind === "forum" ? parseForumInfo(it.content) : null,
         ai: { status: "none", answer: null, updatedAt: null },
       });
     }

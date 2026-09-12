@@ -3,9 +3,10 @@
  * - `upload` — file-upload task (topicTypeId 8)
  * - `quiz`   — questionnaire / pre/post-test / exercises (15, 29, 30, 37)
  * - `mark`   — manually "mark as completed" content (recordable pdf/reading/link/other)
- * - `other`  — anything actionable that is neither (e.g. forum)
+ * - `forum`  — forum topic (topicTypeId 9): read the thread, publish a reply
+ * - `other`  — anything actionable that is neither
  */
-export type ExerciseKind = "quiz" | "upload" | "mark" | "other";
+export type ExerciseKind = "quiz" | "upload" | "mark" | "forum" | "other";
 
 /** Raw portal content classification (`src/content.ts::classify`). */
 export type ContentKind = "pdf" | "reading" | "quiz" | "file_upload" | "link" | "forum" | "other";
@@ -64,6 +65,40 @@ export interface QuizSelection {
   optionId: number;
 }
 
+/** One forum publication (top-level post or nested reply via `children`). */
+export interface ForumPost {
+  id: number;
+  topicId: number;
+  html: string;
+  createdAt: string;
+  updatedAt: string;
+  isEdited: boolean;
+  /** Author enrollment — the id that appears in `enrollmentIdsWhoLiked`. */
+  enrollmentId: number;
+  /** `null` = top-level post; set = reply to another post. */
+  parentPostId: number | null;
+  isHidden: boolean;
+  isDeleted: boolean;
+  postOwnerUsername: string;
+  postOwnerProfilePhoto: string | null;
+  postOwnerSafeaRole: string | null;
+  postOwnerRoleName: string | null;
+  children: ForumPost[];
+  enrollmentIdsWhoLiked: number[];
+}
+
+/** Forum state (from the topic detail `content` + dump-time thread fetch). */
+export interface ForumInfo {
+  countPosts: number;
+  countOfMyPosts: number;
+  isAllowLikes: boolean;
+  isToLimitResponses: boolean;
+  maxAnswerPerStudent: number;
+  isOnlyVisibleToPeopleWithPost: boolean;
+  hasReachedPostLimit: boolean;
+  posts: ForumPost[];
+}
+
 export interface Exercise {
   id: number;
   title: string;
@@ -94,6 +129,8 @@ export interface Exercise {
   remoteFiles: { filename: string | null; url: string }[];
   instructionsText: string;
   questions: QuizQ[];
+  /** Forum state when `contentKind === "forum"`, else null. */
+  forum: ForumInfo | null;
   ai: { status: "none" | "generating" | "done" | "error"; answer: string | null; updatedAt: string | null };
 }
 

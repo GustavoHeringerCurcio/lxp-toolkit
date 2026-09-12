@@ -63,6 +63,33 @@ Each leaf item in the scraped content tree looks like:
                "icon": "mdi-play-circle-outline", "bookId": null } ] }
 ```
 
+## Forum content (`topicTypeId` 9)
+
+Topic-detail `content` carries the flags but `posts` is **always `[]`** — fetch the
+thread from `/v1/plataforma/content/enrollment/{eid}/topic/{tid}/post` (see `03`).
+
+```json
+{ "countPosts": 5, "countOfMyPosts": 0, "isAllowLikes": true,
+  "isToLimitResponses": false, "maxAnswerPerStudent": 0,
+  "isOnlyVisibleToPeopleWithPost": false, "hasReachedPostLimit": false,
+  "posts": [] }
+```
+
+Thread post (from the enrollment endpoint; `children` nests replies):
+
+```json
+{ "id": 5605173, "topicId": 89612128, "html": "<div>…</div>",
+  "createdAt": "2026-08-25 22:11:33.712398", "updatedAt": "…", "isEdited": true,
+  "enrollmentId": 120880466, "parentPostId": null,
+  "isHidden": false, "isDeleted": false, "deletedBy": null,
+  "postOwnerUsername": "NOME DO ALUNO", "postOwnerProfilePhoto": null,
+  "postOwnerLtiRole": "urn:lti:role:ims/lis/Learner", "postOwnerSafeaRole": "student",
+  "postOwnerRoleName": "Estudante", "mainGroupId": null,
+  "children": [], "enrollmentIdsWhoLiked": [120887299] }
+```
+
+Completion: `countOfMyPosts > 0` (posting is the forum's "done").
+
 ## Reading / PDF — `content.html`
 
 Contains custom tags to watch for:

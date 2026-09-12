@@ -41,9 +41,11 @@ export function ActivityCard({ e }: { e: Exercise }) {
       ? tn("plural.questions", e.questions.length)
       : e.kind === "upload" && fileCount
         ? tn("plural.files", fileCount)
-        : e.kind === "mark" || e.kind === "other"
-          ? contentLabel(e.contentKind, t)
-          : "";
+        : e.kind === "forum" && e.forum
+          ? t("forum.count", { n: e.forum.countPosts })
+          : e.kind === "mark" || e.kind === "other"
+            ? contentLabel(e.contentKind, t)
+            : "";
   const lateish = !e.done && e.status === "expired";
   const dateTone = lateish ? "text-late" : !e.done && e.daysLeft != null && e.daysLeft <= 3 ? "text-soon" : "text-muted-foreground";
 

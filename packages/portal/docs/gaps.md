@@ -58,9 +58,42 @@ behind the portal's **"Mark as completed"** button (`src/actions.ts::markRead`).
 `src/content.ts::isMarkable` enumerates these; `npm run agent -- --read` (alias `--complete`)
 marks them all in one pass.
 
-## 4. Forum post/reply (LOW)
+## 4. Forum post/reply (IN PROGRESS — read side solved)
 
-Forum read content is captured; post/reply endpoints unknown (only 3 forum items in this course).
+**Status:** 🟡 read side solved (2026-09-12); write side implemented but body shape unconfirmed.
+
+**Read side (solved, verified live):**
+- Topic detail (`GET /v2/.../topics/{topicId}`) carries forum flags in `content`:
+  `countPosts`, `countOfMyPosts`, `isAllowLikes`, `isToLimitResponses`,
+  `maxAnswerPerStudent`, `isOnlyVisibleToPeopleWithPost`, `hasReachedPostLimit` — but
+  `posts` is **always `[]`** there.
+- The thread lives at `GET /v1/plataforma/content/enrollment/{enrollmentId}/topic/{topicId}/post?page=1&perPage=50`
+  (note the **singular** `topic`/`post`). Bearer-only GET works, no WAF. Pagination via
+  `page`/`perPage`.
+- SPA path: Vuex `plataforma/enrollment/actionGetPostsByTopicId` with payload
+  `{ enrollmentId, topicId }`. Other forum actions found in the store:
+  `content/actionPostCommentInForum`, `content/actionPatchCommentOfTopic`,
+  `content/actionLikeTopic`/`actionDislikeTopic`/`actionLikeComment`/`actionDislikeComment`,
+  `newContent/actionCreatePost`, `newContent/actionEditPost`,
+  `newContent/actionAddPostLike`/`actionRemovePostLike`, `newContent/actionAddTopicLike`/`actionRemoveTopicLike`,
+  `newContent/actionGetPostByParentPostId`, `enrollment/actionDeletePost`.
+- Post schema: `{ id, topicId, html, createdAt, updatedAt, isEdited, enrollmentId,
+  parentPostId (null = top-level), isHidden, isDeleted, postOwnerUsername,
+  postOwnerProfilePhoto, postOwnerLtiRole, postOwnerSafeaRole, postOwnerRoleName,
+  mainGroupId, children[], enrollmentIdsWhoLiked[] }`. `children` nests replies.
+- Posting is the completion signal: `countOfMyPosts > 0` → done (implemented in
+  `collectContent` + app index).
+
+**Write side (implemented — endpoint reconstructed from the SPA store, 2026-09-12):**
+- `POST /v1/plataforma/content/topic/{topicId}/enrollment/{enrollmentId}/post` with body
+  `{ html }` (add `parentPostId` for replies). Reconstructed by decoding the obfuscated
+  SPA chunk string table: Vuex `content/actionPostCommentInForum` takes
+  `{ topicId, enrollmentId, params }` and calls `client.post("content/topic/{tid}/enrollment/{eid}/post", params)`.
+- Edit: `PATCH content/topic/{tid}/enrollment/{eid}/post/{postId}` (patchCommentOfTopic).
+  Delete: `DELETE /content/enrollment/{eid}/topic/{tid}/post/{postId}` (deletePost).
+  Likes: `POST/DELETE content/academics-main/{courseId}/topics/{topicId}/posts/{postId}/likes`.
+- `submit-task.ts` `action: "forum"` posts, then verifies by re-reading the thread, and
+  falls back to driving the SPA composer when the API rejects (403/WAF).
 
 ## 5. Token/WAF risk for writes
 

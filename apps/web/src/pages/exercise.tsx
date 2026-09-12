@@ -13,6 +13,7 @@ import {
   History,
   Loader2,
   Maximize2,
+  MessagesSquare,
   Minimize2,
   Paperclip,
   RefreshCw,
@@ -43,10 +44,10 @@ import {
 import { toast } from "sonner";
 import { useAppData } from "@/lib/app-state";
 import { fmtDeadline } from "@/lib/status";
-import { cn } from "@/lib/utils";
 import { isOffice, previewUrl, remoteFileName } from "@/lib/files";
 import { useT, type TranslateFn } from "@/lib/i18n";
-import type { AnswerState, Exercise, RemoteFile } from "@/types";
+import { cn, stripHtml } from "@/lib/utils";
+import type { AnswerState, Exercise, ForumInfo, ForumPost, RemoteFile } from "@/types";
 import { BackLink } from "@/components/app-sidebar";
 import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
 import { AccChips } from "@/components/prof-chip";
@@ -378,9 +379,11 @@ function AnswerPanel({
   };
 
   const isUpload = e.kind === "upload";
+  const isForum = e.kind === "forum";
+  const wantsText = isUpload || isForum;
   const isDone = e.done || e.status === "done";
   const canSend =
-    !isDone && Boolean(sendCfg?.enabled) && !sending && (isUpload ? Boolean(draft.trim()) : e.selections.length > 0);
+    !isDone && Boolean(sendCfg?.enabled) && !sending && (wantsText ? Boolean(draft.trim()) : e.selections.length > 0);
 
   return (
     <CollapsibleCard
@@ -494,11 +497,13 @@ function AnswerPanel({
         </div>
       }
     >
-        {isUpload ? (
+        {wantsText ? (
           <Textarea
             value={draft}
             onChange={(ev) => setDraft(ev.target.value)}
-            placeholder={t("draft.uploadPlaceholder")}
+            placeholder={
+              isForum ? t("draft.forumPlaceholder") : t("draft.uploadPlaceholder")
+            }
             rows={6}
             className="min-h-36 field-sizing-fixed leading-relaxed"
           />
@@ -556,15 +561,17 @@ function AnswerPanel({
             </div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-foreground/90">
               <li>
-                {!isUpload
-                  ? e.isSurvey
-                    ? t("send.howSurvey")
-                    : t("send.howQuiz")
-                  : sendMode === "text"
-                    ? t("send.howText")
-                    : sendMode === "pdf"
-                      ? t("send.howPdf")
-                      : t("send.howTxt")}
+                {isForum
+                  ? t("send.howForum")
+                  : !isUpload
+                    ? e.isSurvey
+                      ? t("send.howSurvey")
+                      : t("send.howQuiz")
+                    : sendMode === "text"
+                      ? t("send.howText")
+                      : sendMode === "pdf"
+                        ? t("send.howPdf")
+                        : t("send.howTxt")}
               </li>
               <li>{t("send.irreversible")}</li>
               <li>{t("send.check")}</li>
@@ -671,7 +678,7 @@ function AnswerPanel({
                 variant="default"
                 size="sm"
                 onClick={() => void confirmSend()}
-                disabled={!agree || sending || (isUpload ? !draft.trim() : e.selections.length === 0)}
+                disabled={!agree || sending || (wantsText ? !draft.trim() : e.selections.length === 0)}
               >
                 {sending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
                 {sending ? t("send.sending") : t("send.confirm")}
@@ -816,6 +823,67 @@ function DetailSkeleton() {
   );
 }
 
+function ForumThreadPost({ post, depth = 0 }: { post: ForumPost; depth?: number }) {
+  const { t, locale } = useT();
+  const text = stripHtml(post.html);
+  if (post.isDeleted || !text) return null;
+  const isStaff = post.postOwnerSafeaRole != null && post.postOwnerSafeaRole !== "student";
+  return (
+    <li className={cn(depth > 0 && "ml-4 border-l border-border/60 pl-3")}>
+      <div className="rounded-md border border-border bg-muted/25 p-3">
+        <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
+          <span className={cn("font-semibold", isStaff ? "text-brand" : "text-foreground/80")}>
+            {post.postOwnerUsername}
+          </span>
+          {isStaff && <span className="text-[10px] font-medium text-brand">{post.postOwnerRoleName ?? post.postOwnerSafeaRole}</span>}
+          <span>{fmtVersionDate(post.createdAt, locale)}</span>
+          {post.isEdited && <span className="text-[10px] italic">{t("forum.edited")}</span>}
+          {post.enrollmentIdsWhoLiked.length > 0 && (
+            <span className="text-[10px]">♥ {post.enrollmentIdsWhoLiked.length}</span>
+          )}
+        </div>
+        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{text}</p>
+      </div>
+      {post.children.length > 0 && (
+        <ul className="mt-2 space-y-2">
+          {post.children.map((c) => (
+            <ForumThreadPost key={c.id} post={c} depth={depth + 1} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function ForumThread({ forum }: { forum: ForumInfo }) {
+  const { t } = useT();
+  return (
+    <CollapsibleCard
+      id="forum"
+      icon={<MessagesSquare className="size-4 shrink-0 text-brand" aria-hidden />}
+      title={t("forum.title")}
+      badge={
+        <span className="text-xs font-normal text-muted-foreground">
+          {t("forum.count", { n: forum.countPosts })}
+        </span>
+      }
+      bodyClassName="space-y-2 p-4"
+    >
+      {forum.posts.length === 0 ? (
+        <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+          {forum.countPosts > 0 ? t("forum.notLoaded") : t("forum.firstPost")}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {forum.posts.map((p) => (
+            <ForumThreadPost key={p.id} post={p} />
+          ))}
+        </ul>
+      )}
+    </CollapsibleCard>
+  );
+}
+
 export function ExercisePage() {
   const { id } = useParams();
   const { items, loading, error, reload, refresh } = useAppData();
@@ -928,6 +996,8 @@ export function ExercisePage() {
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{e.instructionsText}</p>
             </CollapsibleCard>
           )}
+
+          {e.forum && <ForumThread forum={e.forum} />}
 
           {e.remoteFiles.length > 0 && (
             <CollapsibleCard

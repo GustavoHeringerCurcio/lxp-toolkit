@@ -2,7 +2,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Locator, Page } from "playwright";
-import { createSession, closeSession } from "../src/session.js";
+import { createSession, closeSession, type Session } from "../src/session.js";
+import { ApiClient } from "../src/client.js";
 import { markRead } from "../src/actions.js";
 import { config, logger } from "../src/config.js";
 
@@ -43,8 +44,16 @@ import { config, logger } from "../src/config.js";
  * Mark request JSON (manually "mark as completed"):
  *   { "action": "mark", "courseId": number, "itemId": number }
  *
+ * Forum request JSON (publish a reply in a forum topic):
+ *   { "action": "forum", "courseId": number, "itemId": number, "answer": string,
+ *     "enrollmentId"?: number, "parentPostId"?: number }
+ *   Preferred path: direct `POST /v1/plataforma/content/topic/{tid}/enrollment/{eid}/post`
+ *   with `{ html }` (endpoint reconstructed from the SPA's own Vuex
+ *   `actionPostCommentInForum`), then the thread is re-read to verify the post
+ *   landed. Falls back to driving the SPA composer when the API rejects.
+ *
  * Result JSON:
- *   { "ok": boolean, "status": "ok"|"unknown"|"error", "detail": string, "at": string }
+ *   { "ok": boolean, "status": "ok"|"already"|"unknown"|"error", "detail": string, "at": string }
  */
 interface QuizItem {
   questionId: number;
@@ -81,7 +90,17 @@ type SubmitRequest =
       survey?: boolean;
       selections: QuizItem[];
     }
-  | { action: "mark"; courseId: number; itemId: number };
+  | { action: "mark"; courseId: number; itemId: number }
+  | {
+      action: "forum";
+      courseId: number;
+      itemId: number;
+      answer: string;
+      /** Portal enrollment id (from the topic context); enables the direct API path. */
+      enrollmentId?: number;
+      /** Set to reply to an existing post instead of publishing a new thread post. */
+      parentPostId?: number;
+    };
 
 interface SubmitResult {
   ok: boolean;
@@ -378,6 +397,281 @@ async function answerQuiz(
   return { done, total: selections.length, notes };
 }
 
+// ---------------------------------------------------------------------------
+// Forum publish
+// ---------------------------------------------------------------------------
+
+interface ForumApiPost {
+  id: number;
+  html: string;
+  parentPostId: number | null;
+  enrollmentId: number;
+  isDeleted: boolean;
+}
+
+function stripTags(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Fetch a forum thread through the enrollment-scoped endpoint (bearer-only GET). */
+async function forumApiPosts(
+  client: ApiClient,
+  enrollmentId: number,
+  itemId: number,
+): Promise<ForumApiPost[]> {
+  const out: ForumApiPost[] = [];
+  for (let pageIndex = 1; pageIndex <= 5; pageIndex++) {
+    try {
+      const res = await client.get<unknown>(
+        `/v1/plataforma/content/enrollment/${enrollmentId}/topic/${itemId}/post?page=${pageIndex}&perPage=50`,
+      );
+      const batch = Array.isArray(res.data) ? (res.data as Record<string, unknown>[]) : [];
+      for (const p of batch) {
+        out.push({
+          id: Number(p.id),
+          html: String(p.html ?? ""),
+          parentPostId: p.parentPostId != null ? Number(p.parentPostId) : null,
+          enrollmentId: Number(p.enrollmentId ?? 0),
+          isDeleted: p.isDeleted === true,
+        });
+      }
+      if (batch.length === 0) break;
+    } catch {
+      break;
+    }
+  }
+  return out;
+}
+
+/**
+ * Verify a post landed: fetch the thread and look for a post that was not in
+ * `beforeIds` and carries our text. Returns the post id, or null when the
+ * portal has no trace of the publication.
+ */
+async function verifyForumPost(
+  client: ApiClient,
+  enrollmentId: number,
+  itemId: number,
+  needle: string,
+  beforeIds: number[],
+): Promise<number | null> {
+  const posts = await forumApiPosts(client, enrollmentId, itemId);
+  const fresh = posts.filter((p) => !beforeIds.includes(p.id) && !p.isDeleted);
+  const matched = fresh.find((p) => p.html && normalize(stripTags(p.html)).includes(needle));
+  if (matched) return matched.id;
+  const anyTextual = fresh.find((p) => normalize(stripTags(p.html)).length > 0);
+  return anyTextual ? anyTextual.id : null;
+}
+
+/**
+ * Fill the forum composer. The portal reuses the TinyMCE editor for forum
+ * replies; some forum templates render a plain contenteditable/textarea until a
+ * "Responder" button is clicked — try opening it first, then fill.
+ */
+async function fillForumComposer(page: Page, text: string): Promise<boolean> {
+  // 1. open the composer when the template hides it behind a button
+  const opener = page
+    .locator("button, [role='button'], a")
+    .filter({ hasText: /^\s*(responder|publicar|postar|comentar|reply|post|comment)\s*$/i })
+    .filter({ visible: true })
+    .first();
+  if ((await opener.count().catch(() => 0)) > 0) {
+    await opener.click({ timeout: 2_000 }).catch(() => {});
+    await page.waitForTimeout(1_500);
+  }
+  // 2. TinyMCE iframe (same as uploads)
+  if (await fillEditor(page, text)) return true;
+  // 3. plain contenteditable / textarea
+  const editable = page.locator("[contenteditable='true'], textarea").filter({ visible: true }).first();
+  if ((await editable.count().catch(() => 0)) > 0) {
+    await editable.click({ timeout: 3_000 }).catch(() => {});
+    await page.keyboard.insertText(text).catch(() => {});
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Publish a forum reply. Direct endpoint first (verified by re-reading the
+ * thread), then the SPA composer as fallback.
+ */
+async function publishForum(
+  session: Session,
+  req: Extract<SubmitRequest, { action: "forum" }>,
+  dryRun: boolean,
+): Promise<SubmitResult> {
+  const { client, page } = session;
+  const needle = normalize(stripTags(req.answer)).slice(0, 80);
+  const eid = req.enrollmentId ?? null;
+
+  if (eid) {
+    const before = await forumApiPosts(client, eid, req.itemId);
+    const beforeIds = before.map((p) => p.id);
+    const mineBefore = before.filter((p) => p.enrollmentId === eid && !p.isDeleted).length;
+
+    if (dryRun) {
+      return {
+        ok: true,
+        status: "unknown",
+        detail: `dry-run: endpoint de leitura OK (${before.length} publicações, ${mineBefore} minhas). Nada foi publicado.`,
+        at: new Date().toISOString(),
+      };
+    }
+
+    const bodies: Record<string, unknown>[] = [];
+    if (req.parentPostId != null) bodies.push({ html: req.answer, parentPostId: req.parentPostId });
+    bodies.push({ html: req.answer });
+    if (req.parentPostId == null) bodies.push({ html: req.answer, parentPostId: null });
+
+    // Confirmed from the SPA store: the forum reply action posts to
+    // /v1/plataforma/content/topic/{topicId}/enrollment/{enrollmentId}/post
+    // with the payload passed verbatim as `params` (html [+ parentPostId]).
+    const writePath = `/v1/plataforma/content/topic/${req.itemId}/enrollment/${eid}/post`;
+    let postOk = false;
+    let lastErr = "";
+    for (const body of bodies) {
+      try {
+        await client.post(writePath, body);
+        postOk = true;
+        break;
+      } catch (err) {
+        lastErr = err instanceof Error ? err.message : String(err);
+        if (/403|401/.test(lastErr)) break; // WAF/auth — go straight to DOM fallback
+        if (/limit|limite|429/.test(lastErr)) {
+          return {
+            ok: false,
+            status: "already",
+            detail: `O portal recusou a publicação (limite de participações): ${lastErr}`,
+            at: new Date().toISOString(),
+          };
+        }
+      }
+    }
+    if (postOk) {
+      await page.waitForTimeout(2_000);
+      const postId = await verifyForumPost(client, eid, req.itemId, needle, beforeIds);
+      if (postId != null) {
+        return {
+          ok: true,
+          status: "ok",
+          detail: `Publicação registrada no fórum (post ${postId}).`,
+          at: new Date().toISOString(),
+        };
+      }
+      return {
+        ok: false,
+        status: "unknown",
+        detail:
+          "O endpoint aceitou a publicação mas o tópico não mostra o novo post. Confira no portal antes de reenviar.",
+        at: new Date().toISOString(),
+      };
+    }
+    logger.warn({ lastErr }, "forum direct POST rejected; falling back to SPA composer");
+  }
+
+  // --- DOM fallback: open the forum topic in the SPA and drive the composer ---
+  const route = `/course/${req.courseId}/content/${req.itemId}`;
+  logger.info({ route }, "navigating to forum topic (composer fallback)");
+  await clientNav(page, route);
+  await page.waitForTimeout(8_000);
+
+  const alreadyReason = await detectAlreadySubmitted(page).catch(() => null);
+  if (alreadyReason) {
+    return { ok: false, status: "already", detail: alreadyReason, at: new Date().toISOString() };
+  }
+
+  if (dryRun) {
+    const buttons = await describeButtons(page).catch(() => "");
+    return {
+      ok: true,
+      status: "unknown",
+      detail: `dry-run: página do fórum aberta. Botões: ${buttons}`,
+      at: new Date().toISOString(),
+    };
+  }
+
+  // The forum page hydrates slowly: retry composer detection for up to ~30s.
+  let filled = false;
+  for (let attempt = 0; attempt < 6 && !filled; attempt++) {
+    filled = await fillForumComposer(page, req.answer).catch(() => false);
+    if (!filled) {
+      logger.info({ attempt }, "forum composer not ready; waiting");
+      await page.waitForTimeout(5_000);
+    }
+  }
+  if (!filled) {
+    const buttons = await describeButtons(page).catch(() => "");
+    return {
+      ok: false,
+      status: "error",
+      detail: `nenhum compositor do fórum encontrado. Botões: ${buttons}`,
+      at: new Date().toISOString(),
+    };
+  }
+  await page.waitForTimeout(1_500);
+
+  // Thread snapshot before the click, so the click result can be verified.
+  const beforeIds = eid ? (await forumApiPosts(client, eid, req.itemId)).map((p) => p.id) : [];
+
+  const submit = await waitForSubmit(page, 15_000);
+  if (!submit) {
+    const buttons = await describeButtons(page).catch(() => "");
+    return {
+      ok: false,
+      status: "error",
+      detail: `nenhum botão de publicar encontrado. Botões: ${buttons}`,
+      at: new Date().toISOString(),
+    };
+  }
+  const clicked = await submit.click({ timeout: 5_000 }).then(() => true).catch(() => false);
+  if (!clicked) {
+    const buttons = await describeButtons(page).catch(() => "");
+    return {
+      ok: false,
+      status: "error",
+      detail: `botão de publicar encontrado mas não clicável. Botões: ${buttons}`,
+      at: new Date().toISOString(),
+    };
+  }
+  await confirmDialog(page);
+  await page.waitForTimeout(3_000);
+
+  if (eid) {
+    const after = await forumApiPosts(client, eid, req.itemId);
+    const fresh = after.filter((p) => !beforeIds.includes(p.id) && !p.isDeleted && normalize(stripTags(p.html)).length > 0);
+    if (fresh.length > 0) {
+      return {
+        ok: true,
+        status: "ok",
+        detail: `Publicação registrada no fórum via compositor do portal (post ${fresh[0].id}).`,
+        at: new Date().toISOString(),
+      };
+    }
+  }
+  const detection = await detectSuccess(page);
+  if (detection.ok) {
+    return {
+      ok: true,
+      status: "ok",
+      detail: snippet(detection.snippet, 300),
+      at: new Date().toISOString(),
+      portalDetail: snippet(detection.snippet, 300),
+    };
+  }
+  return {
+    ok: false,
+    status: "unknown",
+    detail: `publicação enviada pelo compositor mas não confirmada. Página: ${snippet(detection.snippet, 300)}`,
+    at: new Date().toISOString(),
+    portalDetail: snippet(detection.snippet, 300),
+  };
+}
+
 interface StoreQuizResult {
   answered: number;
   total: number;
@@ -558,12 +852,14 @@ async function main(): Promise<void> {
   };
 
   try {
-    req = JSON.parse(readFileSync(reqPath, "utf-8")) as SubmitRequest;
+    // Windows editors/tools may prepend a UTF-8 BOM, which breaks JSON.parse.
+    req = JSON.parse(readFileSync(reqPath, "utf-8").replace(/^\uFEFF/, "")) as SubmitRequest;
   } catch (err) {
     return fail(`cannot read request file: ${err instanceof Error ? err.message : String(err)}`);
   }
   if (req.action === "upload" && (!req.answer || !req.answer.trim())) return fail("request has no answer text");
   if (req.action === "quiz" && (!req.selections || req.selections.length === 0)) return fail("request has no selections");
+  if (req.action === "forum" && (!req.answer || !req.answer.trim())) return fail("request has no answer text");
 
   const session = await createSession({ headful }).catch((err) => {
     fail(`login failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -588,6 +884,18 @@ async function main(): Promise<void> {
       process.exit(0);
     } catch (err) {
       return fail(`mark failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // Forum publish: direct endpoint → SPA composer, verified against the thread.
+  if (req.action === "forum") {
+    try {
+      const result = await publishForum(session, req, dryRun);
+      writeResult(resultPath, result);
+      console.log(`submit-task done [${result.status}]`);
+      process.exit(result.status === "error" ? 1 : 0);
+    } catch (err) {
+      return fail(`forum publish failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

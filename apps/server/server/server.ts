@@ -26,6 +26,7 @@ import {
   launchUploadSubmit,
   launchQuizSubmit,
   launchMarkComplete,
+  launchForumSubmit,
   lastSubmission,
   sendEnv,
   submissionsFor,
@@ -263,9 +264,9 @@ function allViews() {
   return enrich(loadExercises(), loadAnswers(), loadOverrides()).filter((v) => !v.hidden);
 }
 
-/** Only tasks/quizzes have AI-answerable content. */
+/** Tasks, quizzes and forums have AI-answerable content. */
 function isAnswerable(view: { kind: string }): boolean {
-  return view.kind === "upload" || view.kind === "quiz";
+  return view.kind === "upload" || view.kind === "quiz" || view.kind === "forum";
 }
 
 /**
@@ -370,7 +371,8 @@ const server = createServer(async (req, res) => {
     if (url.startsWith("/api/send/preview")) {
       const id = Number(new URL(req.url ?? "/", "http://local").searchParams.get("id"));
       const view = findView(id);
-      const canSubmit = (view.kind === "upload" || view.kind === "quiz") && view.status !== "done";
+      const canSubmit =
+        (view.kind === "upload" || view.kind === "quiz" || view.kind === "forum") && view.status !== "done";
       return json(res, 200, {
         ok: canSubmit,
         reason: !canSubmit
@@ -591,6 +593,8 @@ const server = createServer(async (req, res) => {
           let submission;
           if (view.kind === "quiz") {
             submission = launchQuizSubmit(view, selections);
+          } else if (view.kind === "forum") {
+            submission = launchForumSubmit(view, answer);
           } else {
             let filePath: string | undefined;
             if (mode === "pdf") {

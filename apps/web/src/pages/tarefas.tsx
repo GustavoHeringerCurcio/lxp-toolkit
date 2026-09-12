@@ -41,7 +41,7 @@ export function TarefasPage() {
 
   const scoped = useMemo(() => items.filter((e) => scope === "all" || e.status === scope), [items, scope]);
   const typeCounts = useMemo(() => {
-    const c: Record<ExerciseKind, number> = { quiz: 0, upload: 0, mark: 0, other: 0 };
+    const c: Record<ExerciseKind, number> = { quiz: 0, upload: 0, forum: 0, mark: 0, other: 0 };
     for (const e of scoped) c[e.kind] += 1;
     return c;
   }, [scoped]);

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ListChecks, Upload, CircleCheckBig, MessagesSquare } from "lucide-react";
+import { ListChecks, Upload, CircleCheckBig, MessagesSquare, FileQuestion } from "lucide-react";
 import { TONE_CLS, type Tone } from "@/lib/status";
 import { KIND_META } from "@/lib/kind";
 import { useT, type TranslateFn } from "@/lib/i18n";
@@ -147,7 +147,7 @@ export function DesignPage() {
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
-              {(["quiz", "upload", "mark", "other"] as const).map((k) => {
+              {(["quiz", "upload", "forum", "mark", "other"] as const).map((k) => {
                 const meta = KIND_META[k];
                 const Icon = meta.icon;
                 return (
@@ -187,8 +187,9 @@ export function DesignPage() {
               [
                 ["quiz", ListChecks],
                 ["upload", Upload],
+                ["forum", MessagesSquare],
                 ["mark", CircleCheckBig],
-                ["other", MessagesSquare],
+                ["other", FileQuestion],
               ] as const
             ).map(([k, Icon]) => (
               <span key={k} className={`grid size-10 place-items-center rounded-lg ${KIND_META[k].tileClass}`}>

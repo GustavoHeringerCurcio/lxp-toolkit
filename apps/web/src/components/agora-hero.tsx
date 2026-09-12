@@ -22,9 +22,11 @@ function heroMeta(next: Exercise, t: TranslateFn, tn: (key: string, n: number) =
     ? tn("plural.questions", next.questions.length)
     : next.kind === "upload" && fileCount
       ? tn("plural.files", fileCount)
-      : next.kind === "mark" || next.kind === "other"
-        ? contentLabel(next.contentKind, t)
-        : "";
+      : next.kind === "forum" && next.forum
+        ? t("forum.count", { n: next.forum.countPosts })
+        : next.kind === "mark" || next.kind === "other"
+          ? contentLabel(next.contentKind, t)
+          : "";
 }
 
 /** The "next up" hero: what to do next, with a live mono countdown. */

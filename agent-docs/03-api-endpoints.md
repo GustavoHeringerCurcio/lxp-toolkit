@@ -35,7 +35,11 @@ All requests carry the headers from `02-auth.md`. Query params shown are real ex
 |---|---|---|
 | GET | `/v2/plataforma/content/academics-main/{courseId}/contents` | full module→section→item tree |
 | GET | `/v2/plataforma/content/academics-main/{courseId}/topics/{sectionId}` | section detail (children html) |
-| GET | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}` | **item/topic detail** — richest source (`topics.content` + `context`) |
+| GET | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}` | **item/topic detail** — richest source (`topics.content` + `context`). For forums, `content` carries counts/flags but `posts` is always `[]` |
+| GET | `/v1/plataforma/content/enrollment/{enrollmentId}/topic/{topicId}/post?page=1&perPage=50` | **forum thread** (write side lives here too). Bearer-only GET works; paginated (`page`/`perPage`). Confirmed live 2026-09-12. The SPA reaches it via Vuex `plataforma/enrollment/actionGetPostsByTopicId` with payload `{ enrollmentId, topicId }` |
+| POST | `/v1/plataforma/content/topic/{topicId}/enrollment/{enrollmentId}/post` | **forum publish** (write). Body `{ html }` (add `parentPostId` to reply). Reconstructed from the SPA's Vuex `content/actionPostCommentInForum` (`payload = { topicId, enrollmentId, params }` → `client.post("content/topic/{tid}/enrollment/{eid}/post", params)`); runner verifies by re-reading the thread |
+| PATCH | `/v1/plataforma/content/topic/{topicId}/enrollment/{enrollmentId}/post/{postId}` | edit own forum post (SPA `patchCommentOfTopic`; body presumably `{ html }`) |
+| DELETE | `/v1/plataforma/content/enrollment/{enrollmentId}/topic/{topicId}/post/{postId}` | delete own forum post (SPA `deletePost`) |
 | GET | `/v1/plataforma/content/lti/tool/list-by-alias/student` | LTI tool list |
 | POST | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}/progress` | "Mark as completed" (write). Empty body → `204`; bearer only, no WAF. See `04-topic-types.md` + `packages/portal/src/content.ts::isMarkable` |
 | POST | `/v1/plataforma/content/enrollment/{enrollmentId}/quiz/{topicId}` | **Answer one quiz question** (write). Body `{ "questionId", "optionId" }`. Driven through the SPA Vuex action `plataforma/enrollment/actionAnswerQuizQuestion` (`{ enrollmentId, topic: { topicId }, questionId, optionId }`) so it reuses the live bearer + WAF session. `enrollmentId` comes from the topic `context` |
@@ -76,7 +80,8 @@ All requests carry the headers from `02-auth.md`. Query params shown are real ex
 - `https://bucket.safea.grupoa.education/...` (logos/banners)
 - `https://libs.grupoa.education/pdfreader/web/viewer.html?file=…` (PDF viewer)
 
-## Known unknowns (write side, deliberately not automated)
+## Known unknowns (write side)
 
-File-upload submit, forum post/reply endpoints. See `packages/portal/docs/gaps.md`.
+File-upload submit endpoint. Forum write is reconstructed from the SPA store (see the
+`content/topic/...` rows above) and verified by thread re-read after posting.
 Quiz submit is **solved** (see the `enrollment/{id}/quiz/...` rows above).
