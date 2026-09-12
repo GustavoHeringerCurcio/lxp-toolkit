@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Check,
   Eye,
@@ -19,6 +19,13 @@ import { saveAiConfig, saveProfile } from "@/api";
 import { useAppData } from "@/lib/app-state";
 import { BackLink } from "@/components/app-sidebar";
 import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_STYLE, renderStylePreview } from "@/lib/prompt-preview";
+import {
+  ESTIMATED_GENERATION_TOKENS,
+  estimateGenerationCostUsd,
+  findModel,
+  formatUsd,
+  groupModels,
+} from "@/lib/model-pricing";
 import { useT } from "@/lib/i18n";
 import { useTheme, type Theme } from "@/lib/theme";
 import { useLocalStorage } from "@/lib/use-local-storage";
@@ -26,6 +33,7 @@ import { cn } from "@/lib/utils";
 import type { AiActivitySections, AiProfile, AiStyle } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 type SettingsTab = "personal" | "ai" | "advanced";
@@ -130,9 +138,18 @@ function Feedback({ msg, err }: { msg: string | null; err: string | null }) {
   );
 }
 
+function PriceStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="font-mono text-sm tabular-nums text-foreground/90">{value}</p>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const { cfg, patchConfig } = useAppData();
-  const { t, lang, setLang } = useT();
+  const { t, lang, locale, setLang } = useT();
   const { theme, setTheme } = useTheme();
   const [tab, setTab] = useLocalStorage<SettingsTab>("lxp.settings.tab", "ai");
   const [style, setStyle] = useState<AiStyle>(DEFAULT_STYLE);
@@ -157,6 +174,22 @@ export function SettingsPage() {
     setNome(cfg.profile?.nome ?? "");
     setMatricula(cfg.profile?.matricula ?? "");
   }, [cfg]);
+
+  const selectedModel = findModel(model);
+  const generationCost = estimateGenerationCostUsd(model);
+  const modelGroups = useMemo(() => {
+    const groups = groupModels();
+    if (model && !selectedModel) {
+      return [
+        {
+          group: t("settings.modelCustom"),
+          models: [{ id: model, label: model, group: "custom", input: 0, output: 0 }],
+        },
+        ...groups,
+      ];
+    }
+    return groups;
+  }, [model, selectedModel, t]);
 
   const patchStyle = (patch: Partial<AiStyle>) => {
     setStyle((prev) => ({ ...prev, ...patch }));
@@ -436,8 +469,30 @@ export function SettingsPage() {
         <>
           <Card icon={<SlidersHorizontal className="size-4 text-brand" aria-hidden />} title={t("settings.generation")}>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field label={t("settings.model")}>
-                <Input value={model} onChange={(ev) => setModel(ev.target.value)} placeholder="gpt-4o" />
+              <Field
+                label={t("settings.model")}
+                hint={!selectedModel && model ? t("settings.modelUnknown") : undefined}
+              >
+                <Select
+                  value={model}
+                  aria-label={t("settings.model")}
+                  onChange={(ev) => {
+                    setModel(ev.target.value);
+                    setMsg(null);
+                    setErr(null);
+                  }}
+                >
+                  {modelGroups.map((g) => (
+                    <optgroup key={g.group} label={g.group}>
+                      {g.models.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                          {m.recommended ? ` · ${t("settings.modelRecommended")}` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </Select>
               </Field>
               <Field label={t("settings.temperature")}>
                 <Input
@@ -457,6 +512,32 @@ export function SettingsPage() {
                   onChange={(ev) => setMaxTokens(ev.target.value)}
                 />
               </Field>
+            </div>
+            <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <PriceStat
+                  label={t("settings.priceInput")}
+                  value={selectedModel ? formatUsd(selectedModel.input, locale) : "—"}
+                />
+                <PriceStat
+                  label={t("settings.priceOutput")}
+                  value={selectedModel ? formatUsd(selectedModel.output, locale) : "—"}
+                />
+                <PriceStat
+                  label={t("settings.pricePerActivity")}
+                  value={generationCost != null ? formatUsd(generationCost, locale) : "—"}
+                />
+                <PriceStat
+                  label={t("settings.pricePer100")}
+                  value={generationCost != null ? formatUsd(generationCost * 100, locale) : "—"}
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {t("settings.priceEstimateHint", {
+                  input: ESTIMATED_GENERATION_TOKENS.input.toLocaleString(locale),
+                  output: ESTIMATED_GENERATION_TOKENS.output.toLocaleString(locale),
+                })}
+              </p>
             </div>
             {cfg?.configPath && (
               <p className="text-[11px] text-muted-foreground">{t("settings.configPath", { path: cfg.configPath })}</p>

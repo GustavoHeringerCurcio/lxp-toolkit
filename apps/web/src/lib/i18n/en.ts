@@ -353,6 +353,15 @@ export const en: Dict = {
   "settings.temperature": "Temperature",
   "settings.maxTokens": "Max tokens",
   "settings.configPath": "config: {{path}}",
+  "settings.modelRecommended": "recommended",
+  "settings.modelCustom": "Custom",
+  "settings.modelUnknown": "Model not in the list — price not estimated.",
+  "settings.priceInput": "Input / 1M tokens",
+  "settings.priceOutput": "Output / 1M tokens",
+  "settings.pricePerActivity": "Per activity",
+  "settings.pricePer100": "Per 100 activities",
+  "settings.priceEstimateHint":
+    "Estimate to solve one activity (≈ {{input}} input tokens + {{output}} output tokens). The real cost varies with the brief, attachments and questions.",
   "settings.previewTitle": "Message preview (system)",
   "settings.previewNote":
     "Placeholders like {{nome}} and {{atividade}} are filled in at submission time.",

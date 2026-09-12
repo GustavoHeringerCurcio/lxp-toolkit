@@ -357,6 +357,15 @@ export const pt = {
   "settings.temperature": "Temperatura",
   "settings.maxTokens": "Máx. tokens",
   "settings.configPath": "config: {{path}}",
+  "settings.modelRecommended": "recomendado",
+  "settings.modelCustom": "Personalizado",
+  "settings.modelUnknown": "Modelo fora da lista — preço não estimado.",
+  "settings.priceInput": "Entrada / 1M tokens",
+  "settings.priceOutput": "Saída / 1M tokens",
+  "settings.pricePerActivity": "Por atividade",
+  "settings.pricePer100": "Por 100 atividades",
+  "settings.priceEstimateHint":
+    "Estimativa para resolver uma atividade (≈ {{input}} tokens de entrada + {{output}} de saída). O custo real varia com o tamanho do enunciado, dos anexos e das questões.",
   "settings.previewTitle": "Prévia da mensagem (system)",
   "settings.previewNote":
     "Os marcadores como {{nome}} e {{atividade}} são preenchidos no momento do envio.",
