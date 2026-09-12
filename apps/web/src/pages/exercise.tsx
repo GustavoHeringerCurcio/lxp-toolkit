@@ -15,7 +15,6 @@ import {
   Paperclip,
   RefreshCw,
   Save,
-  SendHorizontal,
   Sparkles,
   Trash2,
   Undo2,
@@ -49,6 +48,7 @@ import { ProfessorTag, SubjectLabel } from "@/components/identity";
 import { AiRequestPanel } from "@/components/ai-request-panel";
 import { MarkPanel, PortalOnlyPanel } from "@/components/mark-panel";
 import { SendDialog } from "@/components/send-dialog";
+import { SendIcon } from "@/components/icons/send-icons";
 import { StatusBadge, TypeBadge, DoneBadge } from "@/components/status-badges";
 import { kindMeta } from "@/lib/kind";
 import { sendModeLabel } from "@/lib/send";
@@ -414,7 +414,7 @@ function AnswerPanel({
                 }}
                 disabled={!canSend}
               >
-                <SendHorizontal aria-hidden />
+                <SendIcon className="size-3.5" aria-hidden />
                 {t("send.button")}
               </Button>
             )}

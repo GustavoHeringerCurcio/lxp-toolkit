@@ -139,10 +139,10 @@ Self-hosted via `@fontsource-variable/*` (no runtime Google Fonts):
 | Activity type — other | `MessagesSquare` (monochrome chip) |
 | Focus mode | `Maximize2` / `Minimize2` |
 
-**Exception — submission-format family.** The three send-format icons (direct text / `.txt` / `.pdf`)
-are custom SVGs in `components/icons/format-icons.tsx`, not lucide: lucide has no PDF glyph, and the
-three must read as one hand-tuned family (24px grid, 1.7 stroke, round caps, `currentColor`). Every
-other icon stays lucide.
+**Exception — send-flow icon set.** The send-confirmation modal does not use lucide. It draws from
+one custom duotone family in `components/icons/send-icons.tsx` (24px grid, 1.5 stroke, round
+caps/joins, `currentColor` + `fillOpacity .12` on body shapes): submit, warning, text / `.txt` /
+`.pdf`, preview, download, close, check, spinner. Every other surface stays lucide.
 
 ## 7. Subject identity & neutral professors
 
@@ -224,6 +224,9 @@ grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid;
 
 ## History
 
+- **v3.2 (2026-09):** send modal decluttered to a minimal confirm (title + one warning line + one
+  action line); format becomes a segmented control; all modal icons replaced by the custom duotone
+  `send-icons` family.
 - **v3.1 (2026-09):** send flow moved from an inline block to a centered confirmation modal
   (Base UI `Dialog`); checkbox dropped for a single explicit CTA; custom submission-format icon
   family added.
