@@ -18,7 +18,9 @@ dark-only) is retired. Everything below replaces it.
 
 **Co-pilot copy rules (enforced):**
 - Generation = **"rascunho"** ("Gerar rascunho", "Salvar rascunho", "Novo rascunho") — never "resposta pronta".
-- Sending to the portal keeps factual, high-friction language ("Enviar no portal", confirm checkbox).
+- Sending to the portal keeps factual, high-friction language ("Enviar no portal"). It happens in a
+  confirmation **modal** whose single explicit "Confirmar e enviar" CTA *is* the confirmation — no
+  separate checkbox.
 - AI always framed as draft aid: *revise antes de enviar*, *você decide o que envia*.
 
 ## 2. Direction — "Folio"
@@ -137,6 +139,11 @@ Self-hosted via `@fontsource-variable/*` (no runtime Google Fonts):
 | Activity type — other | `MessagesSquare` (monochrome chip) |
 | Focus mode | `Maximize2` / `Minimize2` |
 
+**Exception — submission-format family.** The three send-format icons (direct text / `.txt` / `.pdf`)
+are custom SVGs in `components/icons/format-icons.tsx`, not lucide: lucide has no PDF glyph, and the
+three must read as one hand-tuned family (24px grid, 1.7 stroke, round caps, `currentColor`). Every
+other icon stays lucide.
+
 ## 7. Subject identity & neutral professors
 
 `SubjectAvatar` + `lib/subject.ts`: deterministic identity per **module** (the only per-card color,
@@ -154,7 +161,7 @@ never a competing color. The sidebar "Professores" list uses the same neutral tr
 | `/` | **Agora** | combined status line (merged done/late/open bar + overall ring, disclosing per-module bars), greeting, next-task hero with live countdown, urgency-grouped open queue |
 | `/tarefas` | **Tarefas** | scope tabs (Abertas/Atrasadas/Concluídas/Todas) + module/type chips + list |
 | `/progresso` | **Progresso** | per-module progress bars, status/type distribution (CSS bars, `chart-*` tokens) |
-| `/tarefa/:id` | **Atividade** | reading column (prose width) + sticky workbench; focus mode; version timeline; 3-step send flow |
+| `/tarefa/:id` | **Atividade** | reading column (prose width) + sticky workbench; focus mode; version timeline; send-confirmation modal |
 | `/treino/quiz` | **Treino de quiz** | gamified practice quiz (AI-generated or portal-sourced), one question at a time with feedback, score + readiness verdict + history |
 | `/treino/estudo` | **Perguntar à IA** | free-text study Q&A scoped to the selected subject; streamed markdown |
 | `/ajustes` | **Ajustes** | hub with pill tabs (Pessoal · IA · Avançado): profile + appearance, IA voice/format/rules/content, generation params + preview |
@@ -217,6 +224,9 @@ grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid;
 
 ## History
 
+- **v3.1 (2026-09):** send flow moved from an inline block to a centered confirmation modal
+  (Base UI `Dialog`); checkbox dropped for a single explicit CTA; custom submission-format icon
+  family added.
 - **v3 (2026-09):** rebrand **Pauta → LXP Toolkit** ("Stacked X" mark); identity color economy
   (status = semantic, type = monochrome icon, subject = `--subject-1..8` identity, professor =
   neutral); activity cards reworked around the subject monogram; raw-hex exception retired.

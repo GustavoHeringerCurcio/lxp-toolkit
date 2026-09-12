@@ -7,9 +7,6 @@ import {
   Copy,
   Download,
   ExternalLink,
-  Eye,
-  FileText,
-  FileType,
   History,
   Loader2,
   Maximize2,
@@ -18,16 +15,14 @@ import {
   Paperclip,
   RefreshCw,
   Save,
-  Send,
+  SendHorizontal,
   Sparkles,
   Trash2,
-  Type,
   Undo2,
 } from "lucide-react";
 import {
   clearAnswerHistory,
   fetchAnswerState,
-  fetchSendArtifact,
   fetchSendConfig,
   fetchSubmission,
   fetchSubmissions,
@@ -53,8 +48,10 @@ import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/c
 import { ProfessorTag, SubjectLabel } from "@/components/identity";
 import { AiRequestPanel } from "@/components/ai-request-panel";
 import { MarkPanel, PortalOnlyPanel } from "@/components/mark-panel";
+import { SendDialog } from "@/components/send-dialog";
 import { StatusBadge, TypeBadge, DoneBadge } from "@/components/status-badges";
 import { kindMeta } from "@/lib/kind";
+import { sendModeLabel } from "@/lib/send";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -68,17 +65,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const SEND_MODES: { value: SendMode; labelKey: string; hintKey: string; icon: typeof Type }[] = [
-  { value: "text", labelKey: "send.mode.text.label", hintKey: "send.mode.text.hint", icon: Type },
-  { value: "txt", labelKey: "send.mode.txt.label", hintKey: "send.mode.txt.hint", icon: FileText },
-  { value: "pdf", labelKey: "send.mode.pdf.label", hintKey: "send.mode.pdf.hint", icon: FileType },
-];
-
-function sendModeLabel(mode: SendMode, t: TranslateFn): string {
-  const mode0 = SEND_MODES.find((m) => m.value === mode);
-  return mode0 ? t(mode0.labelKey) : mode;
-}
 
 function submissionLabel(status: SubmissionDto["status"], t: TranslateFn): string {
   switch (status) {
@@ -114,15 +100,8 @@ function AnswerPanel({
   const [state, setState] = useState<AnswerState | null>(null);
   const [sendCfg, setSendCfg] = useState<SendConfigDto | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
-  const [sendMode, setSendMode] = useState<SendMode>("text");
-  const [agree, setAgree] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewText, setPreviewText] = useState<string | null>(null);
-  const [previewBusy, setPreviewBusy] = useState(false);
-  const [downloadBusy, setDownloadBusy] = useState(false);
-  const [previewErr, setPreviewErr] = useState<string | null>(null);
   const [sub, setSub] = useState<SubmissionDto | null>(null);
   const [subs, setSubs] = useState<SubmissionDto[]>([]);
   const cancelRef = useRef(false);
@@ -140,8 +119,6 @@ function AnswerPanel({
     setDraft(e.answer ?? "");
     setErr(null);
     setSendOpen(false);
-    setSendMode("text");
-    setAgree(false);
     setSub(null);
     setSendErr(null);
     cancelRef.current = false;
@@ -180,20 +157,6 @@ function AnswerPanel({
       cancelRef.current = true;
     };
   }, [e.id]);
-
-  // Drop the blob URL whenever the preview changes or the panel unmounts.
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
-
-  // A preview is only valid for the draft/mode it was generated from.
-  useEffect(() => {
-    setPreviewUrl(null);
-    setPreviewText(null);
-    setPreviewErr(null);
-  }, [draft, sendMode]);
 
   const setBusySync = (v: boolean) => {
     busyRef.current = v;
@@ -279,8 +242,8 @@ function AnswerPanel({
   const sortedHistory = [...history].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   const current = state?.current;
 
-  const confirmSend = async (answerOverride?: string) => {
-    const answer = (answerOverride ?? draft).trim();
+  const confirmSend = async (mode: SendMode) => {
+    const answer = draft.trim();
     const isQuiz = e.kind === "quiz";
     if (!answer && !(isQuiz && e.selections.length > 0)) return;
     setSending(true);
@@ -291,7 +254,7 @@ function AnswerPanel({
       description: t("toast.sendLoadingDesc"),
     });
     try {
-      const started = await sendAnswerToPortal(e.id, answer, sendMode, isQuiz ? e.selections : undefined);
+      const started = await sendAnswerToPortal(e.id, answer, mode, isQuiz ? e.selections : undefined);
       setSub(started);
       let final = started;
       const deadline = Date.now() + 150_000;
@@ -312,16 +275,20 @@ function AnswerPanel({
             : final.detail || t("toast.sendOkPlain"),
         });
         patchExercise(e.id, { done: true, status: "done" });
+        setSendOpen(false);
       } else if (final.status === "already") {
         toast.info(t("toast.sendAlready"), { id: toastId, description: final.detail });
         patchExercise(e.id, { done: true, status: "done" });
+        setSendOpen(false);
       } else if (final.status === "unknown") {
         toast.warning(t("toast.sendUnknown"), {
           id: toastId,
           description: t("toast.sendUnknownDesc", { detail: final.detail }),
         });
+        setSendErr(final.detail || t("toast.sendUnknown"));
       } else {
         toast.error(t("toast.sendFail"), { id: toastId, description: final.detail });
+        setSendErr(final.detail || t("toast.sendFail"));
       }
       onRefresh();
       void loadSubs();
@@ -332,49 +299,7 @@ function AnswerPanel({
       toast.error(t("toast.sendFail"), { id: toastId, description: msg });
     } finally {
       setSending(false);
-      setSendOpen(false);
       cancelRef.current = true;
-    }
-  };
-
-  const previewArtifact = async () => {
-    if (sendMode !== "txt" && sendMode !== "pdf") return;
-    setPreviewBusy(true);
-    setPreviewErr(null);
-    try {
-      const { blob } = await fetchSendArtifact(e.id, draft, sendMode);
-      if (sendMode === "pdf") {
-        setPreviewText(null);
-        setPreviewUrl(URL.createObjectURL(blob));
-      } else {
-        setPreviewUrl(null);
-        setPreviewText(await blob.text());
-      }
-    } catch (x) {
-      setPreviewErr(x instanceof Error ? x.message : String(x));
-    } finally {
-      setPreviewBusy(false);
-    }
-  };
-
-  const downloadArtifact = async () => {
-    if (sendMode !== "txt" && sendMode !== "pdf") return;
-    setDownloadBusy(true);
-    setPreviewErr(null);
-    try {
-      const { blob, filename } = await fetchSendArtifact(e.id, draft, sendMode, true);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (x) {
-      setPreviewErr(x instanceof Error ? x.message : String(x));
-    } finally {
-      setDownloadBusy(false);
     }
   };
 
@@ -489,7 +414,7 @@ function AnswerPanel({
                 }}
                 disabled={!canSend}
               >
-                <Send aria-hidden />
+                <SendHorizontal aria-hidden />
                 {t("send.button")}
               </Button>
             )}
@@ -542,150 +467,15 @@ function AnswerPanel({
           <p className="text-xs text-muted-foreground">{t("send.blockedDone")}</p>
         )}
 
-        {sendOpen && (
-          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3.5 text-sm">
-            <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-brand">
-              <span>{t("send.stepReview")}</span>
-              <span className="text-muted-foreground" aria-hidden>→</span>
-              {isUpload && (
-                <>
-                  <span>{t("send.stepFormat")}</span>
-                  <span className="text-muted-foreground" aria-hidden>→</span>
-                </>
-              )}
-              <span>{isUpload ? t("send.stepConfirm3") : t("send.stepConfirm2")}</span>
-            </div>
-            <div className="flex items-start gap-2 font-semibold text-foreground">
-              <CircleAlert className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden />
-              <span>{t("send.warning")}</span>
-            </div>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-foreground/90">
-              <li>
-                {isForum
-                  ? t("send.howForum")
-                  : !isUpload
-                    ? e.isSurvey
-                      ? t("send.howSurvey")
-                      : t("send.howQuiz")
-                    : sendMode === "text"
-                      ? t("send.howText")
-                      : sendMode === "pdf"
-                        ? t("send.howPdf")
-                        : t("send.howTxt")}
-              </li>
-              <li>{t("send.irreversible")}</li>
-              <li>{t("send.check")}</li>
-            </ul>
-
-            {isUpload && (
-              <div className="mt-3">
-                <div className="mb-1.5 text-[13px] font-medium text-foreground">{t("send.formatTitle")}</div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {SEND_MODES.map((m) => {
-                    const Icon = m.icon;
-                    const selected = sendMode === m.value;
-                    return (
-                      <button
-                        key={m.value}
-                        type="button"
-                        onClick={() => setSendMode(m.value)}
-                        disabled={sending}
-                        aria-pressed={selected}
-                        className={cn(
-                          "flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-[12px] transition-colors",
-                          "disabled:cursor-not-allowed disabled:opacity-60",
-                          selected
-                            ? "border-brand/60 bg-brand/15 text-foreground"
-                            : "border-border bg-muted/30 text-muted-foreground hover:bg-accent/40",
-                        )}
-                      >
-                        <Icon className="size-4" aria-hidden />
-                        {t(m.labelKey)}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  {(() => {
-                    const m = SEND_MODES.find((x) => x.value === sendMode);
-                    return m ? t(m.hintKey) : "";
-                  })()}
-                </p>
-
-                {(sendMode === "txt" || sendMode === "pdf") && (
-                  <>
-                    <div className="mt-2 flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        onClick={() => void previewArtifact()}
-                        disabled={previewBusy || !draft.trim()}
-                      >
-                        {previewBusy ? <Loader2 className="animate-spin" aria-hidden /> : <Eye aria-hidden />}
-                        {t("send.preview")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        onClick={() => void downloadArtifact()}
-                        disabled={downloadBusy || !draft.trim()}
-                      >
-                        {downloadBusy ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
-                        {t("send.download")}
-                      </Button>
-                    </div>
-                    {previewErr && (
-                      <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                        {previewErr}
-                      </p>
-                    )}
-                    {previewUrl && (
-                      <iframe
-                        src={previewUrl}
-                        title={t("send.previewTitle")}
-                        className="mt-2 h-72 w-full rounded-md border border-border bg-white"
-                      />
-                    )}
-                    {previewText != null && (
-                      <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-2.5 text-[12px] leading-relaxed">
-                        {previewText}
-                      </pre>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
-            <label className="mt-3 flex cursor-pointer items-start gap-2 text-[13px]">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 accent-brand"
-                checked={agree}
-                onChange={(ev) => setAgree(ev.target.checked)}
-              />
-              <span>{t("send.agree")}</span>
-            </label>
-            {sendErr && (
-              <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{sendErr}</p>
-            )}
-            <div className="mt-3 flex items-center justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setSendOpen(false)} disabled={sending}>
-                {t("send.cancel")}
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => void confirmSend()}
-                disabled={!agree || sending || (wantsText ? !draft.trim() : e.selections.length === 0)}
-              >
-                {sending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
-                {sending ? t("send.sending") : t("send.confirm")}
-              </Button>
-            </div>
-          </div>
-        )}
+        <SendDialog
+          open={sendOpen}
+          onOpenChange={setSendOpen}
+          exercise={e}
+          draft={draft}
+          sending={sending}
+          sendErr={sendErr}
+          onConfirm={(mode) => void confirmSend(mode)}
+        />
 
         {sub && (
           <div
