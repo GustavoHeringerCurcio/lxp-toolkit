@@ -43,10 +43,16 @@ export interface PdfRef {
   remoteUrl: string;
 }
 
+export interface QuizOption {
+  /** Portal option id (used by the submit endpoint). */
+  id: number;
+  text: string;
+}
+
 export interface QuizQ {
   id: number;
   text: string;
-  options: string[];
+  options: QuizOption[];
 }
 
 /** One chosen option for a quiz question (optionIndex is 0-based). */
@@ -54,12 +60,18 @@ export interface QuizSelection {
   questionId: number;
   optionIndex: number;
   letter: string;
+  /** Portal option id of the chosen alternative. */
+  optionId: number;
 }
 
 export interface Exercise {
   id: number;
   title: string;
   kind: ExerciseKind;
+  /** Portal enrollment id (from the topic context); required to submit quizzes. */
+  enrollmentId: number | null;
+  /** A "Pesquisa": answered straight through the endpoint, no attempt/finish cycle. */
+  isSurvey: boolean;
   /** Raw content classification (pdf/reading/link/forum/other/quiz/file_upload). */
   contentKind: ContentKind;
   /** Whether the portal records progress for this item (drives "mark as completed"). */

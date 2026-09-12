@@ -27,22 +27,30 @@ export interface RemoteFile {
   url: string;
 }
 
+export interface QuizOption {
+  id: number;
+  text: string;
+}
+
 export interface QuizQ {
   id: number;
   text: string;
-  options: string[];
+  options: QuizOption[];
 }
 
 export interface QuizSelection {
   questionId: number;
   optionIndex: number;
   letter: string;
+  optionId: number;
 }
 
 export interface Exercise {
   id: number;
   title: string;
   kind: ExerciseKind;
+  enrollmentId: number | null;
+  isSurvey: boolean;
   contentKind: ContentKind;
   isRecordProgress: boolean;
   courseId: number;

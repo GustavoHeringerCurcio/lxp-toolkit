@@ -4,19 +4,32 @@
 questions, file-upload instructions, links), grades, notices, messages, achievements, calendar,
 communities, and LTI tools. Only the **write** side (mutating the academic record) remains unknown.
 
-## 1. Quiz submit (HIGH priority for the exercise agent)
+## 1. Quiz submit (SOLVED)
 
-**Status:** ❌ unknown
+**Status:** ✅ solved (2026-09-11, verified against the live SPA by aborting the network call).
 
-**Known:**
+The student quiz flow is driven by the SPA's Vuex actions in the `plataforma/enrollment` module,
+which call:
+
+- **Answer a question** → `POST /v1/plataforma/content/enrollment/{enrollmentId}/quiz/{topicId}`
+  with body `{ "questionId": <id>, "optionId": <id> }`.
+  Vuex: `actionAnswerQuizQuestion({ enrollmentId, topic: { topicId }, questionId, optionId })`.
+- **Finish the attempt** → `POST /v1/plataforma/content/enrollment/{enrollmentId}/quiz/{topicId}/attempt/{attemptId}`
+  with an empty body.
+  Vuex: `actionFinishQuizAttempt({ enrollmentId, topic: { topicId }, attemptId })`.
+
+`enrollmentId` comes from the topic `context`. Because writes may hit AWS WAF, the runner drives
+these through the SPA store (which uses the authenticated `$axios`), not native `fetch`. A
+**Pesquisa** (survey) is submitted by the answer call alone — it has no attempt/finish cycle.
+
+Implemented in `scripts/submit-task.ts::submitQuizViaStore` (`action: "quiz"`, with `survey: true`
+for pesquisas) and surfaced by the assistant (`assistant/src/send.ts::launchQuizSubmit`).
+
+**Known (read side):**
 - Quiz content fully readable via `GET /v2/plataforma/content/academics-main/{courseId}/topics/{topicId}`
   → `topics.content.questions[]` (each with `id`, `enunciated`, `options[]`).
 - Quiz `topicTypeId`s: 37 ("Exercícios"), 15 ("Questionário"), 29/30 (pre/post-test).
 - `content.hasRetries`, `numberRetries`, `hasCompletedAllAttempts` gate retries.
-
-**Missing:** the submit/answer endpoint(s). Candidates to probe (live interaction + network recorder):
-`POST .../topics/{topicId}/answer`, `.../questions/{questionId}/answer`, `.../topics/{topicId}/finish`,
-`.../attempt`.
 
 ## 2. File upload submit (HIGH priority)
 
@@ -55,11 +68,11 @@ GET reads work without the AWS WAF token, but `aws-waf-token` cookie + `awswaf_s
 present. Writes (POST/PUT) may require the WAF challenge solved in-browser. Recommend driving all
 writes through Playwright (in-page) rather than native `fetch`.
 
-## How to close gaps 1 & 2
+## How to close gap 2 (file upload)
 
 ```bash
 npm run capture-api -- --url https://unifoa2.grupoa.education/plataforma/course/5254272/content/89612190 --headful
-# → answer one quiz question and upload one file, then press Enter to dump the captured API calls
+# → upload one file, then press Enter to dump the captured API calls
 ```
 
 > ⚠ These actions submit real work to the student's academic record. Run only with explicit intent.

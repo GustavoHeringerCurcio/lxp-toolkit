@@ -31,8 +31,14 @@ import { config, logger } from "../src/config.js";
  *   back to a generic "lxp-submit-<timestamp>-<itemId>" name.
  *
  * Quiz request JSON:
- *   { "action": "quiz", "courseId": number, "itemId": number,
- *     "selections": [{ questionId, optionIndex, letter, questionText, optionText }] }
+ *   { "action": "quiz", "courseId": number, "itemId": number, "enrollmentId"?: number,
+ *     "survey"?: boolean,
+ *     "selections": [{ questionId, optionIndex, letter, optionId, questionText, optionText }] }
+ *   When `enrollmentId` is present the runner submits through the SPA's own
+ *   Vuex actions (actionAnswerQuizQuestion → actionFinishQuizAttempt); otherwise
+ *   it falls back to clicking the options in the DOM. When `survey` is true
+ *   (a "Pesquisa") it only answers the questions and skips the attempt/finish
+ *   step, which pesquisas do not use.
  *
  * Mark request JSON (manually "mark as completed"):
  *   { "action": "mark", "courseId": number, "itemId": number }
@@ -44,6 +50,8 @@ interface QuizItem {
   questionId: number;
   optionIndex: number;
   letter: string;
+  /** Portal option id — required to submit through the SPA store/endpoint. */
+  optionId?: number;
   questionText: string;
   optionText: string;
 }
@@ -63,7 +71,16 @@ type SubmitRequest =
       /** Absolute path to a pre-generated file to attach (used by "pdf"). */
       filePath?: string;
     }
-  | { action: "quiz"; courseId: number; itemId: number; selections: QuizItem[] }
+  | {
+      action: "quiz";
+      courseId: number;
+      itemId: number;
+      /** Portal enrollment id (from the topic context); enables the store path. */
+      enrollmentId?: number;
+      /** A "Pesquisa": answer only, no attempt/finish cycle. */
+      survey?: boolean;
+      selections: QuizItem[];
+    }
   | { action: "mark"; courseId: number; itemId: number };
 
 interface SubmitResult {
@@ -361,6 +378,159 @@ async function answerQuiz(
   return { done, total: selections.length, notes };
 }
 
+interface StoreQuizResult {
+  answered: number;
+  total: number;
+  finished: boolean;
+  attemptId: number | null;
+  notes: string[];
+  error?: string;
+}
+
+/**
+ * Submit a quiz by driving the SPA's own Vuex store instead of scraping the DOM.
+ * The portal actions are namespaced `plataforma/enrollment` and build (verified
+ * against the live SPA by aborting the network call):
+ *   POST /v1/plataforma/content/enrollment/{enrollmentId}/quiz/{topicId}
+ *        body { questionId, optionId }             (actionAnswerQuizQuestion)
+ *   POST /v1/plataforma/content/enrollment/{enrollmentId}/quiz/{topicId}/attempt/{attemptId}
+ *        body null                                 (actionFinishQuizAttempt)
+ * Payloads:
+ *   answer: { enrollmentId, topic: { topicId }, questionId, optionId }
+ *   finish: { enrollmentId, topic: { topicId }, attemptId }
+ * This reuses the live bearer token + AWS WAF session, so it is far more robust
+ * than clicking options. `survey` skips the finish step: a pesquisa is submitted
+ * by answering the question, with no attempt/finish cycle.
+ */
+async function submitQuizViaStore(
+  page: Page,
+  enrollmentId: number,
+  topicId: number,
+  selections: QuizItem[],
+  survey = false,
+): Promise<StoreQuizResult> {
+  const args = {
+    enrollmentId,
+    topicId,
+    survey,
+    selections: selections.map((s) => ({ questionId: s.questionId, optionId: s.optionId ?? 0 })),
+  };
+  return page.evaluate((arg) => {
+    interface Store {
+      dispatch: (type: string, payload?: unknown) => Promise<unknown>;
+      getters: Record<string, unknown>;
+      state?: Record<string, unknown>;
+    }
+    const w = window as unknown as { $nuxt?: { $store?: Store } };
+    const store = w.$nuxt?.$store;
+    if (!store) {
+      return {
+        answered: 0,
+        total: arg.selections.length,
+        finished: false,
+        attemptId: null,
+        notes: [] as string[],
+        error: "no-store",
+      };
+    }
+    const topic = { topicId: arg.topicId };
+    const notes: string[] = [];
+    let answered = 0;
+    let attemptId: number | null = null;
+
+    const messageOf = (err: unknown): string => {
+      if (err && typeof err === "object" && "message" in err) return String((err as { message: unknown }).message);
+      return String(err);
+    };
+    const numberOrNull = (value: unknown): number | null => {
+      if (value == null) return null;
+      const n = Number(value);
+      return Number.isNaN(n) ? null : n;
+    };
+    const attemptIdFrom = (data: unknown): number | null => {
+      if (!data || typeof data !== "object") return null;
+      const o = data as Record<string, unknown>;
+      const direct = numberOrNull(o.enrollmentQuizAttemptId) ?? numberOrNull(o.attemptId) ?? numberOrNull(o.id);
+      if (direct != null) return direct;
+      const lists: unknown[] = [o.attempts, (o.content as Record<string, unknown> | undefined)?.attempts];
+      for (const list of lists) {
+        if (!Array.isArray(list) || list.length === 0) continue;
+        const last = list[list.length - 1] as Record<string, unknown>;
+        const id = numberOrNull(last?.id) ?? numberOrNull(last?.attemptId);
+        if (id != null) return id;
+      }
+      return null;
+    };
+    const attemptIdFromStore = (): number | null => {
+      const candidates: unknown[] = [];
+      try {
+        candidates.push(store.getters["plataforma/enrollment/getterSelectedTopic"]);
+        candidates.push(store.getters["plataforma/content/getterSelectedTopic"]);
+        const state = store.state?.plataforma as Record<string, unknown> | undefined;
+        candidates.push((state?.enrollment as Record<string, unknown> | undefined)?.selectedTopic);
+        candidates.push((state?.content as Record<string, unknown> | undefined)?.selectedTopic);
+      } catch {
+        /* ignore */
+      }
+      for (const c of candidates) {
+        if (!c || typeof c !== "object") continue;
+        const o = c as Record<string, unknown>;
+        const direct = numberOrNull(o.enrollmentQuizAttemptId);
+        if (direct != null) return direct;
+        const atts = (o.content as Record<string, unknown> | undefined)?.attempts;
+        if (Array.isArray(atts) && atts.length) {
+          const last = atts[atts.length - 1] as Record<string, unknown>;
+          const id = numberOrNull(last?.id) ?? numberOrNull(last?.attemptId);
+          if (id != null) return id;
+        }
+      }
+      return null;
+    };
+
+    return (async () => {
+      for (const sel of arg.selections) {
+        try {
+          const data = await store.dispatch("plataforma/enrollment/actionAnswerQuizQuestion", {
+            enrollmentId: arg.enrollmentId,
+            topic,
+            questionId: sel.questionId,
+            optionId: sel.optionId,
+          });
+          answered++;
+          const id = attemptIdFrom(data);
+          if (id != null) attemptId = id;
+        } catch (err) {
+          notes.push(`Q${sel.questionId}: ${messageOf(err)}`);
+        }
+      }
+
+      if (attemptId == null) attemptId = attemptIdFromStore();
+
+      // A pesquisa (survey) is submitted by answering; there is no attempt to finish.
+      if (arg.survey) {
+        return { answered, total: arg.selections.length, finished: answered > 0, attemptId, notes };
+      }
+
+      let finished = false;
+      if (attemptId == null) {
+        notes.push("attemptId não encontrado");
+      } else {
+        try {
+          await store.dispatch("plataforma/enrollment/actionFinishQuizAttempt", {
+            enrollmentId: arg.enrollmentId,
+            topic,
+            attemptId,
+          });
+          finished = true;
+        } catch (err) {
+          notes.push(`finish: ${messageOf(err)}`);
+        }
+      }
+      return { answered, total: arg.selections.length, finished, attemptId, notes };
+    })();
+  }, args);
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const reqPath = flagValue(args, "--req");
@@ -432,6 +602,70 @@ async function main(): Promise<void> {
     if (alreadyReason && !dryRun) return already(alreadyReason);
 
     if (req.action === "quiz") {
+      // Preferred path: drive the SPA store directly — no DOM scraping.
+      if (req.enrollmentId) {
+        // Track the quiz HTTP calls too: the Vuex action may reject while
+        // committing the response even though the answer reached the server, so
+        // the 2xx status is the source of truth.
+        const quizResponses: { url: string; status: number; method: string }[] = [];
+        const onQuizResponse = (res: import("playwright").Response): void => {
+          const u = res.url();
+          if (/\/content\/enrollment\/\d+\/quiz\//.test(u))
+            quizResponses.push({ url: u, status: res.status(), method: res.request().method() });
+        };
+        page.on("response", onQuizResponse);
+        const viaStore = await submitQuizViaStore(
+          page,
+          req.enrollmentId,
+          req.itemId,
+          req.selections,
+          req.survey === true,
+        )
+          .catch(
+            (err): StoreQuizResult => ({
+              answered: 0,
+              total: req.selections.length,
+              finished: false,
+              attemptId: null,
+              notes: [err instanceof Error ? err.message : String(err)],
+              error: "threw",
+            }),
+          )
+          .finally(() => page.off("response", onQuizResponse));
+        const answerHttpOk = quizResponses.filter(
+          (r) => r.method === "POST" && !/\/attempt\//.test(r.url) && r.status >= 200 && r.status < 300,
+        ).length;
+        const answeredOk = Math.max(viaStore.answered, answerHttpOk);
+        const allAnswered = req.selections.length > 0 && answeredOk >= req.selections.length;
+        const finished = req.survey ? allAnswered : viaStore.finished;
+        logger.info({ ...viaStore, answerHttpOk }, "quiz submitted via SPA store");
+        if (allAnswered && finished) {
+          result = {
+            ok: true,
+            status: "ok",
+            detail: req.survey
+              ? `${answeredOk}/${viaStore.total} respostas enviadas pelo endpoint do portal (pesquisa).`
+              : `${answeredOk}/${viaStore.total} respostas enviadas pelo endpoint do portal.`,
+            at: new Date().toISOString(),
+          };
+          writeResult(resultPath, result);
+          console.log(`submit-task done [${result.status}]`);
+          process.exit(0);
+        }
+        if (answeredOk > 0) {
+          result = {
+            ok: false,
+            status: "unknown",
+            detail: `${answeredOk}/${viaStore.total} respostas enviadas, mas a finalização não confirmou. ${viaStore.notes.join(" | ")}`,
+            at: new Date().toISOString(),
+          };
+          writeResult(resultPath, result);
+          console.log(`submit-task done [${result.status}]`);
+          process.exit(0);
+        }
+        logger.warn({ ...viaStore, answerHttpOk }, "SPA store quiz path unavailable; falling back to DOM");
+      }
+
       const outcome = await answerQuiz(page, req.selections);
       logger.info(outcome, "quiz options selected");
       if (outcome.done === 0) {

@@ -83,7 +83,7 @@ function showOne(id: number): void {
     console.log(`\n  questões (${v.questions.length}):`);
     for (const q of v.questions) {
       console.log(`    Q${q.id}: ${q.text}`);
-      q.options.forEach((o, i) => console.log(`        ${String.fromCharCode(97 + i)}) ${o}`));
+      q.options.forEach((o, i) => console.log(`        ${String.fromCharCode(97 + i)}) ${o.text}`));
     }
   }
   if (v.answer) {

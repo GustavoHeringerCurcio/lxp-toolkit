@@ -198,7 +198,7 @@ export async function buildPromptVars(
     const lines: string[] = [];
     for (const q of e.questions) {
       lines.push(`Q${q.id}: ${q.text}`);
-      q.options.forEach((opt, i) => lines.push(`   ${String.fromCharCode(97 + i)}) ${opt}`));
+      q.options.forEach((opt, i) => lines.push(`   ${String.fromCharCode(97 + i)}) ${opt.text}`));
     }
     questoes = lines.join("\n");
   }
@@ -239,7 +239,10 @@ export async function buildMessages(
   const vars = await buildPromptVars(e, profile, notes, sections);
   const messages: ChatMessage[] = [];
 
-  const system = renderTemplate(buildStylePrompt(style, extraInstructions), vars).trim();
+  // Quiz answers are pure option selections: never prefix them with the
+  // student's name/matrícula.
+  const effectiveStyle = e.kind === "quiz" ? { ...style, includeIdentity: false } : style;
+  const system = renderTemplate(buildStylePrompt(effectiveStyle, extraInstructions), vars).trim();
   if (system) messages.push({ role: "system", content: system });
 
   let user = buildActivityPrompt(vars, sections).trim();
@@ -290,7 +293,12 @@ export function parseQuizSelections(text: string, questions: QuizQ[]): QuizSelec
     .filter((q) => found.has(q.id))
     .map((q) => {
       const optionIndex = found.get(q.id) as number;
-      return { questionId: q.id, optionIndex, letter: String.fromCharCode(97 + optionIndex) };
+      return {
+        questionId: q.id,
+        optionIndex,
+        letter: String.fromCharCode(97 + optionIndex),
+        optionId: q.options[optionIndex]?.id ?? 0,
+      };
     });
 }
 

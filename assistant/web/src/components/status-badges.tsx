@@ -7,15 +7,22 @@ import { CONTENT_LABEL, kindMeta } from "@/lib/kind";
 export function TypeBadge({
   kind,
   contentKind,
+  isSurvey,
   className,
 }: {
   kind: Exercise["kind"];
   contentKind?: Exercise["contentKind"];
+  isSurvey?: boolean;
   className?: string;
 }) {
   const meta = kindMeta(kind);
   const Icon = meta.icon;
-  const title = contentKind ? `${meta.label} · ${CONTENT_LABEL[contentKind]}` : meta.label;
+  const label = isSurvey ? "Pesquisa" : meta.short;
+  const title = isSurvey
+    ? "Pesquisa (resposta enviada direto ao portal)"
+    : contentKind
+      ? `${meta.label} · ${CONTENT_LABEL[contentKind]}`
+      : meta.label;
   return (
     <span
       title={title}
@@ -26,7 +33,7 @@ export function TypeBadge({
       )}
     >
       <Icon className="size-3" aria-hidden />
-      {meta.short}
+      {label}
     </span>
   );
 }

@@ -6,6 +6,7 @@ import type {
   AnswerEntry,
   AnswerState,
   ExercisesPayload,
+  QuizSelection,
 } from "./types";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -210,8 +211,16 @@ export interface SubmissionDto {
   confirmationAt?: string;
 }
 
-export async function sendAnswerToPortal(id: number, answer: string, mode: SendMode = "txt"): Promise<SubmissionDto> {
-  const body = (await post("/api/send", { id, answer, mode })) as { error?: string; submission?: SubmissionDto };
+export async function sendAnswerToPortal(
+  id: number,
+  answer: string,
+  mode: SendMode = "txt",
+  selections?: QuizSelection[],
+): Promise<SubmissionDto> {
+  const body = (await post("/api/send", { id, answer, mode, selections })) as {
+    error?: string;
+    submission?: SubmissionDto;
+  };
   if (!body.submission) throw new Error(body.error ?? "HTTP");
   return body.submission;
 }

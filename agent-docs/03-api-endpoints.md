@@ -38,6 +38,8 @@ All requests carry the headers from `02-auth.md`. Query params shown are real ex
 | GET | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}` | **item/topic detail** — richest source (`topics.content` + `context`) |
 | GET | `/v1/plataforma/content/lti/tool/list-by-alias/student` | LTI tool list |
 | POST | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}/progress` | "Mark as completed" (write). Empty body → `204`; bearer only, no WAF. See `04-topic-types.md` + `src/content.ts::isMarkable` |
+| POST | `/v1/plataforma/content/enrollment/{enrollmentId}/quiz/{topicId}` | **Answer one quiz question** (write). Body `{ "questionId", "optionId" }`. Driven through the SPA Vuex action `plataforma/enrollment/actionAnswerQuizQuestion` (`{ enrollmentId, topic: { topicId }, questionId, optionId }`) so it reuses the live bearer + WAF session. `enrollmentId` comes from the topic `context` |
+| POST | `/v1/plataforma/content/enrollment/{enrollmentId}/quiz/{topicId}/attempt/{attemptId}` | **Finish a quiz attempt** (write). Empty body. Vuex `plataforma/enrollment/actionFinishQuizAttempt` (`{ enrollmentId, topic: { topicId }, attemptId }`). **Pesquisas** (surveys) skip this and are submitted by the answer call alone |
 
 ## Grades
 
@@ -76,4 +78,5 @@ All requests carry the headers from `02-auth.md`. Query params shown are real ex
 
 ## Known unknowns (write side, deliberately not automated)
 
-Quiz submit, file-upload submit, forum post/reply endpoints. See `docs/gaps.md`.
+File-upload submit, forum post/reply endpoints. See `docs/gaps.md`.
+Quiz submit is **solved** (see the `enrollment/{id}/quiz/...` rows above).

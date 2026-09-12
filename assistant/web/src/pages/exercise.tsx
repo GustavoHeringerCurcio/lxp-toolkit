@@ -258,7 +258,8 @@ function AnswerPanel({
 
   const confirmSend = async (answerOverride?: string) => {
     const answer = (answerOverride ?? draft).trim();
-    if (!answer) return;
+    const isQuiz = e.kind === "quiz";
+    if (!answer && !(isQuiz && e.selections.length > 0)) return;
     setSending(true);
     setSendErr(null);
     cancelRef.current = false;
@@ -267,7 +268,7 @@ function AnswerPanel({
       description: "Fazendo login e entregando a atividade.",
     });
     try {
-      const started = await sendAnswerToPortal(e.id, answer, sendMode);
+      const started = await sendAnswerToPortal(e.id, answer, sendMode, isQuiz ? e.selections : undefined);
       setSub(started);
       let final = started;
       const deadline = Date.now() + 150_000;
@@ -356,7 +357,8 @@ function AnswerPanel({
 
   const isUpload = e.kind === "upload";
   const isDone = e.done || e.status === "done";
-  const canSend = !isDone && Boolean(sendCfg?.enabled) && Boolean(draft.trim()) && !sending;
+  const canSend =
+    !isDone && Boolean(sendCfg?.enabled) && !sending && (isUpload ? Boolean(draft.trim()) : e.selections.length > 0);
 
   return (
     <CollapsibleCard
@@ -467,17 +469,39 @@ function AnswerPanel({
         </div>
       }
     >
-        <Textarea
-          value={draft}
-          onChange={(ev) => setDraft(ev.target.value)}
-          placeholder={
-            isUpload
-              ? "Escreva a resposta para entregar — ou gere com a IA e revise antes de enviar."
-              : "Gere as respostas do questionário — a IA marca as alternativas ao enviar."
-          }
-          rows={6}
-          className="min-h-36 field-sizing-fixed leading-relaxed"
-        />
+        {isUpload ? (
+          <Textarea
+            value={draft}
+            onChange={(ev) => setDraft(ev.target.value)}
+            placeholder="Escreva a resposta para entregar — ou gere com a IA e revise antes de enviar."
+            rows={6}
+            className="min-h-36 field-sizing-fixed leading-relaxed"
+          />
+        ) : e.selections.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+            Clique em “Gerar com IA” — a alternativa escolhida aparece destacada em verde nas questões.
+          </p>
+        ) : (
+          <div className="rounded-md border border-ok/40 bg-ok/10 p-3">
+            <p className="mb-1.5 text-xs font-semibold text-ok">
+              {e.isSurvey ? "Resposta que será enviada" : "Seleção que será enviada"}
+            </p>
+            <ul className="space-y-1">
+              {e.questions.map((q, qi) => {
+                const sel = e.selections.find((s) => s.questionId === q.id);
+                if (!sel) return null;
+                return (
+                  <li key={q.id} className="text-[13px] text-foreground/90">
+                    <span className="font-semibold">{qi + 1}. </span>
+                    <span className="font-semibold text-ok">
+                      {sel.letter.toUpperCase()}) {q.options[sel.optionIndex]?.text ?? ""}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {err && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</p>}
 
@@ -497,7 +521,9 @@ function AnswerPanel({
             <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-foreground/90">
               <li>
                 {!isUpload
-                  ? "Sua conta LXP abre, as alternativas são marcadas e o questionário é enviado."
+                  ? e.isSurvey
+                    ? "Sua conta LXP abre e a resposta é enviada direto ao endpoint da pesquisa (sem tentativa/nota)."
+                    : "Sua conta LXP abre, as alternativas são marcadas e o questionário é enviado."
                   : sendMode === "text"
                     ? "Sua conta LXP abre e o texto é digitado direto no campo de resposta do portal."
                     : sendMode === "pdf"
@@ -606,7 +632,7 @@ function AnswerPanel({
                 variant="default"
                 size="sm"
                 onClick={() => void confirmSend()}
-                disabled={!agree || sending || !draft.trim()}
+                disabled={!agree || sending || (isUpload ? !draft.trim() : e.selections.length === 0)}
               >
                 {sending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
                 {sending ? "Enviando… (login no portal)" : "Confirmar e enviar"}
@@ -825,7 +851,7 @@ export function ExercisePage() {
           <header className="overflow-hidden rounded-xl border border-border bg-card">
             <span className="pointer-events-none block h-0.5 bg-gradient-to-r from-brand via-brand-2 to-teal" aria-hidden />
             <div className={cn("flex flex-wrap items-center gap-2 p-5", headerCard.open && "pb-0")}>
-              <TypeBadge kind={e.kind} contentKind={e.contentKind} />
+              <TypeBadge kind={e.kind} contentKind={e.contentKind} isSurvey={e.isSurvey} />
               {e.done && <DoneBadge />}
               <StatusBadge e={e} />
               {e.deadlineAt && (
@@ -884,22 +910,37 @@ export function ExercisePage() {
               badge={<span className="text-xs font-normal text-muted-foreground">({e.questions.length})</span>}
               bodyClassName="space-y-2 p-4"
             >
-              {e.questions.map((q, qi) => (
-                <div key={q.id} className="rounded-md border border-border bg-muted/25 p-3">
-                  <div className="mb-1 inline-flex size-5 items-center justify-center rounded-full bg-brand/20 text-[11px] font-bold text-brand">
-                    {qi + 1}
+              {e.questions.map((q, qi) => {
+                const sel = e.selections.find((s) => s.questionId === q.id);
+                return (
+                  <div key={q.id} className="rounded-md border border-border bg-muted/25 p-3">
+                    <div className="mb-1 inline-flex size-5 items-center justify-center rounded-full bg-brand/20 text-[11px] font-bold text-brand">
+                      {qi + 1}
+                    </div>
+                    <p className="text-sm leading-relaxed">{q.text}</p>
+                    <div className="mt-1.5 space-y-0.5">
+                      {q.options.map((o, i) => {
+                        const chosen = sel?.optionIndex === i;
+                        return (
+                          <div
+                            key={o.id || i}
+                            className={cn(
+                              "flex items-center gap-1.5 rounded px-1 text-[13px]",
+                              chosen ? "font-semibold text-ok" : "text-muted-foreground",
+                            )}
+                          >
+                            <span className={cn("font-semibold", chosen ? "text-ok" : "text-foreground/70")}>
+                              {String.fromCharCode(97 + i)})
+                            </span>
+                            <span>{o.text}</span>
+                            {chosen && <CheckCircle2 className="size-3.5 shrink-0" aria-hidden />}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <p className="text-sm leading-relaxed">{q.text}</p>
-                  <div className="mt-1.5 space-y-0.5">
-                    {q.options.map((o, i) => (
-                      <div key={i} className="pl-1 text-[13px] text-muted-foreground">
-                        <span className="mr-1.5 font-semibold text-foreground/70">{String.fromCharCode(97 + i)})</span>
-                        {o}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </CollapsibleCard>
           )}
 

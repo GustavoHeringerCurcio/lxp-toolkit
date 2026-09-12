@@ -129,6 +129,8 @@ x-notice-show-modal: false
 | Verb | Path | Notes |
 |---|---|---|
 | POST | `/v2/plataforma/content/academics-main/{courseId}/topics/{topicId}/progress` | ✅ "Mark as completed": empty body → `204`; bearer only, no WAF (`src/actions.ts::markRead`) |
+| POST | `/v1/plataforma/content/enrollment/{enrollmentId}/quiz/{topicId}` | ✅ answer one quiz question: body `{ questionId, optionId }` (SPA action `plataforma/enrollment/actionAnswerQuizQuestion`) |
+| POST | `/v1/plataforma/content/enrollment/{enrollmentId}/quiz/{topicId}/attempt/{attemptId}` | ✅ finish a quiz attempt: empty body (SPA action `plataforma/enrollment/actionFinishQuizAttempt`); pesquisas skip it |
 
 ## Static assets
 
@@ -140,6 +142,7 @@ x-notice-show-modal: false
 
 ## Still unknown (write side — see docs/gaps.md)
 
-- Quiz submit endpoint (start → answer → grade)
 - File-upload submit endpoint (multipart POST)
 - Forum post/reply endpoints
+
+Quiz submit is solved: see the `enrollment/{id}/quiz/...` rows above.

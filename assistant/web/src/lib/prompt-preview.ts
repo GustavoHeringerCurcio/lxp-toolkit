@@ -150,7 +150,7 @@ export function buildVars(
     const lines: string[] = [];
     for (const q of e.questions) {
       lines.push(`Q${q.id}: ${q.text}`);
-      q.options.forEach((opt, i) => lines.push(`   ${String.fromCharCode(97 + i)}) ${opt}`));
+      q.options.forEach((opt, i) => lines.push(`   ${String.fromCharCode(97 + i)}) ${opt.text}`));
     }
     questoes = lines.join("\n");
   }

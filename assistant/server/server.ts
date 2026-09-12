@@ -21,7 +21,7 @@ import {
 import { enrich } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
 import { humanizeQuizAnswer, parseQuizSelections } from "../src/prompt.js";
-import type { AiActivitySections, AiStyle } from "../src/types.js";
+import type { AiActivitySections, AiStyle, QuizQ, QuizSelection } from "../src/types.js";
 import {
   launchUploadSubmit,
   launchQuizSubmit,
@@ -236,6 +236,37 @@ function allViews() {
 /** Only tasks/quizzes have AI-answerable content. */
 function isAnswerable(view: { kind: string }): boolean {
   return view.kind === "upload" || view.kind === "quiz";
+}
+
+/**
+ * Validate selections sent by the web app (they already carry the portal
+ * optionId). Returns only entries whose question/option exist, falling back to
+ * parsing the humanized answer text when none are usable.
+ */
+function coerceSelections(raw: unknown, questions: QuizQ[]): QuizSelection[] {
+  if (!Array.isArray(raw)) return [];
+  const byId = new Map(questions.map((q) => [q.id, q]));
+  const out: QuizSelection[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const questionId = Number(o.questionId);
+    const q = byId.get(questionId);
+    if (!q) continue;
+    const optionId = Number(o.optionId);
+    let optionIndex = Number(o.optionIndex);
+    if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= q.options.length) {
+      optionIndex = q.options.findIndex((opt) => opt.id === optionId);
+    }
+    if (optionIndex < 0 || optionIndex >= q.options.length) continue;
+    out.push({
+      questionId,
+      optionIndex,
+      letter: String.fromCharCode(97 + optionIndex),
+      optionId: q.options[optionIndex].id,
+    });
+  }
+  return out;
 }
 
 const server = createServer(async (req, res) => {
@@ -510,13 +541,22 @@ const server = createServer(async (req, res) => {
         const mode: SendMode = rawMode === "text" || rawMode === "pdf" || rawMode === "txt" ? rawMode : "txt";
         const view = findView(id);
         if (view.status === "done") return json(res, 400, { error: "Esta atividade já está concluída." });
-        if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de enviar." });
         const env = sendEnv();
         if (!env.enabled) return json(res, 503, { error: env.reason });
-        const selections = view.kind === "quiz" ? parseQuizSelections(answer, view.questions) : [];
-        if (view.kind === "quiz" && selections.length === 0)
-          return json(res, 400, { error: "Não foi possível identificar as alternativas escolhidas na resposta." });
-        saveAnswerVersion(id, answer, "manual", undefined, selections);
+
+        let selections: QuizSelection[] = [];
+        if (view.kind === "quiz") {
+          selections = coerceSelections(b.selections, view.questions);
+          if (selections.length === 0) selections = parseQuizSelections(answer, view.questions);
+          if (selections.length === 0)
+            return json(res, 400, { error: "Não foi possível identificar as alternativas escolhidas na resposta." });
+          const shown =
+            answer.trim() || selections.map((s) => `Q${s.questionId}: ${s.letter}`).join(", ");
+          saveAnswerVersion(id, shown, "manual", undefined, selections);
+        } else {
+          if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de enviar." });
+          saveAnswerVersion(id, answer, "manual", undefined, []);
+        }
         try {
           let submission;
           if (view.kind === "quiz") {

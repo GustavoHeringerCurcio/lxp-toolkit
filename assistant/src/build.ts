@@ -22,10 +22,22 @@ interface TreeItem {
   attachments: { url: string; filename: string | null; filesize: number | null }[];
   html: string | null;
   content: Record<string, unknown> | null;
+  context?: Record<string, unknown> | null;
 }
 
 /** Raw kinds that the portal lets the student complete with "Mark as completed". */
 const MARKABLE_CONTENT: ContentKind[] = ["pdf", "reading", "link", "other"];
+
+/**
+ * A "Pesquisa" is a quiz-like survey with no grade or attempt: it is answered
+ * straight through the endpoint. The portal does not expose a distinct type for
+ * it, so match the title/instructions (pt-BR "Pesquisa", "Enquete", "Survey",
+ * or the "Responda sinceramente" prompt).
+ */
+export function isSurveyItem(title: string, instructions: string): boolean {
+  const text = `${title} ${instructions}`.toLowerCase();
+  return /\bpesquisa\b|\benquete\b|\bsurvey\b/.test(text) || /responda sinceramente/.test(text);
+}
 
 /**
  * Map a raw content item to the action bucket shown in the UI, or `null` when
@@ -104,7 +116,10 @@ function parseQuestions(content: Record<string, unknown> | null): QuizQ[] {
   return qs.map((q) => {
     const raw = q as Record<string, unknown>;
     const options = Array.isArray(raw.options)
-      ? raw.options.map((o) => stripHtml(String((o as Record<string, unknown>).text ?? "")))
+      ? raw.options.map((o) => {
+          const opt = o as Record<string, unknown>;
+          return { id: Number(opt.id), text: stripHtml(String(opt.text ?? "")) };
+        })
       : [];
     return { id: Number(raw.id), text: stripHtml(String(raw.enunciated ?? "")), options };
   });
@@ -135,6 +150,10 @@ export function buildExercises(): Exercise[] {
         id: it.itemId,
         title: it.itemTitle,
         kind,
+        enrollmentId: it.context?.enrollmentId != null ? Number(it.context.enrollmentId) : null,
+        isSurvey:
+          kind === "quiz" &&
+          isSurveyItem(it.itemTitle, `${it.html ?? ""} ${String(it.content?.instructions ?? "")}`),
         contentKind: it.kind,
         isRecordProgress: it.isRecordProgress === true,
         courseId: course.courseId,

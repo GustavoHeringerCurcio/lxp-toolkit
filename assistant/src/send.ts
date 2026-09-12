@@ -102,7 +102,7 @@ export function launchUploadSubmit(
 interface QuizQuestion {
   id: number;
   text: string;
-  options: string[];
+  options: { id: number; text: string }[];
 }
 
 /**
@@ -111,12 +111,22 @@ interface QuizQuestion {
  * locate the right radio/option on the page.
  */
 export function launchQuizSubmit(
-  view: { id: number; courseId: number; title: string; questions: QuizQuestion[] },
+  view: {
+    id: number;
+    courseId: number;
+    title: string;
+    enrollmentId: number | null;
+    isSurvey: boolean;
+    questions: QuizQuestion[];
+  },
   selections: QuizSelection[],
 ): SubmissionEntry {
   const env = sendEnv();
   if (!env.enabled || !env.rootDir) {
     throw new Error(env.reason || "runner não configurado");
+  }
+  if (!view.enrollmentId) {
+    throw new Error("enrollmentId ausente: reindexe os exercícios (npm run index) para enviar o quiz.");
   }
 
   const at = Date.now();
@@ -132,14 +142,26 @@ export function launchQuizSubmit(
       questionId: s.questionId,
       optionIndex: s.optionIndex,
       letter: s.letter,
+      optionId: s.optionId || q?.options[s.optionIndex]?.id || 0,
       questionText: q?.text ?? "",
-      optionText: q?.options[s.optionIndex] ?? "",
+      optionText: q?.options[s.optionIndex]?.text ?? "",
     };
   });
 
   writeFileSync(
     reqFile,
-    JSON.stringify({ action: "quiz", courseId: view.courseId, itemId: view.id, selections: items }, null, 2),
+    JSON.stringify(
+      {
+        action: "quiz",
+        courseId: view.courseId,
+        itemId: view.id,
+        enrollmentId: view.enrollmentId,
+        survey: view.isSurvey === true,
+        selections: items,
+      },
+      null,
+      2,
+    ),
     "utf-8",
   );
 

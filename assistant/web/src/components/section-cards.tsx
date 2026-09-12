@@ -75,7 +75,7 @@ export function NextCard({ next, onClick }: { next: Exercise | null; onClick?: (
         {meta && <div className="mt-0.5 text-xs text-muted-foreground">{meta}</div>}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <TypeBadge kind={next.kind} contentKind={next.contentKind} />
+        <TypeBadge kind={next.kind} contentKind={next.contentKind} isSurvey={next.isSurvey} />
         <StatusBadge e={next} />
         {next.deadlineAt && <span className="text-[11px] tabular-nums text-muted-foreground">{fmtDeadline(next.deadlineAt)}</span>}
       </div>
