@@ -126,7 +126,7 @@ sit harmoniously on warm paper.
 
 | Route | Page | Content |
 |---|---|---|
-| `/` | **Agora** | greeting + overall progress ring, next-task hero with live countdown, **one merged progress bar** (done/late/open) that discloses per-module bars, urgency-grouped open queue |
+| `/` | **Agora** | combined status line (merged done/late/open bar + overall ring, disclosing per-module bars), greeting, next-task hero with live countdown, urgency-grouped open queue |
 | `/tarefas` | **Tarefas** | scope tabs (Abertas/Atrasadas/Concluídas/Todas) + module/type chips + list |
 | `/progresso` | **Progresso** | per-module progress bars, status/type distribution (CSS bars, `chart-*` tokens) |
 | `/tarefa/:id` | **Atividade** | reading column (prose width) + sticky workbench; focus mode; version timeline; 3-step send flow |
@@ -138,11 +138,11 @@ theme, refresh content.
 
 State shared across routes (scope, module/type filter) lives in `lib/app-state.tsx`.
 
-**Agora progress pattern.** `ProgressSummary` shows the whole scope as a single segmented bar
-(`ok`/`late`/`coming`) with a labelled legend and a chevron disclosure; expanding reveals one
-stacked bar per module. The disclosure state persists (`lxp.agora.progress.modules`). The header
-`ProgressRing` stays as the at-a-glance completion %, so the two are never redundant: the ring is
-the percentage, the bar is the composition.
+**Agora progress pattern.** `ProgressSummary` is the page's top line: a single segmented bar
+(`ok`/`late`/`coming`) with the overall `ProgressRing` on the right, a labelled legend, and a
+chevron disclosure that expands to one stacked bar per module. The disclosure state persists
+(`lxp.agora.progress.modules`). The ring is the percentage, the bar is the composition — they
+share one row and are never redundant.
 
 ## 9. Component contract (vibecoding rules)
 

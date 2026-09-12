@@ -167,29 +167,29 @@ export function ProgressSummary({
 
   return (
     <section className="rounded-xl border bg-card p-4">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-controls="agora-progress-modules"
-        className="flex w-full items-center justify-between gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <h2 className="font-heading text-sm font-semibold">{t("now.progress")}</h2>
-        <span className="flex items-center gap-2">
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls="agora-progress-modules"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <h2 className="shrink-0 font-heading text-sm font-semibold">{t("now.progress")}</h2>
+          <span className="flex h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+            <span className="bg-ok" style={{ width: pct(done) }} />
+            <span className="bg-late" style={{ width: pct(late) }} />
+            <span className="bg-coming" style={{ width: pct(openCount) }} />
+          </span>
+          <span className="hidden shrink-0 font-mono text-xs tabular-nums text-muted-foreground sm:inline">
             {done}/{total} · {pctLabel}%
           </span>
           <ChevronDown
             className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-soft", !open && "-rotate-90")}
             aria-hidden
           />
-        </span>
-      </button>
-
-      <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-muted">
-        <span className="bg-ok" style={{ width: pct(done) }} />
-        <span className="bg-late" style={{ width: pct(late) }} />
-        <span className="bg-coming" style={{ width: pct(openCount) }} />
+        </button>
+        <ProgressRing done={done} total={total} size={48} ariaLabel={t("now.ringAria", { done, total })} />
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">

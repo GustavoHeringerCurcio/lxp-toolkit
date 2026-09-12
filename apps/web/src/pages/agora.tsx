@@ -5,7 +5,7 @@ import { useAppData, useScopePrefs } from "@/lib/app-state";
 import { cmpOpen, countInfo } from "@/lib/status";
 import { useT, type TranslateFn } from "@/lib/i18n";
 import { ActivityCard } from "@/components/activity-card";
-import { NextHero, ProgressRing, ProgressSummary, type ModuleProgress } from "@/components/agora-hero";
+import { NextHero, ProgressSummary, type ModuleProgress } from "@/components/agora-hero";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
@@ -78,19 +78,22 @@ export function AgoraPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{dateLabel}</p>
-          <h1 className="mt-1 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-            {greeting(t)}.
-          </h1>
-        </div>
-        <ProgressRing
-          done={counts.done}
-          total={items.length}
-          size={64}
-          ariaLabel={t("now.ringAria", { done: counts.done, total: items.length })}
+      {items.length > 0 && (
+        <ProgressSummary
+          modules={modules}
+          totals={{ done: counts.done, late: counts.expired, open: counts.open, total: items.length }}
+          onSelect={(name) => {
+            setModuleFilter(name);
+            navigate("/tarefas");
+          }}
         />
+      )}
+
+      <header className="min-w-0">
+        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{dateLabel}</p>
+        <h1 className="mt-1 font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
+          {greeting(t)}.
+        </h1>
       </header>
 
       {items.length === 0 ? (
@@ -98,15 +101,6 @@ export function AgoraPage() {
       ) : (
         <>
           {next && <NextHero next={next} onClick={() => navigate(`/tarefa/${next.id}`)} />}
-
-          <ProgressSummary
-            modules={modules}
-            totals={{ done: counts.done, late: counts.expired, open: counts.open, total: items.length }}
-            onSelect={(name) => {
-              setModuleFilter(name);
-              navigate("/tarefas");
-            }}
-          />
 
           <section>
             <div className="mb-2 flex items-center justify-between">
