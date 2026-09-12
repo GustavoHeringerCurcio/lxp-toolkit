@@ -142,7 +142,10 @@ State shared across routes (scope, module/type filter) lives in `lib/app-state.t
 (`ok`/`late`/`coming`) with the overall `ProgressRing` on the right, a labelled legend, and a
 chevron disclosure that expands to one stacked bar per module. The disclosure state persists
 (`lxp.agora.progress.modules`). The ring is the percentage, the bar is the composition — they
-share one row and are never redundant.
+share one row and are never redundant. The whole card is a click target (module rows stop
+propagation and filter `/tarefas`). On expand the merged bar shrinks to a stub while the ring
+grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid; module rows are
+`tabIndex -1` and the panel `aria-hidden` while collapsed.
 
 ## 9. Component contract (vibecoding rules)
 

@@ -97,12 +97,12 @@ export function ProgressRing({
   const c = 2 * Math.PI * r;
   return (
     <div
-      className="relative"
+      className="relative shrink-0 transition-[width,height] duration-500 ease-soft motion-reduce:transition-none"
       style={{ width: size, height: size }}
       role="img"
       aria-label={ariaLabel}
     >
-      <svg width={size} height={size} viewBox="0 0 80 80" className="-rotate-90">
+      <svg viewBox="0 0 80 80" className="size-full -rotate-90">
         <circle cx="40" cy="40" r={r} fill="none" strokeWidth="7" className="stroke-muted" />
         <circle
           cx="40"
@@ -113,11 +113,14 @@ export function ProgressRing({
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - pct)}
-          className="stroke-ok transition-[stroke-dashoffset] duration-700 ease-soft"
+          className="stroke-ok transition-[stroke-dashoffset] duration-700 ease-soft motion-reduce:transition-none"
         />
       </svg>
       <div className="absolute inset-0 grid place-items-center" aria-hidden>
-        <span className="font-heading text-lg font-semibold tabular-nums">
+        <span
+          className="font-heading font-semibold tabular-nums transition-[font-size] duration-500 ease-soft motion-reduce:transition-none"
+          style={{ fontSize: Math.round(size * 0.32) }}
+        >
           {total === 0 ? "—" : `${Math.round(pct * 100)}%`}
         </span>
       </div>
@@ -157,7 +160,6 @@ export function ProgressSummary({
   const [open, setOpen] = useLocalStorage("lxp.agora.progress.modules", false);
   const { done, late, open: openCount, total } = totals;
   const pct = (n: number) => `${(n / Math.max(total, 1)) * 100}%`;
-  const pctLabel = total === 0 ? 0 : Math.round((done / total) * 100);
 
   const legend = [
     { key: "done", label: t("progress.legendDone"), value: done, cls: "bg-ok" },
@@ -166,11 +168,20 @@ export function ProgressSummary({
   ] as const;
 
   return (
-    <section className="rounded-xl border bg-card p-4">
+    <section
+      onClick={() => setOpen((v) => !v)}
+      className={cn(
+        "cursor-pointer rounded-xl border bg-card p-4 transition-colors",
+        "hover:border-primary/30",
+      )}
+    >
       <div className="flex items-center gap-4">
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={(ev) => {
+            ev.stopPropagation();
+            setOpen((v) => !v);
+          }}
           aria-expanded={open}
           aria-controls="agora-progress-modules"
           className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -181,15 +192,15 @@ export function ProgressSummary({
             <span className="bg-late" style={{ width: pct(late) }} />
             <span className="bg-coming" style={{ width: pct(openCount) }} />
           </span>
-          <span className="hidden shrink-0 font-mono text-xs tabular-nums text-muted-foreground sm:inline">
-            {done}/{total} · {pctLabel}%
-          </span>
           <ChevronDown
-            className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-soft", !open && "-rotate-90")}
+            className={cn(
+              "size-4 shrink-0 text-muted-foreground transition-transform duration-300 ease-soft motion-reduce:transition-none",
+              !open && "-rotate-90",
+            )}
             aria-hidden
           />
         </button>
-        <ProgressRing done={done} total={total} size={48} ariaLabel={t("now.ringAria", { done, total })} />
+        <ProgressRing done={done} total={total} size={open ? 88 : 48} ariaLabel={t("now.ringAria", { done, total })} />
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
@@ -202,42 +213,55 @@ export function ProgressSummary({
         ))}
       </div>
 
-      {open && (
-        <div id="agora-progress-modules" className="mt-4 space-y-3 border-t border-border/60 pt-4">
-          {modules.map((m) => {
-            const mp = (n: number) => `${(n / Math.max(m.total, 1)) * 100}%`;
-            const body = (
-              <>
-                <span className="w-32 shrink-0 truncate text-[13px] text-muted-foreground sm:w-44">
-                  {m.name}
-                </span>
-                <span className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                  <span className="bg-ok" style={{ width: mp(m.done) }} />
-                  <span className="bg-late" style={{ width: mp(m.late) }} />
-                  <span className="bg-coming" style={{ width: mp(m.open) }} />
-                </span>
-                <span className="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                  {m.done}/{m.total}
-                </span>
-              </>
-            );
-            return onSelect ? (
-              <button
-                key={m.name}
-                type="button"
-                onClick={() => onSelect(m.name)}
-                className="group flex w-full items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {body}
-              </button>
-            ) : (
-              <div key={m.name} className="flex items-center gap-3">
-                {body}
-              </div>
-            );
-          })}
+      <div
+        id="agora-progress-modules"
+        aria-hidden={!open}
+        className={cn(
+          "grid transition-[grid-template-rows,opacity] duration-500 ease-soft motion-reduce:transition-none",
+          open ? "grid-rows-[1fr] opacity-100" : "pointer-events-none grid-rows-[0fr] opacity-0",
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="mt-4 space-y-3 border-t border-border/60 pt-4">
+            {modules.map((m) => {
+              const mp = (n: number) => `${(n / Math.max(m.total, 1)) * 100}%`;
+              const body = (
+                <>
+                  <span className="w-32 shrink-0 truncate text-[13px] text-muted-foreground sm:w-44">
+                    {m.name}
+                  </span>
+                  <span className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                    <span className="bg-ok" style={{ width: mp(m.done) }} />
+                    <span className="bg-late" style={{ width: mp(m.late) }} />
+                    <span className="bg-coming" style={{ width: mp(m.open) }} />
+                  </span>
+                  <span className="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                    {m.done}/{m.total}
+                  </span>
+                </>
+              );
+              return onSelect ? (
+                <button
+                  key={m.name}
+                  type="button"
+                  tabIndex={open ? 0 : -1}
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    onSelect(m.name);
+                  }}
+                  className="flex w-full items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {body}
+                </button>
+              ) : (
+                <div key={m.name} className="flex items-center gap-3">
+                  {body}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      )}
+      </div>
     </section>
   );
 }
