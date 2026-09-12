@@ -38,6 +38,32 @@ export function countInfo(items: { status: Exercise["status"] }[]): { open: numb
   };
 }
 
+/** Open first, then by days left, then alphabetical — the canonical "what to do next" order. */
+export function cmpOpen(
+  a: { status: string; daysLeft: number | null; title: string },
+  b: { status: string; daysLeft: number | null; title: string },
+): number {
+  const rank = (s: string): number => (s === "open" ? 0 : s === "expired" ? 1 : 2);
+  const r = rank(a.status) - rank(b.status);
+  if (r) return r;
+  const da = a.daysLeft ?? Infinity;
+  const db = b.daysLeft ?? Infinity;
+  if (da !== db) return da - db;
+  return a.title.localeCompare(b.title, "pt");
+}
+
+/** Live countdown parts for a deadline ("3d 04h", past-aware). */
+export function countdownParts(iso: string, now = Date.now()): { rel: string; past: boolean } {
+  const t = new Date(iso).getTime();
+  const diff = t - now;
+  const abs = Math.abs(diff);
+  const d = Math.floor(abs / 86_400_000);
+  const h = Math.floor((abs % 86_400_000) / 3_600_000);
+  const m = Math.floor((abs % 3_600_000) / 60_000);
+  const rel = d >= 1 ? `${d}d ${String(h).padStart(2, "0")}h` : h >= 1 ? `${h}h ${String(m).padStart(2, "0")}min` : `${m}min`;
+  return { rel, past: diff < 0 };
+}
+
 const dateFmt = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" });
 const timeFmt = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
 

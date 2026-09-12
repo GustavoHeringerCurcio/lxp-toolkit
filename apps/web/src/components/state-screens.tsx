@@ -26,10 +26,7 @@ export function ErrorState({ error, onRetry }: { error: string; onRetry: () => v
           <p className="mt-3 font-medium text-foreground">O que verificar</p>
           <ul className="mt-1 list-disc space-y-1 pl-4">
             <li>
-              Dentro de <code>assistant/</code>: rode <code>npm run index</code> e depois <code>npm run web</code>.
-            </li>
-            <li>
-              Em dev: <code>npm run web:dev</code> (front :5174) + <code>tsx server/server.ts</code> (API :4174).
+              Na raiz do repositório: rode <code>npm run index</code> e depois <code>npm run web</code>.
             </li>
             <li>
               Sem dados de origem, rode <code>npm run dump</code> na raiz e repita o index.

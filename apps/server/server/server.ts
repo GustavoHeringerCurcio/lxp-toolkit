@@ -636,7 +636,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n🎓 LXP Homework → http://localhost:${PORT}`);
+  console.log(`\n📝 Pauta (LXP ToolKit) → http://localhost:${PORT}`);
   console.log(`   data: ${dataDir()}`);
   console.log(`   ai config: ${assist("config", "ai-config.json")}\n`);
 });

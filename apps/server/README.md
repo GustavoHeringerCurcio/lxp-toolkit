@@ -1,9 +1,9 @@
-# 🎓 LXP Homework
+# Pauta
 
 The **main product** of `lxp-toolkit`: a web app that gives friendly views of your LXP exercises
-plus **AI-generated answers**. It reads the scraped data produced by the portal toolkit
-(`packages/portal/`) and never talks to the portal except to read content (and to submit, behind
-explicit confirmation).
+plus **AI answer drafts** (you review and own what gets sent). It reads the scraped data produced
+by the portal toolkit (`packages/portal/`) and never talks to the portal except to read content
+(and to submit, behind explicit confirmation).
 
 ```
 ┌─────────────────────────────┐   scraped/ (repo root)     ┌────────────────────────────┐

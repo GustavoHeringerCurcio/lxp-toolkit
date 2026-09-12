@@ -1,21 +1,21 @@
 /**
  * Deterministic accent per professor — same color for professor + its module.
  *
- * Colors are assigned explicitly (spread across the wheel: orange/lime/teal/
- * violet/pink) so the professors in this course never look alike. Unknown names
- * fall back to a hash over a spaced palette.
+ * Colors are data, not theme tokens (the one documented exception to the
+ * "no raw hex" rule — DESIGN.md §7). Palette tuned for Folio: warm, muted,
+ * distinguishable on both paper and espresso.
  */
 const BY_PROFESSOR: Record<string, string> = {
-  "Profa. Débora Amorim": "#f97316", // orange
-  "Prof. Leonardo Dias": "#84cc16", // lime
-  "Prof. Marcelo Passos": "#14b8a6", // teal
-  "Prof. Osni Silva": "#8b5cf6", // violet
-  "Prof. Rafael Iacillo": "#ec4899", // pink
+  "Profa. Débora Amorim": "#c2703d", // terracotta
+  "Prof. Leonardo Dias": "#8a9a3e", // olive
+  "Prof. Marcelo Passos": "#3e8f8a", // muted teal
+  "Prof. Osni Silva": "#8d6bb8", // plum
+  "Prof. Rafael Iacillo": "#c2638a", // rose
 };
 
 const FALLBACK = [
-  "#f97316", "#84cc16", "#14b8a6", "#8b5cf6",
-  "#ec4899", "#0ea5e9", "#eab308", "#c026d3",
+  "#c2703d", "#8a9a3e", "#3e8f8a", "#8d6bb8",
+  "#c2638a", "#5b84b8", "#b8923a", "#a05a78",
 ];
 
 export function accentFor(prof: string | null): string {

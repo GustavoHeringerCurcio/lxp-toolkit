@@ -5,7 +5,7 @@
 **It scrapes your UniFOA / Grupoa LXP portal, then turns it into a homework assistant.**
 
 A little TypeScript monorepo with two halves: a **scraper** that maps the platform's API and saves
-all your course stuff as markdown, and **LXP Homework** — a web app that reads it, watches your
+all your course stuff as markdown, and **Pauta** — a web app that reads it, watches your
 deadlines, and drafts answers with AI.
 
 ![Node](https://img.shields.io/badge/node-22%2B-339933?logo=nodedotjs&logoColor=white)
@@ -26,7 +26,7 @@ Honestly? Two things that go together:
 - 🕷️ **The scraper** (`packages/portal`) — logs in as you, pokes the same JSON API the site uses,
   and dumps every reading, quiz, and assignment to nice readable markdown. It also has the browser
   bot that actually submits stuff.
-- 🎓 **LXP Homework** (`apps/web` + `apps/server`) — the web app. It reads what the scraper saved,
+- 🎓 **Pauta** (`apps/web` + `apps/server`) — the web app. It reads what the scraper saved,
   shows you what's due, and helps you write the answer.
 
 > [!NOTE]
@@ -41,7 +41,7 @@ Honestly? Two things that go together:
 - [What lives where](#what-lives-where)
 - [Getting it running](#getting-it-running)
 - [All the commands](#all-the-commands)
-- [The LXP Homework app](#the-lxp-homework-app)
+- [The Pauta app](#the-pauta-app)
 - [What it's built with](#what-its-built-with)
 - [How it actually works](#how-it-actually-works)
 - [Staying safe (and private)](#staying-safe-and-private)
@@ -56,7 +56,7 @@ Honestly? Two things that go together:
 | | |
 |---|---|
 | **The scraper** | `packages/portal` — Playwright login + a typed API client. Scrapes routes, content, and account surfaces into markdown/JSON. |
-| **The app** | `apps/web` + `apps/server` — **LXP Homework**: task board, deadlines, AI answer drafts, and (careful) submission. |
+| **The app** | `apps/web` + `apps/server` — **Pauta**: task board, deadlines, AI answer drafts, and (careful) submission. |
 | **The data** | `scraped/` (your stuff, gitignored) → `apps/server/data/*.json` (index, answers, submissions). |
 | **Runs on** | Node ≥ 22 · TypeScript ESM · npm workspaces · one `npm install`, one lockfile. |
 | **Open it at** | `npm run web` → <http://localhost:4174> |
@@ -259,7 +259,7 @@ npm run web             # build + serve → http://localhost:4174
 
 ---
 
-## The LXP Homework app
+## The Pauta app
 
 | Bit | What's cool about it |
 |---|---|

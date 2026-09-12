@@ -1,12 +1,30 @@
 <!doctype html>
-<html lang="pt-BR" class="dark">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#0F171D" />
-    <meta name="description" content="Painel das suas tarefas no UniFOA / Grupoa LXP, com respostas geradas por IA." />
-    <title>Minhas tarefas · LXP Homework</title>
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F8F5EE" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#26201A" />
+    <meta
+      name="description"
+      content="Pauta — seu copiloto de estudos: tarefas do UniFOA em um só lugar, rascunhos com IA e envio ao portal."
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Pauta · copiloto de estudos</title>
+    <script>
+      // No-flash theme init: resolves light/dark before first paint.
+      (function () {
+        try {
+          var t = localStorage.getItem("pauta-theme");
+          var dark =
+            t === "dark" ||
+            ((t === null || t === "system") &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,18 +1,19 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource/poppins/latin-400.css";
-@import "@fontsource/poppins/latin-500.css";
-@import "@fontsource/poppins/latin-600.css";
-@import "@fontsource/poppins/latin-700.css";
-@import "@fontsource/lato/latin-400.css";
-@import "@fontsource/lato/latin-700.css";
+@import "@fontsource-variable/fraunces/opsz.css";
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/jetbrains-mono/index.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: 'Poppins', 'Lato', ui-sans-serif, system-ui, sans-serif;
-    --font-sans: 'Lato', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+    --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Mono', monospace;
+
+    --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -46,9 +47,8 @@
     --color-background: var(--background);
     --color-brand: var(--brand);
     --color-brand-2: var(--brand-2);
-    --color-brand-bg: var(--brand-bg);
-    --color-teal: var(--teal);
-    --color-teal-bg: var(--teal-bg);
+    --color-info: var(--info);
+    --color-info-bg: var(--info-bg);
     --color-ok: var(--ok);
     --color-late: var(--late);
     --color-soon: var(--soon);
@@ -69,120 +69,119 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* LXP Homework — Grupoa crimson skin (DESIGN.md)                     */
-/* Light theme (:root) is defined up front; the app ships dark-first   */
-/* (<html class="dark">); a light-mode toggle is a documented follow-  */
-/* up in PLAN.md.                                                     */
+/* Pauta — "Folio" skin (DESIGN.md v2)                                 */
+/* Warm-paper editorial, light-first with a warm-espresso dark mode.   */
+/* Sienna brand on oklch; both themes are first-class.                 */
 /* ------------------------------------------------------------------ */
 
 :root {
-    --background: #F8F9FB;
-    --foreground: #0F171D;
-    --card: #FFFFFF;
-    --card-foreground: #0F171D;
-    --popover: #FFFFFF;
-    --popover-foreground: #0F171D;
-    --primary: #BB243E;
-    --primary-foreground: #FFFFFF;
-    --secondary: #E4E9ED;
-    --secondary-foreground: #0F171D;
-    --muted: #EEF1F5;
-    --muted-foreground: #5A6B7A;
-    --accent: #E4E9ED;
-    --accent-foreground: #0F171D;
-    --destructive: #BB243E;
-    --border: #D8DEE5;
-    --input: #D8DEE5;
-    --ring: #BB243E;
-    --radius: 0.625rem;
+    --background: oklch(0.977 0.007 85);
+    --foreground: oklch(0.25 0.018 55);
+    --card: oklch(0.995 0.003 85);
+    --card-foreground: oklch(0.25 0.018 55);
+    --popover: oklch(0.995 0.003 85);
+    --popover-foreground: oklch(0.25 0.018 55);
+    --primary: oklch(0.52 0.11 42);
+    --primary-foreground: oklch(0.985 0.004 85);
+    --secondary: oklch(0.945 0.009 80);
+    --secondary-foreground: oklch(0.25 0.018 55);
+    --muted: oklch(0.945 0.009 80);
+    --muted-foreground: oklch(0.47 0.022 60);
+    --accent: oklch(0.935 0.014 78);
+    --accent-foreground: oklch(0.25 0.018 55);
+    --destructive: oklch(0.51 0.17 25);
+    --border: oklch(0.905 0.012 78);
+    --input: oklch(0.9 0.012 78);
+    --ring: oklch(0.52 0.11 42);
+    --radius: 0.75rem;
 
-    --brand: #BB243E;
-    --brand-2: #C93B57;
-    --teal: #00A0A6;
+    --brand: oklch(0.52 0.11 42);
+    --brand-2: oklch(0.6 0.11 46);
 
-    --ok: #1F7A33;
-    --late: #BB243E;
-    --soon: #C9820A;
-    --coming: #00A0A6;
-    --none: #6B7280;
+    --info: oklch(0.5 0.075 245);
 
-    --ok-bg: color-mix(in oklab, var(--ok) 14%, transparent);
-    --late-bg: color-mix(in oklab, var(--late) 14%, transparent);
-    --soon-bg: color-mix(in oklab, var(--soon) 18%, transparent);
-    --coming-bg: color-mix(in oklab, var(--coming) 16%, transparent);
-    --none-bg: color-mix(in oklab, var(--none) 18%, transparent);
-    --teal-bg: color-mix(in oklab, var(--teal) 16%, transparent);
-    --brand-bg: color-mix(in oklab, var(--brand) 14%, transparent);
+    --ok: oklch(0.51 0.1 150);
+    --late: oklch(0.51 0.155 25);
+    --soon: oklch(0.55 0.105 75);
+    --coming: oklch(0.5 0.075 245);
+    --none: oklch(0.55 0.012 75);
+
+    --ok-bg: color-mix(in oklab, var(--ok) 13%, transparent);
+    --late-bg: color-mix(in oklab, var(--late) 13%, transparent);
+    --soon-bg: color-mix(in oklab, var(--soon) 16%, transparent);
+    --coming-bg: color-mix(in oklab, var(--coming) 14%, transparent);
+    --none-bg: color-mix(in oklab, var(--none) 16%, transparent);
+    --info-bg: color-mix(in oklab, var(--info) 14%, transparent);
 
     --chart-1: var(--brand);
-    --chart-2: var(--teal);
+    --chart-2: var(--info);
     --chart-3: var(--ok);
     --chart-4: var(--soon);
     --chart-5: var(--none);
 
-    --sidebar: #FFFFFF;
-    --sidebar-foreground: #0F171D;
-    --sidebar-primary: #BB243E;
-    --sidebar-primary-foreground: #FFFFFF;
-    --sidebar-accent: #E4E9ED;
-    --sidebar-accent-foreground: #0F171D;
-    --sidebar-border: #D8DEE5;
-    --sidebar-ring: #BB243E;
+    --sidebar: oklch(0.96 0.009 80);
+    --sidebar-foreground: oklch(0.25 0.018 55);
+    --sidebar-primary: oklch(0.52 0.11 42);
+    --sidebar-primary-foreground: oklch(0.985 0.004 85);
+    --sidebar-accent: oklch(0.92 0.014 78);
+    --sidebar-accent-foreground: oklch(0.25 0.018 55);
+    --sidebar-border: oklch(0.895 0.012 78);
+    --sidebar-ring: oklch(0.52 0.11 42);
 }
 
-/* dark-first: the shipped theme. Ink surfaces + crimson brand. */
+/* Warm espresso — the dark Folio. Not blue-ink on purpose. */
 .dark {
-    --background: #0F171D;
-    --foreground: #E6EBEF;
-    --card: #1B2731;
-    --card-foreground: #E6EBEF;
-    --popover: #1B2731;
-    --popover-foreground: #E6EBEF;
-    --primary: #C43351;
-    --primary-foreground: #FFFFFF;
-    --secondary: #24323E;
-    --secondary-foreground: #E6EBEF;
-    --muted: #24323E;
-    --muted-foreground: #9FB0BF;
-    --accent: #24323E;
-    --accent-foreground: #E6EBEF;
-    --destructive: #E05570;
-    --border: rgb(255 255 255 / 10%);
-    --input: rgb(255 255 255 / 14%);
-    --ring: #E05570;
+    --background: oklch(0.215 0.013 60);
+    --foreground: oklch(0.925 0.012 85);
+    --card: oklch(0.253 0.014 60);
+    --card-foreground: oklch(0.925 0.012 85);
+    --popover: oklch(0.26 0.014 60);
+    --popover-foreground: oklch(0.925 0.012 85);
+    --primary: oklch(0.705 0.115 48);
+    --primary-foreground: oklch(0.22 0.03 45);
+    --secondary: oklch(0.305 0.016 60);
+    --secondary-foreground: oklch(0.925 0.012 85);
+    --muted: oklch(0.305 0.016 60);
+    --muted-foreground: oklch(0.71 0.015 78);
+    --accent: oklch(0.315 0.018 60);
+    --accent-foreground: oklch(0.925 0.012 85);
+    --destructive: oklch(0.66 0.15 25);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 14%);
+    --ring: oklch(0.705 0.115 48);
 
-    --brand: #E05570;
-    --brand-2: #F07C94;
-    --teal: #2FD3D9;
+    --brand: oklch(0.705 0.115 48);
+    --brand-2: oklch(0.765 0.105 52);
 
-    --ok: #34A853;
-    --late: #E05570;
-    --soon: #E8A33D;
-    --coming: #2FD3D9;
-    --none: #9AA4B0;
+    --info: oklch(0.72 0.07 245);
 
-    --ok-bg: color-mix(in oklab, var(--ok) 16%, transparent);
-    --late-bg: color-mix(in oklab, var(--late) 16%, transparent);
-    --soon-bg: color-mix(in oklab, var(--soon) 18%, transparent);
-    --coming-bg: color-mix(in oklab, var(--coming) 16%, transparent);
-    --none-bg: color-mix(in oklab, var(--none) 20%, transparent);
-    --teal-bg: color-mix(in oklab, var(--teal) 16%, transparent);
-    --brand-bg: color-mix(in oklab, var(--brand) 16%, transparent);
+    --ok: oklch(0.71 0.12 150);
+    --late: oklch(0.67 0.14 25);
+    --soon: oklch(0.76 0.115 80);
+    --coming: oklch(0.72 0.07 245);
+    --none: oklch(0.66 0.012 78);
+
+    --ok-bg: color-mix(in oklab, var(--ok) 15%, transparent);
+    --late-bg: color-mix(in oklab, var(--late) 15%, transparent);
+    --soon-bg: color-mix(in oklab, var(--soon) 17%, transparent);
+    --coming-bg: color-mix(in oklab, var(--coming) 15%, transparent);
+    --none-bg: color-mix(in oklab, var(--none) 18%, transparent);
+    --info-bg: color-mix(in oklab, var(--info) 15%, transparent);
 
     --chart-1: var(--brand);
-    --chart-2: var(--teal);
+    --chart-2: var(--info);
     --chart-3: var(--ok);
     --chart-4: var(--soon);
     --chart-5: var(--none);
 
-    --sidebar: #1B2731;
-    --sidebar-foreground: #E6EBEF;
-    --sidebar-primary: #C43351;
-    --sidebar-primary-foreground: #FFFFFF;
-    --sidebar-accent: #24323E;
-    --sidebar-accent-foreground: #E6EBEF;
-    --sidebar-border: rgb(255 255 255 / 10%);
-    --sidebar-ring: #E05570;
+    --sidebar: oklch(0.24 0.014 60);
+    --sidebar-foreground: oklch(0.925 0.012 85);
+    --sidebar-primary: oklch(0.705 0.115 48);
+    --sidebar-primary-foreground: oklch(0.22 0.03 45);
+    --sidebar-accent: oklch(0.315 0.018 60);
+    --sidebar-accent-foreground: oklch(0.925 0.012 85);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.705 0.115 48);
 }
 
 @layer base {
@@ -195,9 +194,10 @@
     }
     html {
         @apply font-sans;
+        font-optical-sizing: auto;
     }
     ::selection {
-        background: color-mix(in oklab, var(--brand) 45%, transparent);
+        background: color-mix(in oklab, var(--brand) 30%, transparent);
     }
 }
 
@@ -215,16 +215,16 @@
     border-radius: 999px;
     padding: 2px 10px;
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     white-space: nowrap;
     color: var(--acc);
-    background: color-mix(in srgb, var(--acc) 15%, transparent);
-    border: 1px solid color-mix(in srgb, var(--acc) 45%, transparent);
+    background: color-mix(in srgb, var(--acc) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--acc) 40%, transparent);
 }
 .acc-dot {
     width: 7px;
     height: 7px;
     border-radius: 999px;
     background: var(--acc);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--acc) 35%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--acc) 30%, transparent);
 }

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Pauta — monogram tile (Folio sienna on warm paper) -->
+  <rect width="64" height="64" rx="15" fill="#A15B33"/>
+  <path d="M18 46 V18 h13.5 c6.4 0 10.5 3.9 10.5 9.6 0 5.7-4.1 9.6-10.5 9.6 H25 V46 Z M25 31.6 h5.9 c2.9 0 4.7-1.5 4.7-4 0-2.5-1.8-4-4.7-4 H25 Z" fill="#FBF7EF"/>
+</svg>

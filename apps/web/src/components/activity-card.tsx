@@ -127,7 +127,7 @@ export function ActivityCard({ e }: { e: Exercise }) {
             {meta.canAnswer && (
               <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); generate(); }}>
                 <Sparkles />
-                Gerar com IA
+                Gerar rascunho
               </DropdownMenuItem>
             )}
             {meta.canMark && !e.done && (

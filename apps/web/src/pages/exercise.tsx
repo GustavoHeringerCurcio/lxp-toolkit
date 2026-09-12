@@ -12,6 +12,8 @@ import {
   FileType,
   History,
   Loader2,
+  Maximize2,
+  Minimize2,
   Paperclip,
   RefreshCw,
   Save,
@@ -364,7 +366,7 @@ function AnswerPanel({
     <CollapsibleCard
       id="resposta"
       icon={<Sparkles className="size-4 shrink-0 text-brand" aria-hidden />}
-      title="Resposta"
+      title="Rascunho"
       className="xl:flex xl:h-full xl:min-h-0 xl:flex-col data-[open=false]:xl:h-auto"
       bodyClassName="flex-1 min-h-0 space-y-3 overflow-y-auto p-4"
       badge={
@@ -428,11 +430,11 @@ function AnswerPanel({
         <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-border/60 bg-card px-4 py-3">
           <Button size="sm" onClick={generate} disabled={busy}>
             {busy ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
-            {busy ? "Gerando…" : current ? "Regenerar (nova versão)" : "Gerar com IA"}
+            {busy ? "Gerando…" : current ? "Novo rascunho" : "Gerar rascunho"}
           </Button>
           <Button variant="outline" size="sm" onClick={save} disabled={busy || !draft.trim()}>
             {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-            Salvar resposta
+            Salvar rascunho
           </Button>
           <Button variant="ghost" size="sm" onClick={copy} disabled={!draft.trim()}>
             <Copy aria-hidden />
@@ -479,7 +481,7 @@ function AnswerPanel({
           />
         ) : e.selections.length === 0 ? (
           <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
-            Clique em “Gerar com IA” — a alternativa escolhida aparece destacada em verde nas questões.
+            Clique em “Gerar rascunho” — a alternativa escolhida aparece destacada em verde nas questões.
           </p>
         ) : (
           <div className="rounded-md border border-ok/40 bg-ok/10 p-3">
@@ -513,7 +515,18 @@ function AnswerPanel({
         )}
 
         {sendOpen && (
-          <div className="rounded-lg border border-brand/30 bg-brand/10 p-3.5 text-sm">
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3.5 text-sm">
+            <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-brand">
+              <span>1 · Revise</span>
+              <span className="text-muted-foreground" aria-hidden>→</span>
+              {isUpload && (
+                <>
+                  <span>2 · Formato</span>
+                  <span className="text-muted-foreground" aria-hidden>→</span>
+                </>
+              )}
+              <span>{isUpload ? "3 · Confirme" : "2 · Confirme"}</span>
+            </div>
             <div className="flex items-start gap-2 font-semibold text-foreground">
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden />
               <span>Você está prestes a enviar para o portal de verdade.</span>
@@ -799,6 +812,7 @@ export function ExercisePage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [regenToken, setRegenToken] = useState(0);
+  const [focus, setFocus] = useState(false);
   const headerCard = useCardCollapse("resumo");
 
   const exerciseId = Number(id);
@@ -845,11 +859,15 @@ export function ExercisePage() {
   return (
     <div className="p-4">
       <BackLink />
-      <div className="mt-2 grid gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] xl:items-start">
-        {/* left column: enunciado, arquivos, questões */}
-        <div className="space-y-4 min-w-0">
+      <div
+        className={cn(
+          "mt-2 grid gap-4 xl:items-start",
+          focus ? "" : "xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]",
+        )}
+      >
+        {/* left column: enunciado, arquivos, questões (hidden in focus mode, stays mounted) */}
+        <div className={cn("min-w-0 space-y-4", focus && "hidden")}>
           <header className="overflow-hidden rounded-xl border border-border bg-card">
-            <span className="pointer-events-none block h-0.5 bg-gradient-to-r from-brand via-brand-2 to-teal" aria-hidden />
             <div className={cn("flex flex-wrap items-center gap-2 p-5", headerCard.open && "pb-0")}>
               <TypeBadge kind={e.kind} contentKind={e.contentKind} isSurvey={e.isSurvey} />
               {e.done && <DoneBadge />}
@@ -861,6 +879,16 @@ export function ExercisePage() {
                 </span>
               )}
               <span className="ml-auto" />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFocus(true)}
+                title="Expandir a área de resposta"
+                aria-pressed={false}
+              >
+                <Maximize2 aria-hidden />
+                modo foco
+              </Button>
               <a
                 className={buttonVariants({ variant: "outline", size: "sm" })}
                 href={`https://unifoa2.grupoa.education/plataforma/course/${e.courseId}/content/${e.id}`}
@@ -948,7 +976,19 @@ export function ExercisePage() {
         </div>
 
         {/* right column: answer workbench / completion panel */}
-        <div className="min-w-0 xl:sticky xl:top-[4.5rem] xl:h-[calc(100vh-6rem)]">
+        <div className={cn("min-w-0", !focus && "xl:sticky xl:top-[4.5rem] xl:h-[calc(100vh-6rem)]")}>
+          {focus && (
+            <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2.5">
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <Sparkles className="size-4 text-brand" aria-hidden />
+                Modo foco — só a área de resposta
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setFocus(false)}>
+                <Minimize2 aria-hidden />
+                sair do foco
+              </Button>
+            </div>
+          )}
           {meta.canAnswer ? (
             <AnswerPanel key={e.id} e={e} onRefresh={onRefresh} autoGenerate={wantsAuto} regenToken={regenToken} />
           ) : meta.canMark ? (

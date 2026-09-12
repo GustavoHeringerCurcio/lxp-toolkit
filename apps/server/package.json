@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "LXP Homework backend — exercise index, AI answer generation, portal submission bridge, and static server for the web app.",
+  "description": "Pauta backend — exercise index, AI draft generation, portal submission bridge, and static server for the web app.",
   "engines": {
     "node": ">=22"
   },
