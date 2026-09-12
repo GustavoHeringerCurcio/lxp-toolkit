@@ -112,11 +112,16 @@ add(
 );
 
 // 7. LibreOffice (optional — PDF/Office features)
-const soffice = await commandExists("soffice");
+const sofficeBin = server?.SOFFICE_BIN?.trim();
+const soffice = sofficeBin ? existsSync(sofficeBin) : await commandExists("soffice");
 add(
   "LibreOffice (optional)",
   soffice ? "ok" : "warn",
-  soffice ? "" : "not found — .pdf delivery and Office previews disabled (set SOFFICE_BIN if installed elsewhere)",
+  soffice
+    ? sofficeBin
+      ? "via SOFFICE_BIN"
+      : ""
+    : "not found — .pdf delivery and Office previews disabled (set SOFFICE_BIN if installed elsewhere)",
 );
 
 // 8. Port 4174 free

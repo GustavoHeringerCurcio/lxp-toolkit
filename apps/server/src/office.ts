@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { assist } from "./paths.js";
 
@@ -80,7 +81,7 @@ export async function officeToPdf(srcPath: string, cacheDir = previewCacheDir())
       await execFileAsync(
         sofficeBin(),
         [
-          `-env:UserInstallation=file://${profile}`,
+          `-env:UserInstallation=${pathToFileURL(profile).href}`,
           "--headless",
           "--norestore",
           "--convert-to",
@@ -92,6 +93,11 @@ export async function officeToPdf(srcPath: string, cacheDir = previewCacheDir())
         { timeout: 120_000, maxBuffer: 16 * 1024 * 1024 },
       );
       const produced = path.join(tmp, `${path.basename(srcPath, path.extname(srcPath))}.pdf`);
+      // Windows' soffice.exe is a GUI launcher that may return before the
+      // asynchronous conversion has written its output; wait for it briefly.
+      for (let i = 0; i < 40 && !existsSync(produced); i++) {
+        await new Promise<void>((resolve) => setTimeout(() => resolve(), 500));
+      }
       if (!existsSync(produced)) return null;
       renameSync(produced, out);
       return out;
