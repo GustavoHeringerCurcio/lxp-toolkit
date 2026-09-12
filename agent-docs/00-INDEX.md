@@ -30,7 +30,7 @@ scraped/                    ← YOUR scraped data (gitignored; never commit)
 ├── raw/                    ← content-tree.json, homework-index.json, surfaces.json, topic-types.json …
 ├── routes/                 ← SPA route DOM captures
 └── grades-*.md, calendar.md, notices.md, messages.md, achievements.md, lti-tools.md …
-apps/                       ← CORE 2: the Pauta web app (main product)
+apps/                       ← CORE 2: the LXP Toolkit web app (main product)
 ├── web/                    ← React UI
 └── server/                 ← backend API + AI (serves the web build)
 ```

@@ -1,6 +1,6 @@
-# Pauta — Design System ("Folio" skin) — v2
+# LXP Toolkit — Design System ("Folio" skin) — v3
 
-Design specification for `apps/web/` (the Pauta web app, `npm run web` from the repo root).
+Design specification for `apps/web/` (the LXP Toolkit web app, `npm run web` from the repo root).
 This document is the **single source of truth** for brand, tokens, typography, shape, motion,
 and component contracts. Implementation phases live in the rebrand plan (2026-09).
 
@@ -11,8 +11,8 @@ dark-only) is retired. Everything below replaces it.
 
 | | |
 |---|---|
-| Product | **Pauta** — pt-BR for the student's agenda/planner |
-| Platform | **LXP ToolKit** (repo/monorepo name; appears as a small sub-label, never as the product name) |
+| Product | **LXP Toolkit** — the study toolkit on top of the Grupoa LXP platform |
+| Mark | "Stacked X" — rounded sienna tile, two offset diagonals (layers/toolkit); `BrandMark` + `public/favicon.svg` |
 | Positioning | *Copiloto de estudos* — organization + deadlines first; AI drafts, the student reviews and owns |
 | Voice | pt-BR, calm, direct, adult. Never autopilot language ("entregue pra você") |
 
@@ -75,6 +75,26 @@ classes. Status is **never color-only** (icon + label always).
 
 `--chart-1..5` = brand → info → ok → soon → none. Progresso view uses these for module/type bars.
 
+### 3.5 Identity color economy (v3)
+
+**Status owns semantic color · type is monochrome · subject owns identity color · professor is neutral.**
+This rule prevents the overload that made type badges collide with status (blue = quiz *and* "due soon").
+
+| Dimension | Encoding | Where |
+|---|---|---|
+| Status | semantic tone + icon + label | `TONE_CLS` / `StatusBadge` |
+| Type | icon + label, monochrome (`border-border bg-muted/40 text-muted-foreground`) | `KIND_META.badgeClass`, `TypeBadge` |
+| Subject (module) | `--subject-1..8` palette + monogram initials | `lib/subject.ts`, `.subject-avatar` |
+| Professor | neutral initials avatar, never colored | `lib/prof.ts`, `ProfessorTag` |
+
+Subject palette (tokens in `index.css`, light + dark tuned; no raw color in TSX):
+
+| Token | Hue |
+|---|---|
+| `--subject-1..8` | terracotta · olive · teal · plum · rose · ochre · slate-blue · forest |
+
+A module maps to a slot deterministically (`subjectIndex(moduleName)`, FNV-1a, with an optional pin map), so a subject keeps the same color across pages and themes. The monogram is the leading anchor of every activity card; the module name repeats the color as text (`SubjectLabel`).
+
 ## 4. Typography
 
 Self-hosted via `@fontsource-variable/*` (no runtime Google Fonts):
@@ -101,7 +121,7 @@ Self-hosted via `@fontsource-variable/*` (no runtime Google Fonts):
 
 | Context | Icon |
 |---|---|
-| Brand monogram | serif "P" tile (favicon.svg; sidebar tile uses text, not an icon) |
+| Brand mark | "Stacked X" tile (`BrandMark`; mirrors `favicon.svg`) |
 | Nav — Agora | `Sunrise` |
 | Nav — Tarefas | `ListChecks` |
 | Nav — Progresso | `ChartColumn` |
@@ -111,18 +131,21 @@ Self-hosted via `@fontsource-variable/*` (no runtime Google Fonts):
 | Nav — Perguntar à IA | `Sparkles` |
 | Command palette | `Command` |
 | Theme toggle | `Sun` / `Moon` |
-| Activity type — quiz | `ListChecks` (info chip) |
-| Activity type — upload | `Upload` (brand chip) |
-| Activity type — mark | `CircleCheckBig` (ok chip) |
-| Activity type — other | `MessagesSquare` (neutral chip) |
+| Activity type — quiz | `ListChecks` (monochrome chip) |
+| Activity type — upload | `Upload` (monochrome chip) |
+| Activity type — mark | `CircleCheckBig` (monochrome chip) |
+| Activity type — other | `MessagesSquare` (monochrome chip) |
 | Focus mode | `Maximize2` / `Minimize2` |
 
-## 7. Professor accent chips
+## 7. Subject identity & neutral professors
 
-`AccChips` + `lib/prof.ts`: deterministic accent per professor. The palette values are **data, not
-theme tokens** — the one documented exception to the "no raw hex" rule (they must stay stable and
-distinguishable across themes). Folio palette: terracotta / olive / teal / plum / rose, chosen to
-sit harmoniously on warm paper.
+`SubjectAvatar` + `lib/subject.ts`: deterministic identity per **module** (the only per-card color,
+see §3.5). Color comes from the `--subject-1..8` theme tokens, so there is no raw color in TSX and
+the old "no raw hex" exception is retired. The avatar shows the module monogram and, optionally, a
+small monochrome type icon as a corner badge. `SubjectLabel` repeats the color on the module name.
+
+`ProfessorTag` + `lib/prof.ts`: professors are secondary identity. A neutral initials avatar + name,
+never a competing color. The sidebar "Professores" list uses the same neutral treatment.
 
 ## 8. IA (information architecture) — 8 routes
 
@@ -165,7 +188,8 @@ grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid;
 ## 9. Component contract (vibecoding rules)
 
 1. **Tokens-first.** Zero raw hex/oklch in TSX — semantic utilities only (`bg-primary`,
-   `text-muted-foreground`, …). Exception: professor accent data (§7).
+   `text-muted-foreground`, …). Identity color comes from the `--subject-*` tokens via
+   `lib/subject.ts` (§3.5, §7).
 2. **Primitives** live only in `components/ui/` (shadcn `base-nova` style). Semantic components
    compose them; pages never restyle primitives ad hoc.
 3. **States matrix.** Every interactive component documents/handles:
@@ -178,7 +202,8 @@ grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid;
 ## 10. Theme mechanism
 
 - `<html lang="pt-BR">` (no hardcoded class) + inline no-flash script resolving `pauta-theme`
-  (`light` / `dark` / `system`, default `system`) before first paint.
+  (`light` / `dark` / `system`, default `system`) before first paint. `pauta-theme` / `pauta-lang`
+  are **legacy storage keys kept on purpose** so existing users do not lose their theme/language.
 - `lib/theme.tsx` — `ThemeProvider` + `useTheme()`; header icon toggle (light↔dark);
   system preference changes tracked while in `system` mode.
 
@@ -192,6 +217,9 @@ grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid;
 
 ## History
 
+- **v3 (2026-09):** rebrand **Pauta → LXP Toolkit** ("Stacked X" mark); identity color economy
+  (status = semantic, type = monochrome icon, subject = `--subject-1..8` identity, professor =
+  neutral); activity cards reworked around the subject monogram; raw-hex exception retired.
 - **v2.1 (2026-09):** contrast pass — dark surfaces dropped to near-black (L .165), foreground
   raised to .95, all accent/status chroma lifted (+20–40%) so nothing reads grey; light-mode ink
   darkened to match. Brand and semantics unchanged.

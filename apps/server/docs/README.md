@@ -1,4 +1,4 @@
-# Pauta
+# LXP Toolkit
 
 Fazedor de dever de casa pessoal e local para o portal **UniFOA / Grupoa LXP**.
 

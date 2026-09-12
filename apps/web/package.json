@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Pauta — copiloto de estudos (by LXP ToolKit): tarefas do LXP, rascunhos com IA e envio ao portal.",
+  "description": "LXP Toolkit — copiloto de estudos: tarefas do LXP, rascunhos com IA e envio ao portal.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

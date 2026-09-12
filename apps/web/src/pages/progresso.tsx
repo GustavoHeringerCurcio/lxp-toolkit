@@ -8,12 +8,13 @@ import type { ExerciseKind } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
 
-const TYPE_COLOR: Record<ExerciseKind, string> = {
-  quiz: "bg-info",
-  upload: "bg-brand",
-  forum: "bg-coming",
-  mark: "bg-ok",
-  other: "bg-none",
+/** Type stays monochrome (icon/label elsewhere); a neutral ramp keeps the bars distinct without colliding with status colors. */
+const TYPE_BAR: Record<ExerciseKind, string> = {
+  quiz: "bg-muted-foreground/70",
+  upload: "bg-muted-foreground/50",
+  forum: "bg-muted-foreground/40",
+  mark: "bg-muted-foreground/30",
+  other: "bg-muted-foreground/15",
 };
 
 function SkeletonMain() {
@@ -141,7 +142,7 @@ export function ProgressoPage() {
             <div key={kind} className="flex items-center gap-3">
               <span className="w-20 shrink-0 text-[13px] text-muted-foreground">{kindShort(kind, t)}</span>
               <span className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                <span className={TYPE_COLOR[kind]} style={{ width: `${(count / total) * 100}%` }} />
+                <span className={TYPE_BAR[kind]} style={{ width: `${(count / total) * 100}%` }} />
               </span>
               <span className="w-8 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
                 {count}

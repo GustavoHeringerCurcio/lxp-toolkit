@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { ListChecks, Upload, CircleCheckBig, MessagesSquare, FileQuestion } from "lucide-react";
 import { TONE_CLS, type Tone } from "@/lib/status";
 import { KIND_META } from "@/lib/kind";
+import { BrandMark } from "@/components/brand-mark";
+import { ProfessorTag, SubjectAvatar, SubjectLabel } from "@/components/identity";
 import { useT, type TranslateFn } from "@/lib/i18n";
 
 function toneLabel(tone: Tone, t: TranslateFn): string {
@@ -60,6 +62,17 @@ export function DesignPage() {
           <code className="font-mono text-xs">src/index.css</code>.
         </p>
       </header>
+
+      <Section title={t("design.brand")}>
+        <Card>
+          <CardContent className="flex flex-wrap items-end gap-6">
+            <BrandMark label="LXP Toolkit" className="size-16 rounded-2xl" />
+            <BrandMark label="LXP Toolkit" className="size-8 rounded-lg" />
+            <BrandMark label="LXP Toolkit" className="size-4 rounded-[4px]" />
+            <span className="font-heading text-xl font-semibold tracking-tight">LXP Toolkit</span>
+          </CardContent>
+        </Card>
+      </Section>
 
       <Section title={t("design.palette")}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -166,6 +179,25 @@ export function DesignPage() {
               <Badge variant="secondary">secondary</Badge>
               <Badge variant="outline">outline</Badge>
               <Badge variant="destructive">destructive</Badge>
+            </div>
+          </CardContent>
+        </Card>
+      </Section>
+
+      <Section title={t("design.subjects")}>
+        <Card>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-4">
+              {["Cálculo", "Álgebra Linear", "Programação", "Física", "Estatística"].map((m) => (
+                <span key={m} className="flex items-center gap-2">
+                  <SubjectAvatar moduleName={m} />
+                  <SubjectLabel moduleName={m} className="text-xs" />
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-4 border-t border-border/60 pt-4">
+              <ProfessorTag name="Profa. Débora Amorim" />
+              <ProfessorTag name="Prof. Leonardo Dias" />
             </div>
           </CardContent>
         </Card>

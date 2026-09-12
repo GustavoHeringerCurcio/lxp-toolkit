@@ -17,7 +17,7 @@ import { contentLabel, kindMeta } from "@/lib/kind";
 import { runMark } from "@/lib/mark";
 import { useAppData } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
-import { AccChips } from "./prof-chip";
+import { ProfessorTag, SubjectAvatar, SubjectLabel } from "./identity";
 import { StatusBadge, DoneBadge } from "./status-badges";
 import {
   DropdownMenu,
@@ -34,7 +34,6 @@ export function ActivityCard({ e }: { e: Exercise }) {
   const { t, tn, locale } = useT();
   const [marking, setMarking] = useState(false);
   const meta = kindMeta(e.kind);
-  const Icon = meta.icon;
   const fileCount = e.remoteFiles.length || e.files.length;
   const detail =
     e.kind === "quiz" && e.questions.length
@@ -90,19 +89,22 @@ export function ActivityCard({ e }: { e: Exercise }) {
         "hover:border-primary/30 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       )}
     >
-      <span
-        className={cn("grid size-9 shrink-0 self-center place-items-center rounded-lg", meta.tileClass)}
-        aria-hidden
-      >
-        <Icon className="size-4" />
-      </span>
+      <SubjectAvatar moduleName={e.moduleName} kind={e.kind} className="self-center" />
 
       <span className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span className="flex min-w-0 items-center gap-2">
           <span className={cn("truncate text-sm font-medium", e.done && "text-muted-foreground line-through")}>{e.title}</span>
           {e.done && <DoneBadge className="shrink-0" />}
         </span>
-        <AccChips professorId={e.professorId} professor={e.professor} moduleName={e.moduleName} />
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <ProfessorTag name={e.professor} />
+          {e.professor && e.moduleName && (
+            <span className="text-muted-foreground/50" aria-hidden>
+              ·
+            </span>
+          )}
+          {e.moduleName && <SubjectLabel moduleName={e.moduleName} />}
+        </span>
         {detail && (
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
             {e.kind === "upload" && <Paperclip className="size-3" aria-hidden />}

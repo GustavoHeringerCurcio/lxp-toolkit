@@ -49,6 +49,14 @@
     --color-brand-2: var(--brand-2);
     --color-info: var(--info);
     --color-info-bg: var(--info-bg);
+    --color-subject-1: var(--subject-1);
+    --color-subject-2: var(--subject-2);
+    --color-subject-3: var(--subject-3);
+    --color-subject-4: var(--subject-4);
+    --color-subject-5: var(--subject-5);
+    --color-subject-6: var(--subject-6);
+    --color-subject-7: var(--subject-7);
+    --color-subject-8: var(--subject-8);
     --color-ok: var(--ok);
     --color-late: var(--late);
     --color-soon: var(--soon);
@@ -69,7 +77,7 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Pauta — "Folio" skin (DESIGN.md v2)                                 */
+/* LXP Toolkit — "Folio" skin (DESIGN.md v3)                           */
 /* Warm-paper editorial, light-first with a warm-espresso dark mode.   */
 /* Sienna brand on oklch; both themes are first-class.                 */
 /* ------------------------------------------------------------------ */
@@ -99,6 +107,17 @@
     --brand-2: oklch(0.6 0.125 46);
 
     --info: oklch(0.5 0.095 245);
+
+    /* Subject identity palette — stable per module, the only per-card color.
+       Chosen to sit on warm paper and stay distinguishable from status tones. */
+    --subject-1: oklch(0.56 0.135 35);  /* terracotta */
+    --subject-2: oklch(0.55 0.105 130); /* olive */
+    --subject-3: oklch(0.54 0.09 200);  /* teal */
+    --subject-4: oklch(0.53 0.13 310);  /* plum */
+    --subject-5: oklch(0.58 0.14 5);    /* rose */
+    --subject-6: oklch(0.62 0.115 72);  /* ochre */
+    --subject-7: oklch(0.52 0.10 258);  /* slate blue */
+    --subject-8: oklch(0.5 0.095 165);  /* forest */
 
     --ok: oklch(0.51 0.12 150);
     --late: oklch(0.51 0.17 25);
@@ -155,6 +174,16 @@
 
     --info: oklch(0.725 0.11 245);
 
+    /* Subject identity palette — brighter + higher chroma for the espresso dark. */
+    --subject-1: oklch(0.72 0.15 40);
+    --subject-2: oklch(0.75 0.13 130);
+    --subject-3: oklch(0.74 0.11 200);
+    --subject-4: oklch(0.74 0.14 312);
+    --subject-5: oklch(0.75 0.15 8);
+    --subject-6: oklch(0.79 0.13 75);
+    --subject-7: oklch(0.72 0.12 258);
+    --subject-8: oklch(0.74 0.12 165);
+
     --ok: oklch(0.72 0.155 150);
     --late: oklch(0.67 0.175 25);
     --soon: oklch(0.775 0.14 80);
@@ -207,24 +236,18 @@
     scrollbar-color: color-mix(in oklab, var(--border) 90%, transparent) transparent;
 }
 
-/* professor accent chips (AccChips sets --acc inline) */
-.acc-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    border-radius: 999px;
-    padding: 2px 10px;
-    font-size: 11px;
-    font-weight: 600;
-    white-space: nowrap;
-    color: var(--acc);
-    background: color-mix(in srgb, var(--acc) 12%, transparent);
-    border: 1px solid color-mix(in srgb, var(--acc) 40%, transparent);
+/* subject identity (components set --subj inline from --subject-1..8) */
+.subject-avatar {
+    color: var(--subj);
+    background: color-mix(in oklab, var(--subj) 16%, var(--card));
+    border: 1px solid color-mix(in oklab, var(--subj) 34%, transparent);
 }
-.acc-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    background: var(--acc);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--acc) 30%, transparent);
+.subject-text {
+    color: var(--subj);
+}
+.subject-rail {
+    background: color-mix(in oklab, var(--subj) 70%, transparent);
+}
+.subject-dot {
+    background: var(--subj);
 }

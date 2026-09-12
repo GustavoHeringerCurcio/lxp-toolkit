@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "UniFOA / Grupoa LXP study toolkit — a reverse-engineering scraper (packages/portal) and the Pauta web app (apps/web + apps/server).",
+  "description": "UniFOA / Grupoa LXP study toolkit — a reverse-engineering scraper (packages/portal) and the LXP Toolkit web app (apps/web + apps/server).",
   "engines": {
     "node": ">=22"
   },

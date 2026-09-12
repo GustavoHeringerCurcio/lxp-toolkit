@@ -1,4 +1,4 @@
-# Pauta
+# LXP Toolkit
 
 The **main product** of `lxp-toolkit`: a web app that gives friendly views of your LXP exercises
 plus **AI answer drafts** (you review and own what gets sent). It reads the scraped data produced

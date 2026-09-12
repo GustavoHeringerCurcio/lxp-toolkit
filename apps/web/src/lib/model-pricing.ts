@@ -14,7 +14,7 @@ export interface OpenAiModel {
   input: number;
   /** USD per 1M output tokens. */
   output: number;
-  /** Sensible default for the Pauta answer workflow. */
+  /** Sensible default for the LXP Toolkit answer workflow. */
   recommended?: boolean;
 }
 
@@ -42,7 +42,7 @@ export const OPENAI_MODELS: OpenAiModel[] = [
 ];
 
 /**
- * Average token usage of one "solve this activity" generation in Pauta: the
+ * Average token usage of one "solve this activity" generation in LXP Toolkit: the
  * system style rules + the activity brief, attachments and questions on input,
  * and a typical draft on output. Real usage varies with the activity size.
  */

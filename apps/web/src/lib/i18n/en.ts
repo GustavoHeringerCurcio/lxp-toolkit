@@ -3,7 +3,8 @@ import type { Dict } from "./pt";
 /** English dictionary — must cover every key in `pt.ts` (enforced by `Dict`). */
 export const en: Dict = {
   // app shell
-  "app.title": "Pauta · study copilot",
+  "app.title": "LXP Toolkit · study copilot",
+  "app.subtitle": "study copilot",
   "app.activityFallback": "Activity",
 
   // navigation (sidebar, header, palette)
@@ -474,6 +475,8 @@ export const en: Dict = {
   // design page
   "design.system": "System",
   "design.folio": "Design · Folio",
+  "design.brand": "Brand",
+  "design.subjects": "Subject identity",
   "design.intro": "Living guide to the design system. The source of truth is",
   "design.introAfter": "and",
   "design.palette": "Palette — surfaces",

@@ -2,13 +2,13 @@
 
 This monorepo reverse-engineers the **Grupoa LXP** learning platform
 (`unifoa2.grupoa.education` + `api.plataforma.grupoa.education`), which the student reaches
-through Lyceum SSO (`unifoa.lyceum.com.br`), and ships the **Pauta** web app on top of it.
+through Lyceum SSO (`unifoa.lyceum.com.br`), and ships the **LXP Toolkit** web app on top of it.
 
 Two cores:
 
 - **`packages/portal/`** — the reverse-engineering toolkit (scraper). Human notes live in
   `packages/portal/docs/`.
-- **`apps/web/` + `apps/server/`** — the **Pauta** web app (main product; design system in
+- **`apps/web/` + `apps/server/`** — the **LXP Toolkit** web app (main product; design system in
   `apps/web/DESIGN.md`).
 
 **Before doing any portal-related task (auth, scraping, API calls, automations), read the

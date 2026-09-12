@@ -7,7 +7,8 @@
  */
 export const pt = {
   // app shell
-  "app.title": "Pauta · copiloto de estudos",
+  "app.title": "LXP Toolkit · copiloto de estudos",
+  "app.subtitle": "copiloto de estudos",
   "app.activityFallback": "Atividade",
 
   // navigation (sidebar, header, palette)
@@ -478,6 +479,8 @@ export const pt = {
   // design page
   "design.system": "Sistema",
   "design.folio": "Design · Folio",
+  "design.brand": "Marca",
+  "design.subjects": "Identidade por matéria",
   "design.intro":
     "Guia vivo do design system. A fonte da verdade é",
   "design.introAfter": "e",

@@ -25,7 +25,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { buttonVariants } from "@/components/ui/button";
-import { accentFor, professorLabel } from "@/lib/prof";
+import { professorInitials, professorLabel } from "@/lib/prof";
+import { BrandMark } from "@/components/brand-mark";
 import { useAppData } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
 
@@ -76,13 +77,11 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
         <NavLink to="/" className="flex items-center gap-2.5 px-1 py-0.5">
-          <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary font-heading text-base font-semibold text-primary-foreground shadow-md shadow-primary/25">
-            P
-          </div>
+          <BrandMark className="size-8 rounded-lg shadow-md shadow-primary/25" />
           <div className="min-w-0 leading-tight">
-            <div className="truncate font-heading text-[15px] font-semibold tracking-tight">Pauta</div>
+            <div className="truncate font-heading text-[15px] font-semibold tracking-tight">LXP Toolkit</div>
             <div className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-              LXP ToolKit
+              {t("app.subtitle")}
             </div>
           </div>
         </NavLink>
@@ -165,15 +164,17 @@ export function AppSidebar() {
             <SidebarGroupLabel>{t("nav.groupProfessors")}</SidebarGroupLabel>
             <SidebarGroupContent>
               <div className="flex flex-col gap-1 px-2">
-                {professors.map((p) => {
-                  const acc = accentFor(p.id, p.name);
-                  return (
-                    <div key={p.id ?? p.name} className="flex items-center gap-2 px-1 text-[13px] text-muted-foreground">
-                      <span className="size-2 shrink-0 rounded-full" style={{ background: acc }} />
-                      <span className="truncate">{professorLabel(p.name)}</span>
-                    </div>
-                  );
-                })}
+                {professors.map((p) => (
+                  <div key={p.id ?? p.name} className="flex items-center gap-2 px-1 text-[13px] text-muted-foreground">
+                    <span
+                      aria-hidden
+                      className="grid size-5 shrink-0 place-items-center rounded-full border border-border bg-muted/60 text-[9px] font-semibold uppercase text-muted-foreground"
+                    >
+                      {professorInitials(p.name)}
+                    </span>
+                    <span className="truncate">{professorLabel(p.name)}</span>
+                  </div>
+                ))}
               </div>
             </SidebarGroupContent>
           </SidebarGroup>

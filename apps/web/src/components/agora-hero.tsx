@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, Target } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import type { Exercise } from "@/types";
@@ -7,6 +7,7 @@ import { countdownParts, fmtDeadline } from "@/lib/status";
 import { contentLabel } from "@/lib/kind";
 import { useT, type TranslateFn } from "@/lib/i18n";
 import { StatusBadge, TypeBadge } from "./status-badges";
+import { SubjectAvatar } from "./identity";
 
 function useNow(intervalMs = 30_000): number {
   const [now, setNow] = useState(() => Date.now());
@@ -46,9 +47,7 @@ export function NextHero({ next, onClick }: { next: Exercise; onClick: () => voi
         "transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       )}
     >
-      <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/25">
-        <Target className="size-5" aria-hidden />
-      </span>
+      <SubjectAvatar moduleName={next.moduleName} kind={next.kind} className="size-12 rounded-xl text-base" />
 
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-semibold uppercase tracking-widest text-brand">{t("hero.next")}</span>

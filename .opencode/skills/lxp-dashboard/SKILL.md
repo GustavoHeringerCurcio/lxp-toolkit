@@ -26,5 +26,5 @@ When asked about homework / exercises / deadlines / course progress:
 ## Friendly outputs to offer
 
 - Terminal board: `npm run homework` (colorized). No TTY → still readable.
-- Web app: Pauta — `npm run web` at the repo root (serves `apps/web` via `apps/server`).
+- Web app: LXP Toolkit — `npm run web` at the repo root (serves `apps/web` via `apps/server`).
 - Plain summary: describe `nextUp`, then group open items by module.

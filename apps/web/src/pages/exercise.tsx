@@ -50,7 +50,7 @@ import { cn, stripHtml } from "@/lib/utils";
 import type { AnswerState, Exercise, ForumInfo, ForumPost, RemoteFile } from "@/types";
 import { BackLink } from "@/components/app-sidebar";
 import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
-import { AccChips } from "@/components/prof-chip";
+import { ProfessorTag, SubjectLabel } from "@/components/identity";
 import { AiRequestPanel } from "@/components/ai-request-panel";
 import { MarkPanel, PortalOnlyPanel } from "@/components/mark-panel";
 import { StatusBadge, TypeBadge, DoneBadge } from "@/components/status-badges";
@@ -985,7 +985,15 @@ export function ExercisePage() {
                   <h1 className="font-heading text-xl font-semibold leading-snug text-balance">{e.title}</h1>
                   {e.done && <DoneBadge />}
                 </div>
-                <AccChips professorId={e.professorId} professor={e.professor} moduleName={e.moduleName} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <ProfessorTag name={e.professor} />
+                  {e.professor && e.moduleName && (
+                    <span className="text-muted-foreground/50" aria-hidden>
+                      ·
+                    </span>
+                  )}
+                  {e.moduleName && <SubjectLabel moduleName={e.moduleName} className="text-xs" />}
+                </div>
                 {e.sectionTitle && <p className="mt-1 text-xs text-muted-foreground">{e.sectionTitle}</p>}
               </div>
             )}

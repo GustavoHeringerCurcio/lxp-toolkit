@@ -8,9 +8,9 @@ export interface KindMeta {
   /** Compact label, used on badges/chips. */
   short: string;
   icon: LucideIcon;
-  /** Badge pill classes. */
+  /** Badge pill classes (monochrome — the icon differentiates the type). */
   badgeClass: string;
-  /** Card icon-tile classes. */
+  /** Card icon-tile classes (monochrome). */
   tileClass: string;
   /** Whether the AI answer workbench applies. */
   canAnswer: boolean;
@@ -18,13 +18,21 @@ export interface KindMeta {
   canMark: boolean;
 }
 
+/**
+ * Type is encoded by **icon + label**, never by color: status owns semantic
+ * color and subject owns identity color, so type stays monochrome to avoid
+ * collisions (DESIGN.md §3.5).
+ */
+const NEUTRAL_BADGE = "border-border bg-muted/40 text-muted-foreground";
+const NEUTRAL_TILE = "bg-muted/50 text-muted-foreground";
+
 export const KIND_META: Record<ExerciseKind, KindMeta> = {
   quiz: {
     label: "Quiz",
     short: "Quiz",
     icon: ListChecks,
-    badgeClass: "border-info/25 bg-info/10 text-info",
-    tileClass: "bg-info/15 text-info",
+    badgeClass: NEUTRAL_BADGE,
+    tileClass: NEUTRAL_TILE,
     canAnswer: true,
     canMark: false,
   },
@@ -32,8 +40,8 @@ export const KIND_META: Record<ExerciseKind, KindMeta> = {
     label: "Tarefa (envio de arquivo)",
     short: "Tarefa",
     icon: Upload,
-    badgeClass: "border-brand/25 bg-brand/10 text-brand",
-    tileClass: "bg-brand/15 text-brand",
+    badgeClass: NEUTRAL_BADGE,
+    tileClass: NEUTRAL_TILE,
     canAnswer: true,
     canMark: false,
   },
@@ -41,8 +49,8 @@ export const KIND_META: Record<ExerciseKind, KindMeta> = {
     label: "Marcar como concluída",
     short: "Marcar",
     icon: CircleCheckBig,
-    badgeClass: "border-ok/30 bg-ok-bg text-ok",
-    tileClass: "bg-ok/15 text-ok",
+    badgeClass: NEUTRAL_BADGE,
+    tileClass: NEUTRAL_TILE,
     canAnswer: false,
     canMark: true,
   },
@@ -50,8 +58,8 @@ export const KIND_META: Record<ExerciseKind, KindMeta> = {
     label: "Fórum",
     short: "Fórum",
     icon: MessagesSquare,
-    badgeClass: "border-brand/25 bg-brand/10 text-brand",
-    tileClass: "bg-brand/15 text-brand",
+    badgeClass: NEUTRAL_BADGE,
+    tileClass: NEUTRAL_TILE,
     canAnswer: true,
     canMark: false,
   },
@@ -59,8 +67,8 @@ export const KIND_META: Record<ExerciseKind, KindMeta> = {
     label: "Outro",
     short: "Outro",
     icon: FileQuestion,
-    badgeClass: "border-border bg-muted/50 text-muted-foreground",
-    tileClass: "bg-muted/50 text-muted-foreground",
+    badgeClass: NEUTRAL_BADGE,
+    tileClass: NEUTRAL_TILE,
     canAnswer: false,
     canMark: false,
   },

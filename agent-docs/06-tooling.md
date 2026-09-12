@@ -48,7 +48,7 @@ cp packages/portal/.env.example packages/portal/.env    # then fill LXP_USERNAME
 
 `scraped/raw/homework-index.json` (built by `npm run index`) links every open assignment to its
 section, sibling content, and local files. Read it instead of re-scraping. `npm run homework` is
-the friendly terminal board; the browser UI is the Pauta web app (`npm run web` at the repo
+the friendly terminal board; the browser UI is the LXP Toolkit web app (`npm run web` at the repo
 root, served from `apps/web` + `apps/server`).
 
 
