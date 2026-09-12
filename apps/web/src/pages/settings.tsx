@@ -4,6 +4,7 @@ import { saveAiConfig } from "@/api";
 import { useAppData } from "@/lib/app-state";
 import { BackLink } from "@/components/app-sidebar";
 import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_STYLE, renderStylePreview } from "@/lib/prompt-preview";
+import { useT } from "@/lib/i18n";
 import type { AiActivitySections, AiStyle } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +78,7 @@ function Feedback({ msg, err }: { msg: string | null; err: string | null }) {
 
 export function SettingsPage() {
   const { cfg, patchConfig } = useAppData();
+  const { t } = useT();
   const [style, setStyle] = useState<AiStyle>(DEFAULT_STYLE);
   const [sections, setSections] = useState<AiActivitySections>(DEFAULT_ACTIVITY_SECTIONS);
   const [model, setModel] = useState("");
@@ -120,20 +122,20 @@ export function SettingsPage() {
     setMsg(null);
     setErr(null);
     try {
-      const t = Number(temperature);
-      const m = Number(maxTokens);
-      if (Number.isNaN(t)) throw new Error("Temperatura inválida.");
-      if (Number.isNaN(m) || m <= 0) throw new Error("Máximo de tokens inválido.");
+      const temp = Number(temperature);
+      const maxTok = Number(maxTokens);
+      if (Number.isNaN(temp)) throw new Error(t("settings.invalidTemperature"));
+      if (Number.isNaN(maxTok) || maxTok <= 0) throw new Error(t("settings.invalidMaxTokens"));
       const nextModel = model.trim() || cfg?.model || "gpt-4o";
       await saveAiConfig({
         model: nextModel,
-        temperature: t,
-        max_output_tokens: m,
+        temperature: temp,
+        max_output_tokens: maxTok,
         style,
         activitySections: sections,
       });
-      patchConfig({ model: nextModel, temperature: t, max_output_tokens: m, style, activitySections: sections });
-      setMsg("Configurações salvas.");
+      patchConfig({ model: nextModel, temperature: temp, max_output_tokens: maxTok, style, activitySections: sections });
+      setMsg(t("settings.saved"));
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
     } finally {
@@ -148,56 +150,57 @@ export function SettingsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={save} disabled={busy}>
           {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-          {busy ? "Salvando…" : "Salvar tudo"}
+          {busy ? t("settings.saving") : t("settings.saveAll")}
         </Button>
         <Button variant="outline" size="sm" onClick={restoreDefaults} disabled={busy}>
           <RotateCcw aria-hidden />
-          Restaurar padrão
+          {t("settings.restore")}
         </Button>
         <Button variant="ghost" size="sm" onClick={() => setShowPreview((v) => !v)} aria-pressed={showPreview}>
           <Eye aria-hidden />
-          {showPreview ? "esconder prévia" : "ver prévia"}
+          {showPreview ? t("common.hidePreview") : t("common.showPreview")}
         </Button>
       </div>
 
       <Feedback msg={msg} err={err} />
 
-      <Card icon={<MessageSquareQuote className="size-4 text-brand" aria-hidden />} title="Voz da IA">
+      <Card icon={<MessageSquareQuote className="size-4 text-brand" aria-hidden />} title={t("settings.voice")}>
         <p className="text-xs text-muted-foreground">
-          Isto vira a mensagem de sistema: diz à IA <em>como</em> escrever. O conteúdo da atividade é
-          enviado à parte, então a IA não repete os rótulos.
+          {t("settings.voiceIntro1")}{" "}
+          <em>{t("settings.voiceIntroEm")}</em>{" "}
+          {t("settings.voiceIntro2")}
         </p>
-        <Field label="Quem a IA está sendo">
+        <Field label={t("settings.personaLabel")}>
           <Input
             value={style.persona}
             onChange={(ev) => patchStyle({ persona: ev.target.value })}
-            placeholder="Ex.: Você é o aluno entregando esta atividade."
+            placeholder={t("settings.personaPlaceholder")}
           />
         </Field>
-        <Field label="Tom e idioma" hint="Descreva o estilo de escrita esperado.">
+        <Field label={t("settings.voiceLabel")} hint={t("settings.voiceHint")}>
           <Textarea
             value={style.voice}
             onChange={(ev) => patchStyle({ voice: ev.target.value })}
             rows={2}
             className="min-h-16 leading-relaxed"
-            placeholder="Ex.: Escreva em português simples e natural, como um estudante."
+            placeholder={t("settings.voicePlaceholder")}
           />
         </Field>
         <Toggle
-          label="Começar com nome e matrícula"
-          hint={'"Nome: …" e "Matrícula: …" no topo da resposta.'}
+          label={t("settings.identityToggle")}
+          hint={t("settings.identityHint")}
           checked={style.includeIdentity}
           onChange={(v) => patchStyle({ includeIdentity: v })}
         />
       </Card>
 
-      <Card icon={<ListChecks className="size-4 text-brand" aria-hidden />} title="Formato da resposta">
-        <Field label="Questões de múltipla escolha">
+      <Card icon={<ListChecks className="size-4 text-brand" aria-hidden />} title={t("settings.format")}>
+        <Field label={t("settings.mcqLabel")}>
           <div className="flex flex-wrap gap-2">
             {(
               [
-                { value: "letter", label: "Só a letra" },
-                { value: "letter_text", label: "Letra + justificativa" },
+                { value: "letter", label: t("settings.mcqLetter") },
+                { value: "letter_text", label: t("settings.mcqLetterText") },
               ] as const
             ).map((opt) => (
               <label
@@ -218,76 +221,74 @@ export function SettingsPage() {
         </Field>
         <div className="grid gap-2 sm:grid-cols-2">
           <Toggle
-            label="Numerar as respostas"
+            label={t("settings.numbering")}
             checked={style.numbering}
             onChange={(v) => patchStyle({ numbering: v })}
           />
           <Toggle
-            label="Associação na mesma linha"
-            hint="Ex.: 1. item - resposta"
+            label={t("settings.assocInline")}
+            hint={t("settings.assocHint")}
             checked={style.associateInline}
             onChange={(v) => patchStyle({ associateInline: v })}
           />
         </div>
         <Toggle
-          label="Sem introdução nem despedida"
+          label={t("settings.noIntroOutro")}
           checked={style.noIntroOutro}
           onChange={(v) => patchStyle({ noIntroOutro: v })}
         />
       </Card>
 
-      <Card icon={<Wand2 className="size-4 text-brand" aria-hidden />} title="Regras">
+      <Card icon={<Wand2 className="size-4 text-brand" aria-hidden />} title={t("settings.rules")}>
         <Toggle
-          label="Não repetir os rótulos da atividade"
-          hint="Evita que a IA copie 'Atividade:', 'Enunciado:', 'Questões:' etc."
+          label={t("settings.noMetaLabels")}
+          hint={t("settings.noMetaHint")}
           checked={style.noMetaLabels}
           onChange={(v) => patchStyle({ noMetaLabels: v })}
         />
-        <Field label="Regras extras" hint="Uma regra por linha. Viram itens da lista de regras.">
+        <Field label={t("settings.extraRules")} hint={t("settings.extraRulesHint")}>
           <Textarea
             value={style.extraRules}
             onChange={(ev) => patchStyle({ extraRules: ev.target.value })}
             rows={3}
             className="min-h-20 leading-relaxed"
-            placeholder={"Ex.:\nUse frases curtas\nNão use listas quando a questão pedir um texto"}
+            placeholder={t("settings.extraRulesPlaceholder")}
           />
         </Field>
       </Card>
 
-      <Card icon={<SlidersHorizontal className="size-4 text-brand" aria-hidden />} title="Conteúdo enviado">
-        <p className="text-xs text-muted-foreground">
-          Escolha o que entra na mensagem do usuário, junto com o enunciado da atividade.
-        </p>
+      <Card icon={<SlidersHorizontal className="size-4 text-brand" aria-hidden />} title={t("settings.contentSent")}>
+        <p className="text-xs text-muted-foreground">{t("settings.contentSentIntro")}</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <Toggle
-            label="Enunciado / instruções"
+            label={t("settings.secInstructions")}
             checked={sections.enunciado}
             onChange={(v) => patchSections({ enunciado: v })}
           />
           <Toggle
-            label="Arquivos anexados"
+            label={t("settings.secFiles")}
             checked={sections.arquivos}
             onChange={(v) => patchSections({ arquivos: v })}
           />
           <Toggle
-            label="Questões do quiz"
+            label={t("settings.secQuestions")}
             checked={sections.questoes}
             onChange={(v) => patchSections({ questoes: v })}
           />
           <Toggle
-            label="Observações do aluno"
+            label={t("settings.secNotes")}
             checked={sections.observacoes}
             onChange={(v) => patchSections({ observacoes: v })}
           />
         </div>
       </Card>
 
-      <Card icon={<SlidersHorizontal className="size-4 text-brand" aria-hidden />} title="Parâmetros de geração">
+      <Card icon={<SlidersHorizontal className="size-4 text-brand" aria-hidden />} title={t("settings.generation")}>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Modelo">
+          <Field label={t("settings.model")}>
             <Input value={model} onChange={(ev) => setModel(ev.target.value)} placeholder="gpt-4o" />
           </Field>
-          <Field label="Temperatura">
+          <Field label={t("settings.temperature")}>
             <Input
               type="number"
               step="0.1"
@@ -297,7 +298,7 @@ export function SettingsPage() {
               onChange={(ev) => setTemperature(ev.target.value)}
             />
           </Field>
-          <Field label="Máx. tokens">
+          <Field label={t("settings.maxTokens")}>
             <Input
               type="number"
               min="1"
@@ -307,7 +308,7 @@ export function SettingsPage() {
           </Field>
         </div>
         {cfg?.configPath && (
-          <p className="text-[11px] text-muted-foreground">config: {cfg.configPath}</p>
+          <p className="text-[11px] text-muted-foreground">{t("settings.configPath", { path: cfg.configPath })}</p>
         )}
       </Card>
 
@@ -315,15 +316,13 @@ export function SettingsPage() {
         <section className="rounded-xl border border-border bg-card">
           <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
             <Eye className="size-4 text-brand" aria-hidden />
-            <h2 className="font-heading text-sm font-semibold">Prévia da mensagem (system)</h2>
+            <h2 className="font-heading text-sm font-semibold">{t("settings.previewTitle")}</h2>
           </div>
           <div className="p-4">
             <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-[11px] leading-relaxed text-foreground/80">
               {renderStylePreview(style)}
             </pre>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Os marcadores como {"{nome}"} e {"{atividade}"} são preenchidos no momento do envio.
-            </p>
+            <p className="mt-2 text-[11px] text-muted-foreground">{t("settings.previewNote")}</p>
           </div>
         </section>
       )}

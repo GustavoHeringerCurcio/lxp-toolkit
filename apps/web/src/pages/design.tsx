@@ -6,14 +6,22 @@ import { Badge } from "@/components/ui/badge";
 import { ListChecks, Upload, CircleCheckBig, MessagesSquare } from "lucide-react";
 import { TONE_CLS, type Tone } from "@/lib/status";
 import { KIND_META } from "@/lib/kind";
+import { useT, type TranslateFn } from "@/lib/i18n";
 
-const TONE_LABEL: Record<Tone, string> = {
-  ok: "Concluída",
-  late: "Atrasada 2d",
-  soon: "Vence amanhã",
-  coming: "Vence em 5d",
-  none: "Sem prazo",
-};
+function toneLabel(tone: Tone, t: TranslateFn): string {
+  switch (tone) {
+    case "ok":
+      return t("status.done");
+    case "late":
+      return t("status.lateDays", { n: 2 });
+    case "soon":
+      return t("status.dueTomorrow");
+    case "coming":
+      return t("status.dueIn", { n: 5 });
+    case "none":
+      return t("status.noDeadline");
+  }
+}
 
 function Swatch({ name, varName, dark }: { name: string; varName: string; dark?: boolean }) {
   return (
@@ -41,18 +49,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /** Living style guide — tokens, type ramp and component states (DESIGN.md §8-9). */
 export function DesignPage() {
+  const { t } = useT();
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8 p-4 sm:p-6">
       <header>
-        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Sistema</p>
-        <h1 className="mt-1 font-heading text-2xl font-semibold tracking-tight">Design · Folio</h1>
+        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t("design.system")}</p>
+        <h1 className="mt-1 font-heading text-2xl font-semibold tracking-tight">{t("design.folio")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Guia vivo do design system. A fonte da verdade é <code className="font-mono text-xs">DESIGN.md</code> e{" "}
+          {t("design.intro")} <code className="font-mono text-xs">DESIGN.md</code> {t("design.introAfter")}{" "}
           <code className="font-mono text-xs">src/index.css</code>.
         </p>
       </header>
 
-      <Section title="Paleta — superfícies">
+      <Section title={t("design.palette")}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Card size="sm">
             <CardContent className="grid gap-2.5">
@@ -89,7 +98,7 @@ export function DesignPage() {
         </div>
       </Section>
 
-      <Section title="Tipografia">
+      <Section title={t("design.typography")}>
         <Card>
           <CardContent className="space-y-4">
             <div>
@@ -97,43 +106,43 @@ export function DesignPage() {
               <div className="mt-1 font-mono text-[10px] text-muted-foreground">font-heading · opsz auto</div>
             </div>
             <div>
-              <div className="text-base">Inter — corpo da interface. A raposa marrom salta sobre o cão preguiçoso.</div>
+              <div className="text-base">{t("design.typographyBody")}</div>
               <div className="mt-1 font-mono text-[10px] text-muted-foreground">font-sans · 14px base</div>
             </div>
             <div>
               <div className="font-mono text-lg tabular-nums">3d 04h · 12.345 · 2026-09-12</div>
-              <div className="mt-1 font-mono text-[10px] text-muted-foreground">font-mono · dados e contagens</div>
+              <div className="mt-1 font-mono text-[10px] text-muted-foreground">{t("design.monoBody")}</div>
             </div>
           </CardContent>
         </Card>
       </Section>
 
-      <Section title="Botões">
+      <Section title={t("design.buttons")}>
         <Card>
           <CardContent className="flex flex-wrap items-center gap-2">
-            <Button>Primário</Button>
-            <Button variant="secondary">Secundário</Button>
-            <Button variant="outline">Contorno</Button>
-            <Button variant="ghost">Ghost</Button>
-            <Button variant="destructive">Destrutivo</Button>
-            <Button variant="link">Link</Button>
-            <Button disabled>Desabilitado</Button>
-            <Button size="sm">Small</Button>
-            <Button size="xs">XSmall</Button>
+            <Button>{t("design.btnPrimary")}</Button>
+            <Button variant="secondary">{t("design.btnSecondary")}</Button>
+            <Button variant="outline">{t("design.btnOutline")}</Button>
+            <Button variant="ghost">{t("design.btnGhost")}</Button>
+            <Button variant="destructive">{t("design.btnDestructive")}</Button>
+            <Button variant="link">{t("design.btnLink")}</Button>
+            <Button disabled>{t("design.btnDisabled")}</Button>
+            <Button size="sm">{t("design.btnSmall")}</Button>
+            <Button size="xs">{t("design.btnXSmall")}</Button>
           </CardContent>
         </Card>
       </Section>
 
-      <Section title="Badges de status e tipo">
+      <Section title={t("design.badges")}>
         <Card>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              {(Object.keys(TONE_LABEL) as Tone[]).map((t) => (
+              {(Object.keys(TONE_CLS) as Tone[]).map((tone) => (
                 <span
-                  key={t}
-                  className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${TONE_CLS[t]}`}
+                  key={tone}
+                  className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${TONE_CLS[tone]}`}
                 >
-                  {TONE_LABEL[t]}
+                  {toneLabel(tone, t)}
                 </span>
               ))}
             </div>
@@ -147,7 +156,7 @@ export function DesignPage() {
                     className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${meta.badgeClass}`}
                   >
                     <Icon className="size-3" aria-hidden />
-                    {meta.short}
+                    {t(`kind.${k}.short`)}
                   </span>
                 );
               })}
@@ -162,16 +171,16 @@ export function DesignPage() {
         </Card>
       </Section>
 
-      <Section title="Campos">
+      <Section title={t("design.fields")}>
         <Card>
           <CardContent className="grid max-w-md gap-3">
-            <Input placeholder="Campo de texto" aria-label="Campo de texto" />
-            <Textarea placeholder="Área de texto" rows={3} aria-label="Área de texto" />
+            <Input placeholder={t("design.fieldText")} aria-label={t("design.fieldText")} />
+            <Textarea placeholder={t("design.fieldArea")} rows={3} aria-label={t("design.fieldArea")} />
           </CardContent>
         </Card>
       </Section>
 
-      <Section title="Ícones de tipo">
+      <Section title={t("design.icons")}>
         <Card>
           <CardContent className="flex flex-wrap gap-4">
             {(
@@ -190,15 +199,14 @@ export function DesignPage() {
         </Card>
       </Section>
 
-      <Section title="Movimento">
+      <Section title={t("design.motion")}>
         <Card>
           <CardHeader>
-            <CardTitle>Restrito por padrão</CardTitle>
+            <CardTitle>{t("design.motionTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Durações 120 / 200 / 320 ms, easing <code className="font-mono text-xs">ease-soft</code>. O movimento
-            confirma ações — nunca decora. <code className="font-mono text-xs">prefers-reduced-motion</code> sempre
-            respeitado.
+            {t("design.motionBody")} <code className="font-mono text-xs">ease-soft</code>. {t("design.motionBody2")}{" "}
+            <code className="font-mono text-xs">prefers-reduced-motion</code> {t("design.motionBody3")}
           </CardContent>
         </Card>
       </Section>

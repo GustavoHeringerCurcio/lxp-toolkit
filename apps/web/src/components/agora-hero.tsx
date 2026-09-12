@@ -3,7 +3,8 @@ import { Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Exercise } from "@/types";
 import { countdownParts, fmtDeadline } from "@/lib/status";
-import { CONTENT_LABEL } from "@/lib/kind";
+import { contentLabel } from "@/lib/kind";
+import { useT, type TranslateFn } from "@/lib/i18n";
 import { StatusBadge, TypeBadge } from "./status-badges";
 
 function useNow(intervalMs = 30_000): number {
@@ -15,22 +16,23 @@ function useNow(intervalMs = 30_000): number {
   return now;
 }
 
-function heroMeta(next: Exercise): string {
+function heroMeta(next: Exercise, t: TranslateFn, tn: (key: string, n: number) => string): string {
   const fileCount = next.remoteFiles.length || next.files.length;
   return next.kind === "quiz" && next.questions.length
-    ? `${next.questions.length} questão${next.questions.length > 1 ? "es" : ""}`
+    ? tn("plural.questions", next.questions.length)
     : next.kind === "upload" && fileCount
-      ? `${fileCount} arquivo${fileCount > 1 ? "s" : ""}`
+      ? tn("plural.files", fileCount)
       : next.kind === "mark" || next.kind === "other"
-        ? CONTENT_LABEL[next.contentKind]
+        ? contentLabel(next.contentKind, t)
         : "";
 }
 
 /** The "next up" hero: what to do next, with a live mono countdown. */
 export function NextHero({ next, onClick }: { next: Exercise; onClick: () => void }) {
   const now = useNow();
+  const { t, tn, locale } = useT();
   const cd = next.deadlineAt ? countdownParts(next.deadlineAt, now) : null;
-  const meta = heroMeta(next);
+  const meta = heroMeta(next, t, tn);
 
   return (
     <button
@@ -46,7 +48,7 @@ export function NextHero({ next, onClick }: { next: Exercise; onClick: () => voi
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-semibold uppercase tracking-widest text-brand">Próxima</span>
+        <span className="block text-[11px] font-semibold uppercase tracking-widest text-brand">{t("hero.next")}</span>
         <span className="mt-0.5 block truncate font-heading text-lg font-semibold leading-snug tracking-tight">
           {next.title}
         </span>
@@ -60,14 +62,14 @@ export function NextHero({ next, onClick }: { next: Exercise; onClick: () => voi
         {next.deadlineAt && cd ? (
           <>
             <span className="font-mono text-xl font-medium tabular-nums text-foreground">
-              {cd.past ? "atrasada" : cd.rel}
+              {cd.past ? t("hero.late") : cd.rel}
             </span>
             <span className="text-[11px] tabular-nums text-muted-foreground">
-              {cd.past ? `venceu há ${cd.rel}` : fmtDeadline(next.deadlineAt)}
+              {cd.past ? t("hero.overdueBy", { t: cd.rel }) : fmtDeadline(next.deadlineAt, locale)}
             </span>
           </>
         ) : (
-          <span className="text-xs text-muted-foreground">sem prazo</span>
+          <span className="text-xs text-muted-foreground">{t("hero.noDeadline")}</span>
         )}
         <StatusBadge e={next} />
       </span>
@@ -121,11 +123,12 @@ export function ModuleMiniBars({
   modules: ModuleProgress[];
   onSelect?: (name: string) => void;
 }) {
+  const { t } = useT();
   return (
     <div className="rounded-xl border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-heading text-sm font-semibold">Módulos</h2>
-        <span className="text-[11px] text-muted-foreground">concluídas / total</span>
+        <h2 className="font-heading text-sm font-semibold">{t("hero.modules")}</h2>
+        <span className="text-[11px] text-muted-foreground">{t("hero.doneOfTotal")}</span>
       </div>
       <div className="space-y-3">
         {modules.map((m) => {

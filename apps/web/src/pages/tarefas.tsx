@@ -2,18 +2,12 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { countInfo, cmpOpen } from "@/lib/status";
 import { useAppData, useScopePrefs, type Scope } from "@/lib/app-state";
+import { useT } from "@/lib/i18n";
 import { ActivityCard } from "@/components/activity-card";
-import { KIND_ORDER, kindMeta } from "@/lib/kind";
+import { KIND_ORDER, kindMeta, kindShort } from "@/lib/kind";
 import type { ExerciseKind } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
-
-export const SCOPE_LABEL: Record<Scope, string> = {
-  open: "Abertas",
-  expired: "Atrasadas",
-  done: "Concluídas",
-  all: "Todas",
-};
 
 const SCOPES: Scope[] = ["open", "expired", "done", "all"];
 
@@ -34,14 +28,15 @@ function SkeletonMain() {
 export function TarefasPage() {
   const { items, loading } = useAppData();
   const { scope, setScope, moduleFilter, setModuleFilter, typeFilter, setTypeFilter } = useScopePrefs();
+  const { t, locale } = useT();
 
   const counts = useMemo(() => countInfo(items), [items]);
   const modules = useMemo(
     () =>
       [...new Set(items.map((e) => e.moduleName).filter((m): m is string => !!m))].sort((a, b) =>
-        a.localeCompare(b, "pt"),
+        a.localeCompare(b, locale),
       ),
-    [items],
+    [items, locale],
   );
 
   const scoped = useMemo(() => items.filter((e) => scope === "all" || e.status === scope), [items, scope]);
@@ -53,8 +48,8 @@ export function TarefasPage() {
   const shown = useMemo(() => {
     let list = moduleFilter ? scoped.filter((e) => e.moduleName === moduleFilter) : scoped;
     if (typeFilter) list = list.filter((e) => e.kind === typeFilter);
-    return [...list].sort(cmpOpen);
-  }, [scoped, moduleFilter, typeFilter]);
+    return [...list].sort((a, b) => cmpOpen(a, b, locale));
+  }, [scoped, moduleFilter, typeFilter, locale]);
 
   if (loading && items.length === 0) return <SkeletonMain />;
 
@@ -65,7 +60,7 @@ export function TarefasPage() {
       {/* scope tabs */}
       <div
         role="tablist"
-        aria-label="Filtrar por situação"
+        aria-label={t("tasks.filterAria")}
         className="flex w-fit items-center gap-0.5 rounded-full border bg-card p-1"
       >
         {SCOPES.map((s) => (
@@ -81,7 +76,7 @@ export function TarefasPage() {
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
-            {SCOPE_LABEL[s]}
+            {t(`scope.${s}`)}
             <span className="ml-1.5 font-mono text-[11px] tabular-nums opacity-70">
               {s === "open" ? counts.open : s === "expired" ? counts.expired : s === "done" ? counts.done : items.length}
             </span>
@@ -93,7 +88,7 @@ export function TarefasPage() {
       {modules.length > 0 && (
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
           <span className="mr-1 shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Módulos
+            {t("tasks.modules")}
           </span>
           {modules.map((m) => (
             <button
@@ -116,11 +111,10 @@ export function TarefasPage() {
       {/* type chips */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
         <span className="mr-1 shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Tipo
+          {t("tasks.type")}
         </span>
         {KIND_ORDER.map((k) => {
-          const meta = kindMeta(k);
-          const Icon = meta.icon;
+          const Icon = kindMeta(k).icon;
           return (
             <button
               key={k}
@@ -134,7 +128,7 @@ export function TarefasPage() {
               )}
             >
               <Icon className="size-3" aria-hidden />
-              {meta.short}
+              {kindShort(k, t)}
               <span className="font-mono tabular-nums opacity-60">{typeCounts[k]}</span>
             </button>
           );
@@ -144,11 +138,11 @@ export function TarefasPage() {
       {/* list */}
       {shown.length === 0 ? (
         <NoData
-          title={filtersActive ? "Nada com esses filtros" : "Nada por aqui"}
+          title={filtersActive ? t("tasks.emptyFilteredTitle") : t("tasks.emptyTitle")}
           detail={
             filtersActive
-              ? "Tente limpar os filtros de módulo ou tipo."
-              : `Nenhuma tarefa em “${SCOPE_LABEL[scope]}”.`
+              ? t("tasks.emptyFilteredDetail")
+              : t("tasks.emptyScopeDetail", { scope: t(`scope.${scope}`) })
           }
           action={
             filtersActive ? (
@@ -159,7 +153,7 @@ export function TarefasPage() {
                 }}
                 className="rounded-full border px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
               >
-                Limpar filtros
+                {t("tasks.clearFilters")}
               </button>
             ) : undefined
           }

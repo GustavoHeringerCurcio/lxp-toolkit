@@ -2,7 +2,8 @@ import { CalendarClock, CheckCircle2, CircleAlert, Clock3, Minus, type LucideIco
 import { cn } from "@/lib/utils";
 import type { Exercise } from "@/types";
 import { deadlineInfo, TONE_CLS, type Tone } from "@/lib/status";
-import { CONTENT_LABEL, kindMeta } from "@/lib/kind";
+import { contentLabel, kindLabel, kindMeta, kindShort } from "@/lib/kind";
+import { useT } from "@/lib/i18n";
 
 export function TypeBadge({
   kind,
@@ -15,14 +16,15 @@ export function TypeBadge({
   isSurvey?: boolean;
   className?: string;
 }) {
+  const { t } = useT();
   const meta = kindMeta(kind);
   const Icon = meta.icon;
-  const label = isSurvey ? "Pesquisa" : meta.short;
+  const label = isSurvey ? t("badge.survey") : kindShort(kind, t);
   const title = isSurvey
-    ? "Pesquisa (resposta enviada direto ao portal)"
+    ? t("badge.surveyTitle")
     : contentKind
-      ? `${meta.label} · ${CONTENT_LABEL[contentKind]}`
-      : meta.label;
+      ? `${kindLabel(kind, t)} · ${contentLabel(contentKind, t)}`
+      : kindLabel(kind, t);
   return (
     <span
       title={title}
@@ -47,7 +49,8 @@ const TONE_ICON: Record<Tone, LucideIcon> = {
 };
 
 export function StatusBadge({ e, className }: { e: Pick<Exercise, "done" | "status" | "daysLeft">; className?: string }) {
-  const d = deadlineInfo(e);
+  const { t } = useT();
+  const d = deadlineInfo(e, t);
   const Icon = TONE_ICON[d.tone];
   return (
     <span
@@ -63,8 +66,9 @@ export function StatusBadge({ e, className }: { e: Pick<Exercise, "done" | "stat
   );
 }
 
-/** Prominent green "Feito" pill shown on completed activities. */
+/** Prominent green "done" pill shown on completed activities. */
 export function DoneBadge({ className }: { className?: string }) {
+  const { t } = useT();
   return (
     <span
       className={cn(
@@ -73,7 +77,7 @@ export function DoneBadge({ className }: { className?: string }) {
       )}
     >
       <CheckCircle2 className="size-3" aria-hidden />
-      Feito
+      {t("badge.done")}
     </span>
   );
 }

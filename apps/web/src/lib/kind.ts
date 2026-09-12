@@ -1,5 +1,6 @@
 import { CircleCheckBig, ListChecks, MessagesSquare, Upload, type LucideIcon } from "lucide-react";
 import type { ContentKind, ExerciseKind } from "@/types";
+import type { TranslateFn } from "./i18n";
 
 export interface KindMeta {
   /** Full label, used on the detail page. */
@@ -71,4 +72,21 @@ export const CONTENT_LABEL: Record<ContentKind, string> = {
 
 export function kindMeta(kind: ExerciseKind): KindMeta {
   return KIND_META[kind];
+}
+
+/**
+ * UI labels come from the dictionaries so they follow the active language.
+ * `KIND_META.label` stays in PT on purpose: it feeds the AI prompt payload,
+ * which must keep matching `apps/server/src/prompt.ts`.
+ */
+export function kindLabel(kind: ExerciseKind, t: TranslateFn): string {
+  return t(`kind.${kind}.label`);
+}
+
+export function kindShort(kind: ExerciseKind, t: TranslateFn): string {
+  return t(`kind.${kind}.short`);
+}
+
+export function contentLabel(kind: ContentKind, t: TranslateFn): string {
+  return t(`content.${kind}`);
 }

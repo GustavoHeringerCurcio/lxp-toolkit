@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Eye, Loader2, Save, Trash2, Wand2 } from "lucide-react";
 import { saveAiRequest } from "@/api";
 import { useAppData } from "@/lib/app-state";
+import { useT } from "@/lib/i18n";
 import {
   DEFAULT_ACTIVITY_SECTIONS,
   DEFAULT_STYLE,
@@ -15,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => void }) {
   const { cfg, patchExercise } = useAppData();
+  const { t } = useT();
   const style = cfg?.style ?? DEFAULT_STYLE;
   const sections = cfg?.activitySections ?? DEFAULT_ACTIVITY_SECTIONS;
   const profile = cfg?.profile ?? { nome: "", matricula: "" };
@@ -38,7 +40,7 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
       const raw = value.trim() ? value : null;
       const res = await saveAiRequest(e.id, raw);
       patchExercise(e.id, { aiRequestJson: res.aiRequestJson, hasAiOverride: res.hasAiOverride });
-      setMsg(raw ? "Instruções salvas para esta atividade." : "Instruções removidas.");
+      setMsg(raw ? t("aiPanel.savedMsg") : t("aiPanel.removedMsg"));
       if (raw) onSaved?.();
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
@@ -55,18 +57,15 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
     <CollapsibleCard
       id="ai-request"
       icon={<Wand2 className="size-4 shrink-0 text-brand" aria-hidden />}
-      title="O que a IA recebe"
+      title={t("aiPanel.title")}
       badge={
         <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-          só esta atividade
+          {t("aiPanel.badge")}
         </span>
       }
       bodyClassName="space-y-3 p-4"
     >
-      <p className="text-xs text-muted-foreground">
-        Instruções extras só para esta atividade. As regras gerais ficam em IA Ajustes e o restante da
-        mensagem é montado automaticamente.
-      </p>
+      <p className="text-xs text-muted-foreground">{t("aiPanel.intro")}</p>
 
       <Textarea
         value={text}
@@ -75,15 +74,15 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
           setMsg(null);
         }}
         rows={5}
-        placeholder="Ex.: responda em tópicos curtos / use exemplos de código em Python…"
-        aria-label="Instruções extras desta atividade"
+        placeholder={t("aiPanel.placeholder")}
+        aria-label={t("aiPanel.aria")}
         className="min-h-24 leading-relaxed"
       />
 
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={() => void persist(text)} disabled={busy}>
           {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-          Salvar
+          {t("aiPanel.save")}
         </Button>
         <Button
           variant="ghost"
@@ -95,7 +94,7 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
           disabled={busy || (!text.trim() && !e.hasAiOverride)}
         >
           <Trash2 aria-hidden />
-          Remover
+          {t("aiPanel.remove")}
         </Button>
         <Button
           variant="ghost"
@@ -105,7 +104,7 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
           aria-pressed={showPreview}
         >
           <Eye aria-hidden />
-          {showPreview ? "esconder prévia" : "ver prévia"}
+          {showPreview ? t("common.hidePreview") : t("common.showPreview")}
         </Button>
       </div>
 
@@ -123,16 +122,13 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
       {showPreview && (
         <div>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Prévia da mensagem (system + user)
+            {t("aiPanel.previewTitle")}
           </p>
           <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-card p-3 text-[11px] leading-relaxed text-foreground/80">
             {previewText}
           </pre>
           {e.kind === "upload" && e.files.length > 0 && (
-            <p className="mt-1.5 text-[11px] text-muted-foreground">
-              O texto dos PDFs e arquivos Office é extraído no servidor e inserido em {"{arquivos}"} no
-              momento do envio.
-            </p>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">{t("aiPanel.previewNote")}</p>
           )}
         </div>
       )}

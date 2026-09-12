@@ -26,17 +26,18 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { accentFor } from "@/lib/prof";
 import { useAppData } from "@/lib/app-state";
+import { useT } from "@/lib/i18n";
 import { AiSettingsDialog } from "@/components/ai-settings-dialog";
 
 const NAV = [
-  { to: "/", label: "Agora", icon: Sunrise, end: true },
-  { to: "/tarefas", label: "Tarefas", icon: ListChecks, match: ["/tarefa/"] },
-  { to: "/progresso", label: "Progresso", icon: ChartColumn },
+  { to: "/", key: "nav.now", icon: Sunrise, end: true },
+  { to: "/tarefas", key: "nav.tasks", icon: ListChecks, match: ["/tarefa/"] },
+  { to: "/progresso", key: "nav.progress", icon: ChartColumn },
 ] as const;
 
 const SYSTEM_NAV = [
-  { to: "/ajustes", label: "Ajustes", icon: SlidersHorizontal },
-  { to: "/design", label: "Design", icon: Palette },
+  { to: "/ajustes", key: "nav.settings", icon: SlidersHorizontal },
+  { to: "/design", key: "nav.design", icon: Palette },
 ] as const;
 
 function isRouteActive(to: string, pathname: string, match?: readonly string[]): boolean {
@@ -46,6 +47,7 @@ function isRouteActive(to: string, pathname: string, match?: readonly string[]):
 
 export function AppSidebar() {
   const { items } = useAppData();
+  const { t } = useT();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -73,10 +75,11 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Estudo</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("nav.groupStudy")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {NAV.map((n) => {
+                const label = t(n.key);
                 const active = isRouteActive(n.to, location.pathname, "match" in n ? n.match : undefined);
                 const badge =
                   n.to === "/" ? (nowCount > 0 ? nowCount : "") : n.to === "/tarefas" ? (items.length > 0 ? items.length : "") : "";
@@ -84,12 +87,12 @@ export function AppSidebar() {
                   <SidebarMenuItem key={n.to}>
                     <SidebarMenuButton
                       isActive={active}
-                      tooltip={n.label}
+                      tooltip={label}
                       onClick={() => navigate(n.to)}
                       className="group-data-[collapsible=icon]:!px-2"
                     >
                       <n.icon />
-                      <span>{n.label}</span>
+                      <span>{label}</span>
                       {badge !== "" && (
                         <span className="ml-auto font-mono text-xs tabular-nums text-muted-foreground">{badge}</span>
                       )}
@@ -102,28 +105,28 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Sistema</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("nav.groupSystem")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {SYSTEM_NAV.map((n) => (
                 <SidebarMenuItem key={n.to}>
                   <SidebarMenuButton
                     isActive={location.pathname === n.to}
-                    tooltip={n.label}
+                    tooltip={t(n.key)}
                     onClick={() => navigate(n.to)}
                     className="group-data-[collapsible=icon]:!px-2"
                   >
                     <n.icon />
-                    <span>{n.label}</span>
+                    <span>{t(n.key)}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
               <SidebarMenuItem>
                 <AiSettingsDialog
                   trigger={
-                    <SidebarMenuButton tooltip="Perfil" className="group-data-[collapsible=icon]:!px-2">
+                    <SidebarMenuButton tooltip={t("nav.profile")} className="group-data-[collapsible=icon]:!px-2">
                       <UserRound />
-                      <span>Perfil</span>
+                      <span>{t("nav.profile")}</span>
                     </SidebarMenuButton>
                   }
                 />
@@ -134,7 +137,7 @@ export function AppSidebar() {
 
         {professors.length > 0 && (
           <SidebarGroup>
-            <SidebarGroupLabel>Professores</SidebarGroupLabel>
+            <SidebarGroupLabel>{t("nav.groupProfessors")}</SidebarGroupLabel>
             <SidebarGroupContent>
               <div className="flex flex-col gap-1 px-2">
                 {professors.map((p) => {
@@ -164,13 +167,14 @@ export function AppSidebar() {
 
 /** Reusable back link shown at the top of the exercise page. */
 export function BackLink({ to = "/tarefas" }: { to?: string }) {
+  const { t } = useT();
   return (
     <Link
       to={to}
       className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "-ml-1 text-muted-foreground")}
     >
       <ChevronLeft />
-      voltar para tarefas
+      {t("nav.backToTasks")}
     </Link>
   );
 }

@@ -1,0 +1,428 @@
+/**
+ * Portuguese (BR) dictionary — the canonical key set.
+ * `en.ts` must implement every key here (enforced via `Dict`).
+ *
+ * Placeholders use `{{name}}`. If a variable is not provided the token is
+ * kept verbatim — that is how literal `{nome}`-style markers survive in copy.
+ */
+export const pt = {
+  // app shell
+  "app.title": "Pauta · copiloto de estudos",
+  "app.activityFallback": "Atividade",
+
+  // navigation (sidebar, header, palette)
+  "nav.now": "Agora",
+  "nav.tasks": "Tarefas",
+  "nav.progress": "Progresso",
+  "nav.settings": "Ajustes",
+  "nav.design": "Design",
+  "nav.designGuide": "Design · guia do sistema",
+  "nav.groupStudy": "Estudo",
+  "nav.groupSystem": "Sistema",
+  "nav.groupProfessors": "Professores",
+  "nav.profile": "Perfil",
+  "nav.backToTasks": "voltar para tarefas",
+
+  // header
+  "header.searchTitle": "Buscar (Ctrl+K)",
+  "header.searchAria": "Abrir busca",
+  "header.profileAria": "Perfil & IA",
+
+  // language switcher
+  "lang.title": "Idioma",
+  "lang.aria": "Mudar idioma",
+  "lang.ptName": "Português (BR)",
+  "lang.enName": "English",
+
+  // theme
+  "theme.title": "Tema",
+  "theme.toLight": "Mudar para tema claro",
+  "theme.toDark": "Mudar para tema escuro",
+
+  // command palette
+  "palette.title": "Navegação",
+  "palette.desc": "Ir para uma página, tarefa ou ação",
+  "palette.placeholder": "Buscar páginas, ações e tarefas…",
+  "palette.empty": "Nada encontrado.",
+  "palette.pages": "Páginas",
+  "palette.actions": "Ações",
+  "palette.tasks": "Tarefas",
+  "palette.toggleTheme": "Alternar tema",
+  "palette.refresh": "Atualizar conteúdo do portal",
+  "palette.reload": "Recarregar lista",
+  "palette.toggleLang": "Alternar idioma",
+
+  // agora page
+  "greeting.night": "Boa madrugada",
+  "greeting.morning": "Bom dia",
+  "greeting.afternoon": "Boa tarde",
+  "greeting.evening": "Boa noite",
+  "now.done": "concluídas",
+  "now.queue": "Fila aberta",
+  "now.seeAll": "ver todas",
+  "now.emptyTitle": "Nada na pauta",
+  "now.emptyDetail": "Suas tarefas aparecem aqui assim que o conteúdo do portal for sincronizado.",
+  "now.queueEmptyTitle": "Nada aberto",
+  "now.queueEmptyDetail": "Tudo em dia — aproveite a travessia.",
+
+  // hero
+  "hero.next": "Próxima",
+  "hero.late": "atrasada",
+  "hero.overdueBy": "atrasada há {{t}}",
+  "hero.noDeadline": "sem prazo",
+  "hero.modules": "Módulos",
+  "hero.doneOfTotal": "concluídas / total",
+
+  // status (deadlineInfo)
+  "status.done": "Concluída",
+  "status.late": "Atrasada",
+  "status.lateDays": "Atrasada {{n}}d",
+  "status.noDeadline": "Sem prazo",
+  "status.dueToday": "Vence hoje",
+  "status.dueTomorrow": "Vence amanhã",
+  "status.dueIn": "Vence em {{n}}d",
+
+  // scope tabs
+  "scope.open": "Abertas",
+  "scope.expired": "Atrasadas",
+  "scope.done": "Concluídas",
+  "scope.all": "Todas",
+
+  // plurals
+  "plural.questions.one": "{{n}} questão",
+  "plural.questions.other": "{{n}} questões",
+  "plural.files.one": "{{n}} arquivo",
+  "plural.files.other": "{{n}} arquivos",
+
+  // tasks page
+  "tasks.filterAria": "Filtrar por situação",
+  "tasks.modules": "Módulos",
+  "tasks.type": "Tipo",
+  "tasks.emptyFilteredTitle": "Nada com esses filtros",
+  "tasks.emptyTitle": "Nada por aqui",
+  "tasks.emptyFilteredDetail": "Tente limpar os filtros de módulo ou tipo.",
+  "tasks.emptyScopeDetail": "Nenhuma tarefa em “{{scope}}”.",
+  "tasks.clearFilters": "Limpar filtros",
+
+  // progress page
+  "progress.emptyTitle": "Sem dados ainda",
+  "progress.emptyDetail": "Sincronize o conteúdo do portal para ver o progresso.",
+  "progress.byModule": "Por módulo",
+  "progress.byType": "Por tipo",
+  "progress.legendDone": "concluídas",
+  "progress.legendLate": "atrasadas",
+  "progress.legendOpen": "abertas",
+
+  // activity card menu
+  "card.moreAria": "mais opções",
+  "menu.generate": "Gerar rascunho",
+  "menu.mark": "Marcar como concluída",
+  "menu.open": "Abrir atividade",
+  "menu.openPortal": "Abrir no portal",
+  "menu.copyLink": "Copiar link",
+  "menu.downloadMd": "Baixar resposta .md",
+
+  // badges
+  "badge.survey": "Pesquisa",
+  "badge.surveyTitle": "Pesquisa (resposta enviada direto ao portal)",
+  "badge.done": "Feito",
+
+  // toasts
+  "toast.markLoading": "Marcando como concluída…",
+  "toast.markLoadingDesc": "Fazendo login e registrando no portal.",
+  "toast.markDone": "Marcada como concluída",
+  "toast.markFail": "Não foi possível marcar",
+  "toast.sendLoading": "Enviando para o portal…",
+  "toast.sendLoadingDesc": "Fazendo login e entregando a atividade.",
+  "toast.sendOk": "Entregue no portal",
+  "toast.sendOkAttachment": "Anexo {{name}} registrado.",
+  "toast.sendOkPlain": "A atividade foi registrada.",
+  "toast.sendAlready": "Já estava entregue",
+  "toast.sendUnknown": "Envio sem confirmação",
+  "toast.sendUnknownDesc": "{{detail}} Confira no portal.",
+  "toast.sendFail": "Não foi possível enviar",
+
+  // mark panel
+  "mark.title": "Concluir",
+  "mark.body":
+    "Esta atividade é do tipo {{kind}} — não há resposta a enviar. O portal conclui o item registrando o progresso.",
+  "mark.doneBody": "Item já concluído no portal.",
+  "mark.busy": "Marcando… (login no portal)",
+  "mark.button": "Marcar como concluída",
+  "mark.openPortal": "abrir no portal",
+  "mark.portalOnly": "Esta atividade ({{kind}}) é feita direto no portal.",
+  "mark.history": "Histórico ({{n}})",
+  "sub.mark.ok": "Concluída no portal",
+  "sub.mark.already": "Já estava concluída",
+  "sub.mark.unknown": "Sem confirmação",
+  "sub.mark.failed": "Falhou",
+  "sub.mark.running": "Marcando…",
+
+  // submissions (send flow)
+  "sub.send.ok": "Entregue no portal",
+  "sub.send.already": "Já estava entregue",
+  "sub.send.unknown": "Envio sem confirmação",
+  "sub.send.failed": "Falhou",
+  "sub.send.running": "Enviando…",
+  "subs.title": "Envios ({{n}})",
+
+  // send flow
+  "send.subInitDetail": "Abrindo sessão no portal…",
+  "send.mode.text.label": "Texto direto",
+  "send.mode.text.hint": "digitado no campo de resposta do portal",
+  "send.mode.txt.label": "Arquivo .txt",
+  "send.mode.txt.hint": "anexado como arquivo de texto",
+  "send.mode.pdf.label": "Arquivo .pdf",
+  "send.mode.pdf.hint": "convertido em PDF e anexado",
+  "send.formatTitle": "Formato do envio",
+  "send.stepReview": "1 · Revise",
+  "send.stepFormat": "2 · Formato",
+  "send.stepConfirm3": "3 · Confirme",
+  "send.stepConfirm2": "2 · Confirme",
+  "send.warning": "Você está prestes a enviar para o portal de verdade.",
+  "send.howSurvey":
+    "Sua conta LXP abre e a resposta é enviada direto ao endpoint da pesquisa (sem tentativa/nota).",
+  "send.howQuiz": "Sua conta LXP abre, as alternativas são marcadas e o questionário é enviado.",
+  "send.howText": "Sua conta LXP abre e o texto é digitado direto no campo de resposta do portal.",
+  "send.howPdf": "Sua conta LXP abre, o texto é convertido em PDF e anexado à resposta.",
+  "send.howTxt": "Sua conta LXP abre, o texto é anexado como arquivo (.txt) e entregue.",
+  "send.irreversible": "A ação não é reversível e pode consumir uma tentativa.",
+  "send.check": "Confira o texto e o prazo antes de confirmar.",
+  "send.agree": "Confirmo que quero enviar esta resposta para o LXP agora.",
+  "send.cancel": "Cancelar",
+  "send.confirm": "Confirmar e enviar",
+  "send.sending": "Enviando… (login no portal)",
+  "send.preview": "Pré-visualizar",
+  "send.download": "Baixar",
+  "send.previewTitle": "Pré-visualização do arquivo",
+  "send.button": "Enviar no portal",
+  "send.answerSurvey": "Resposta que será enviada",
+  "send.answerQuiz": "Seleção que será enviada",
+  "send.blockedDone": "Esta atividade já foi concluída — envio bloqueado.",
+
+  // draft panel
+  "draft.title": "Rascunho",
+  "draft.saved": "salvo {{date}} · {{source}}",
+  "draft.sourceAi": "IA",
+  "draft.sourceManual": "manual",
+  "draft.donePortal": "concluída no portal",
+  "draft.generating": "Gerando…",
+  "draft.new": "Novo rascunho",
+  "draft.generate": "Gerar rascunho",
+  "draft.save": "Salvar rascunho",
+  "draft.copy": "copiar",
+  "draft.uploadPlaceholder":
+    "Escreva a resposta para entregar — ou gere com a IA e revise antes de enviar.",
+  "draft.quizHint":
+    "Clique em “Gerar rascunho” — a alternativa escolhida aparece destacada em verde nas questões.",
+
+  // version history
+  "history.aria": "histórico de versões",
+  "history.title": "Histórico",
+  "history.previous": "Versões anteriores",
+  "history.empty": "Nenhuma versão anterior — gere de novo para acumular.",
+  "history.emptySnippet": "(vazio)",
+  "history.clear": "Limpar histórico",
+
+  // exercise page
+  "exercise.notFoundTitle": "Atividade não encontrada",
+  "exercise.notFoundDetail": "Esse exercício não existe (ou o índice mudou).",
+  "exercise.backToPanel": "Voltar para o painel",
+  "exercise.deadline": "prazo {{d}}",
+  "exercise.focusMode": "modo foco",
+  "exercise.focusTitle": "Expandir a área de resposta",
+  "exercise.focusOn": "Modo foco — só a área de resposta",
+  "exercise.focusOff": "sair do foco",
+  "exercise.collapseDetails": "Recolher detalhes",
+  "exercise.instructions": "Enunciado",
+  "exercise.files": "Arquivos",
+  "exercise.questions": "Questões",
+
+  // file preview
+  "files.previewUnavailable": "pré-visualização indisponível · abrir",
+  "files.open": "abrir",
+  "files.converting": "convertendo arquivo…",
+
+  // shared
+  "common.hidePreview": "esconder prévia",
+  "common.showPreview": "ver prévia",
+
+  // settings page
+  "settings.saving": "Salvando…",
+  "settings.saveAll": "Salvar tudo",
+  "settings.restore": "Restaurar padrão",
+  "settings.saved": "Configurações salvas.",
+  "settings.invalidTemperature": "Temperatura inválida.",
+  "settings.invalidMaxTokens": "Máximo de tokens inválido.",
+  "settings.voice": "Voz da IA",
+  "settings.voiceIntro1": "Isto vira a mensagem de sistema: diz à IA",
+  "settings.voiceIntroEm": "como",
+  "settings.voiceIntro2":
+    "escrever. O conteúdo da atividade é enviado à parte, então a IA não repete os rótulos.",
+  "settings.personaLabel": "Quem a IA está sendo",
+  "settings.personaPlaceholder": "Ex.: Você é o aluno entregando esta atividade.",
+  "settings.voiceLabel": "Tom e idioma",
+  "settings.voiceHint": "Descreva o estilo de escrita esperado.",
+  "settings.voicePlaceholder": "Ex.: Escreva em português simples e natural, como um estudante.",
+  "settings.identityToggle": "Começar com nome e matrícula",
+  "settings.identityHint": "“Nome: …” e “Matrícula: …” no topo da resposta.",
+  "settings.format": "Formato da resposta",
+  "settings.mcqLabel": "Questões de múltipla escolha",
+  "settings.mcqLetter": "Só a letra",
+  "settings.mcqLetterText": "Letra + justificativa",
+  "settings.numbering": "Numerar as respostas",
+  "settings.assocInline": "Associação na mesma linha",
+  "settings.assocHint": "Ex.: 1. item - resposta",
+  "settings.noIntroOutro": "Sem introdução nem despedida",
+  "settings.rules": "Regras",
+  "settings.noMetaLabels": "Não repetir os rótulos da atividade",
+  "settings.noMetaHint": "Evita que a IA copie ‘Atividade:’, ‘Enunciado:’, ‘Questões:’ etc.",
+  "settings.extraRules": "Regras extras",
+  "settings.extraRulesHint": "Uma regra por linha. Viram itens da lista de regras.",
+  "settings.extraRulesPlaceholder":
+    "Ex.:\nUse frases curtas\nNão use listas quando a questão pedir um texto",
+  "settings.contentSent": "Conteúdo enviado",
+  "settings.contentSentIntro":
+    "Escolha o que entra na mensagem do usuário, junto com o enunciado da atividade.",
+  "settings.secInstructions": "Enunciado / instruções",
+  "settings.secFiles": "Arquivos anexados",
+  "settings.secQuestions": "Questões do quiz",
+  "settings.secNotes": "Observações do aluno",
+  "settings.generation": "Parâmetros de geração",
+  "settings.model": "Modelo",
+  "settings.temperature": "Temperatura",
+  "settings.maxTokens": "Máx. tokens",
+  "settings.configPath": "config: {{path}}",
+  "settings.previewTitle": "Prévia da mensagem (system)",
+  "settings.previewNote":
+    "Os marcadores como {{nome}} e {{atividade}} são preenchidos no momento do envio.",
+
+  // profile sheet
+  "profile.title": "Perfil",
+  "profile.desc":
+    "Seu nome/matrícula alimentam os marcadores {{nome}} e {{matricula}} na mensagem enviada à IA.",
+  "profile.name": "Nome",
+  "profile.namePlaceholder": "Seu nome",
+  "profile.id": "Matrícula",
+  "profile.idPlaceholder": "Ex.: 2023XXXXX",
+  "profile.otherScreens": "O texto enviado à IA e os parâmetros de geração ficam em outras telas.",
+  "profile.moreSettings": "Mais configurações",
+  "profile.saved": "Perfil salvo.",
+  "profile.close": "Fechar",
+  "profile.saving": "Salvando…",
+  "profile.save": "Salvar perfil",
+
+  // ai request panel
+  "aiPanel.title": "O que a IA recebe",
+  "aiPanel.badge": "só esta atividade",
+  "aiPanel.intro":
+    "Instruções extras só para esta atividade. As regras gerais ficam em IA Ajustes e o restante da mensagem é montado automaticamente.",
+  "aiPanel.placeholder": "Ex.: responda em tópicos curtos / use exemplos de código em Python…",
+  "aiPanel.aria": "Instruções extras desta atividade",
+  "aiPanel.save": "Salvar",
+  "aiPanel.remove": "Remover",
+  "aiPanel.savedMsg": "Instruções salvas para esta atividade.",
+  "aiPanel.removedMsg": "Instruções removidas.",
+  "aiPanel.previewTitle": "Prévia da mensagem (system + user)",
+  "aiPanel.previewNote":
+    "O texto dos PDFs e arquivos Office é extraído no servidor e inserido em {{arquivos}} no momento do envio.",
+
+  // error / empty states
+  "errors.loadTitle": "Não conseguimos carregar suas tarefas.",
+  "errors.loadDetail":
+    "O painel ainda não tem os dados prontos ou o serviço local não respondeu. Não é nada com a sua conta.",
+  "errors.retry": "Tentar novamente",
+  "errors.technical": "Detalhes técnicos",
+  "errors.checklist": "O que verificar",
+  "errors.checkSetupA": "Rode",
+  "errors.checkSetupB": "— ele instala tudo, pede as credenciais e já faz o primeiro scrape.",
+  "errors.checkDumpA": "Ou, na raiz do repositório:",
+  "errors.checkDumpB": "e depois",
+  "errors.checkRefreshA": "Depois use o botão",
+  "errors.checkRefreshB": "Atualizar",
+  "errors.checkRefreshC": "aqui em cima para buscar conteúdo novo.",
+  "collapsible.collapse": "Recolher",
+  "collapsible.expand": "Expandir",
+
+  // ui primitives
+  "ui.close": "Fechar",
+  "ui.toggleSidebar": "Alternar barra lateral",
+  "ui.sidebarTitle": "Barra lateral",
+  "ui.sidebarDesc": "Exibe a barra lateral móvel.",
+  "ui.commandPalette": "Paleta de comandos",
+  "ui.searchCommand": "Buscar um comando para executar...",
+
+  // content refresh
+  "refresh.starting": "Iniciando…",
+  "refresh.buttonTitle": "Buscar conteúdo novo no portal",
+  "refresh.buttonAria": "Atualizar conteúdo",
+  "refresh.updating": "Atualizando…",
+  "refresh.update": "Atualizar",
+  "refresh.failed": "Falha ao atualizar: {{error}}",
+
+  // server-provided refresh steps (translated client-side)
+  "server.step.fetching": "Buscando conteúdo novo no portal",
+  "server.step.building": "Montando a lista de atividades",
+  "server.step.done": "Concluído",
+  "server.step.failed": "Falhou",
+  "server.step.recaptcha": "Aguardando você resolver o reCAPTCHA",
+
+  // api-level messages surfaced in the UI
+  "api.nonJson": "resposta não-JSON. O servidor parece desatualizado: reinicie-o e tente de novo.",
+  "api.genFail": "falha na geração",
+  "api.streamEnded": "stream encerrou sem resposta",
+  "api.unavailable": "serviço indisponível",
+
+  // kinds (labels live here; KIND_META keeps the PT payload labels for prompt-preview)
+  "kind.quiz.label": "Quiz",
+  "kind.quiz.short": "Quiz",
+  "kind.upload.label": "Tarefa (envio de arquivo)",
+  "kind.upload.short": "Tarefa",
+  "kind.mark.label": "Marcar como concluída",
+  "kind.mark.short": "Marcar",
+  "kind.other.label": "Outro",
+  "kind.other.short": "Outro",
+
+  // content kinds
+  "content.pdf": "PDF",
+  "content.reading": "Leitura",
+  "content.link": "Link",
+  "content.forum": "Fórum",
+  "content.other": "Conteúdo",
+  "content.quiz": "Quiz",
+  "content.file_upload": "Tarefa",
+
+  // design page
+  "design.system": "Sistema",
+  "design.folio": "Design · Folio",
+  "design.intro":
+    "Guia vivo do design system. A fonte da verdade é",
+  "design.introAfter": "e",
+  "design.palette": "Paleta — superfícies",
+  "design.typography": "Tipografia",
+  "design.typographyBody": "Inter — corpo da interface. A raposa marrom salta sobre o cão preguiçoso.",
+  "design.monoBody": "font-mono · dados e contagens",
+  "design.buttons": "Botões",
+  "design.btnPrimary": "Primário",
+  "design.btnSecondary": "Secundário",
+  "design.btnOutline": "Contorno",
+  "design.btnGhost": "Ghost",
+  "design.btnDestructive": "Destrutivo",
+  "design.btnLink": "Link",
+  "design.btnDisabled": "Desabilitado",
+  "design.btnSmall": "Small",
+  "design.btnXSmall": "XSmall",
+  "design.badges": "Badges de status e tipo",
+  "design.fields": "Campos",
+  "design.fieldText": "Campo de texto",
+  "design.fieldArea": "Área de texto",
+  "design.icons": "Ícones de tipo",
+  "design.motion": "Movimento",
+  "design.motionTitle": "Restrito por padrão",
+  "design.motionBody":
+    "Durações 120 / 200 / 320 ms, easing",
+  "design.motionBody2": "O movimento confirma ações — nunca decora.",
+  "design.motionBody3": "sempre respeitado.",
+} as const;
+
+export type Dict = Record<keyof typeof pt, string>;

@@ -1,4 +1,5 @@
 import type { Exercise } from "../types";
+import type { TranslateFn } from "./i18n";
 
 export type Tone = "ok" | "late" | "soon" | "coming" | "none";
 
@@ -7,18 +8,21 @@ export interface DeadlineInfo {
   tone: Tone;
 }
 
-export function deadlineInfo(e: Pick<Exercise, "done" | "status" | "daysLeft">): DeadlineInfo {
-  if (e.done) return { label: "Concluída", tone: "ok" };
+export function deadlineInfo(
+  e: Pick<Exercise, "done" | "status" | "daysLeft">,
+  t: TranslateFn,
+): DeadlineInfo {
+  if (e.done) return { label: t("status.done"), tone: "ok" };
   if (e.status === "expired") {
     const n = e.daysLeft == null ? 0 : Math.abs(e.daysLeft);
-    return { label: n === 0 ? "Atrasada" : `Atrasada ${n}d`, tone: "late" };
+    return { label: n === 0 ? t("status.late") : t("status.lateDays", { n }), tone: "late" };
   }
-  if (e.daysLeft == null) return { label: "Sem prazo", tone: "none" };
+  if (e.daysLeft == null) return { label: t("status.noDeadline"), tone: "none" };
   if (e.daysLeft <= 1) {
-    return { label: e.daysLeft === 0 ? "Vence hoje" : "Vence amanhã", tone: "soon" };
+    return { label: e.daysLeft === 0 ? t("status.dueToday") : t("status.dueTomorrow"), tone: "soon" };
   }
-  if (e.daysLeft <= 3) return { label: `Vence em ${e.daysLeft}d`, tone: "soon" };
-  return { label: `Vence em ${e.daysLeft}d`, tone: "coming" };
+  if (e.daysLeft <= 3) return { label: t("status.dueIn", { n: e.daysLeft }), tone: "soon" };
+  return { label: t("status.dueIn", { n: e.daysLeft }), tone: "coming" };
 }
 
 /** Tailwind classes per tone (colored text on a soft tinted pill). */
@@ -42,6 +46,7 @@ export function countInfo(items: { status: Exercise["status"] }[]): { open: numb
 export function cmpOpen(
   a: { status: string; daysLeft: number | null; title: string },
   b: { status: string; daysLeft: number | null; title: string },
+  locale = "pt-BR",
 ): number {
   const rank = (s: string): number => (s === "open" ? 0 : s === "expired" ? 1 : 2);
   const r = rank(a.status) - rank(b.status);
@@ -49,7 +54,7 @@ export function cmpOpen(
   const da = a.daysLeft ?? Infinity;
   const db = b.daysLeft ?? Infinity;
   if (da !== db) return da - db;
-  return a.title.localeCompare(b.title, "pt");
+  return a.title.localeCompare(b.title, locale);
 }
 
 /** Live countdown parts for a deadline ("3d 04h", past-aware). */
@@ -64,10 +69,22 @@ export function countdownParts(iso: string, now = Date.now()): { rel: string; pa
   return { rel, past: diff < 0 };
 }
 
-const dateFmt = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" });
-const timeFmt = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const fmtCache = new Map<string, { dateFmt: Intl.DateTimeFormat; timeFmt: Intl.DateTimeFormat }>();
 
-export function fmtDeadline(iso: string): string {
+function formattersFor(locale: string) {
+  let f = fmtCache.get(locale);
+  if (!f) {
+    f = {
+      dateFmt: new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short" }),
+      timeFmt: new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }),
+    };
+    fmtCache.set(locale, f);
+  }
+  return f;
+}
+
+export function fmtDeadline(iso: string, locale = "pt-BR"): string {
   const d = new Date(iso);
+  const { dateFmt, timeFmt } = formattersFor(locale);
   return `${dateFmt.format(d)} · ${timeFmt.format(d)}`;
 }

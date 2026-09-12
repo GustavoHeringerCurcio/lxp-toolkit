@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppData, useScopePrefs } from "@/lib/app-state";
 import { countInfo } from "@/lib/status";
-import { KIND_ORDER, kindMeta } from "@/lib/kind";
+import { useT } from "@/lib/i18n";
+import { KIND_ORDER, kindShort } from "@/lib/kind";
 import type { ExerciseKind } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
@@ -42,6 +43,7 @@ function StackedBar({ done, open, late }: { done: number; open: number; late: nu
 export function ProgressoPage() {
   const { items, loading } = useAppData();
   const { setModuleFilter } = useScopePrefs();
+  const { t } = useT();
   const navigate = useNavigate();
 
   const counts = useMemo(() => countInfo(items), [items]);
@@ -71,7 +73,7 @@ export function ProgressoPage() {
   if (items.length === 0) {
     return (
       <div className="mx-auto w-full max-w-5xl p-4 sm:p-6">
-        <NoData title="Sem dados ainda" detail="Sincronize o conteúdo do portal para ver o progresso." />
+        <NoData title={t("progress.emptyTitle")} detail={t("progress.emptyDetail")} />
       </div>
     );
   }
@@ -84,9 +86,9 @@ export function ProgressoPage() {
       <div className="grid grid-cols-3 gap-3">
         {(
           [
-            { label: "Abertas", value: counts.open, cls: "text-coming" },
-            { label: "Atrasadas", value: counts.expired, cls: "text-late" },
-            { label: "Concluídas", value: counts.done, cls: "text-ok" },
+            { label: t("scope.open"), value: counts.open, cls: "text-coming" },
+            { label: t("scope.expired"), value: counts.expired, cls: "text-late" },
+            { label: t("scope.done"), value: counts.done, cls: "text-ok" },
           ] as const
         ).map((k) => (
           <div key={k.label} className="rounded-xl border bg-card p-4">
@@ -101,11 +103,11 @@ export function ProgressoPage() {
       {/* per module */}
       <section className="rounded-xl border bg-card p-4">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-heading text-sm font-semibold">Por módulo</h2>
+          <h2 className="font-heading text-sm font-semibold">{t("progress.byModule")}</h2>
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-ok" /> concluídas</span>
-            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-late" /> atrasadas</span>
-            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-coming" /> abertas</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-ok" /> {t("progress.legendDone")}</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-late" /> {t("progress.legendLate")}</span>
+            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-coming" /> {t("progress.legendOpen")}</span>
           </div>
         </div>
         <div className="space-y-4">
@@ -132,11 +134,11 @@ export function ProgressoPage() {
 
       {/* per type */}
       <section className="rounded-xl border bg-card p-4">
-        <h2 className="mb-4 font-heading text-sm font-semibold">Por tipo</h2>
+        <h2 className="mb-4 font-heading text-sm font-semibold">{t("progress.byType")}</h2>
         <div className="space-y-3">
           {types.map(({ kind, count }) => (
             <div key={kind} className="flex items-center gap-3">
-              <span className="w-20 shrink-0 text-[13px] text-muted-foreground">{kindMeta(kind).short}</span>
+              <span className="w-20 shrink-0 text-[13px] text-muted-foreground">{kindShort(kind, t)}</span>
               <span className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
                 <span className={TYPE_COLOR[kind]} style={{ width: `${(count / total) * 100}%` }} />
               </span>

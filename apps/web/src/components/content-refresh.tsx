@@ -1,7 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { fetchRefreshStatus, startContentRefresh, type RefreshStatus } from "@/api";
 import { Button } from "@/components/ui/button";
+import { serverStepKey, useT } from "@/lib/i18n";
 
 const IDLE: RefreshStatus = {
   running: false,
@@ -17,6 +27,7 @@ const IDLE: RefreshStatus = {
  */
 export function useContentRefresh(onDone: () => void) {
   const [state, setState] = useState<RefreshStatus>(IDLE);
+  const { t } = useT();
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   const activeRef = useRef(false);
@@ -48,7 +59,7 @@ export function useContentRefresh(onDone: () => void) {
   const start = useCallback(async () => {
     if (activeRef.current) return;
     activeRef.current = true;
-    setState({ ...IDLE, running: true, step: "Iniciando…" });
+    setState({ ...IDLE, running: true, step: t("refresh.starting") });
     try {
       await startContentRefresh();
     } catch (x) {
@@ -57,7 +68,7 @@ export function useContentRefresh(onDone: () => void) {
       return;
     }
     await poll();
-  }, [poll]);
+  }, [poll, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +91,30 @@ export function useContentRefresh(onDone: () => void) {
   return { state, start };
 }
 
+interface PortalRefreshValue {
+  state: RefreshStatus;
+  start: () => void;
+}
+
+const PortalRefreshContext = createContext<PortalRefreshValue | null>(null);
+
+/**
+ * Single shared instance of the portal-refresh flow, so the header button and
+ * the command palette drive the same scrape/poll (and both resume if one is
+ * already running on mount).
+ */
+export function RefreshProvider({ onDone, children }: { onDone: () => void; children: ReactNode }) {
+  const { state, start } = useContentRefresh(onDone);
+  const value = useMemo<PortalRefreshValue>(() => ({ state, start }), [state, start]);
+  return <PortalRefreshContext.Provider value={value}>{children}</PortalRefreshContext.Provider>;
+}
+
+export function usePortalRefresh(): PortalRefreshValue {
+  const ctx = useContext(PortalRefreshContext);
+  if (!ctx) throw new Error("usePortalRefresh fora de RefreshProvider");
+  return ctx;
+}
+
 export function ContentRefreshButton({
   state,
   onStart,
@@ -87,22 +122,24 @@ export function ContentRefreshButton({
   state: RefreshStatus;
   onStart: () => void;
 }) {
+  const { t } = useT();
   return (
     <Button
       variant="ghost"
       size="sm"
       onClick={onStart}
       disabled={state.running}
-      title="Buscar conteúdo novo no portal"
-      aria-label="Atualizar conteúdo"
+      title={t("refresh.buttonTitle")}
+      aria-label={t("refresh.buttonAria")}
     >
       {state.running ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
-      <span className="hidden sm:inline">{state.running ? "Atualizando…" : "Atualizar"}</span>
+      <span className="hidden sm:inline">{state.running ? t("refresh.updating") : t("refresh.update")}</span>
     </Button>
   );
 }
 
 export function ContentRefreshBanner({ state }: { state: RefreshStatus }) {
+  const { t } = useT();
   if (!state.running && !state.error) return null;
   return (
     <div
@@ -115,9 +152,9 @@ export function ContentRefreshBanner({ state }: { state: RefreshStatus }) {
     >
       {state.running && <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />}
       {state.error ? (
-        <span>Falha ao atualizar: {state.error}</span>
+        <span>{t("refresh.failed", { error: state.error })}</span>
       ) : (
-        <span>{state.step || "Atualizando…"}…</span>
+        <span>{t(state.step ? serverStepKey(state.step) : "refresh.updating")}…</span>
       )}
     </div>
   );

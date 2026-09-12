@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/lib/use-local-storage";
+import { useT } from "@/lib/i18n";
 
 const STORAGE_PREFIX = "lxp.tarefa.cards.";
 
@@ -24,12 +25,13 @@ export function CollapseButton({
   label?: string;
   className?: string;
 }) {
+  const { t } = useT();
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      aria-label={label ?? (open ? "Recolher" : "Expandir")}
+      aria-label={label ?? (open ? t("collapsible.collapse") : t("collapsible.expand"))}
       className={cn(
         "flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         className,

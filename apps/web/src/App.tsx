@@ -5,15 +5,22 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { AppProviders, useAppData } from "@/lib/app-state";
 import { ThemeProvider } from "@/lib/theme";
+import { LangProvider, useT } from "@/lib/i18n";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AiSettingsDialog } from "@/components/ai-settings-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
 import {
   CommandPalette,
   CommandPaletteProvider,
   useCommandPalette,
 } from "@/components/command-palette";
-import { ContentRefreshBanner, ContentRefreshButton, useContentRefresh } from "@/components/content-refresh";
+import {
+  RefreshProvider,
+  ContentRefreshBanner,
+  ContentRefreshButton,
+  usePortalRefresh,
+} from "@/components/content-refresh";
 import { AgoraPage } from "@/pages/agora";
 import { TarefasPage } from "@/pages/tarefas";
 import { ProgressoPage } from "@/pages/progresso";
@@ -23,29 +30,34 @@ import { DesignPage } from "@/pages/design";
 import { ErrorState } from "@/components/state-screens";
 import { Skeleton } from "@/components/ui/skeleton";
 
-function pageTitle(pathname: string, items: { id: number; title: string }[]): string {
-  if (pathname === "/") return "Agora";
-  if (pathname === "/tarefas") return "Tarefas";
-  if (pathname === "/progresso") return "Progresso";
-  if (pathname === "/ajustes") return "Ajustes";
-  if (pathname === "/design") return "Design";
+function pageTitle(
+  pathname: string,
+  items: { id: number; title: string }[],
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  if (pathname === "/") return t("nav.now");
+  if (pathname === "/tarefas") return t("nav.tasks");
+  if (pathname === "/progresso") return t("nav.progress");
+  if (pathname === "/ajustes") return t("nav.settings");
+  if (pathname === "/design") return t("nav.design");
   if (pathname.startsWith("/tarefa/")) {
     const id = Number(pathname.split("/")[2]);
-    return items.find((x) => x.id === id)?.title ?? "Atividade";
+    return items.find((x) => x.id === id)?.title ?? t("app.activityFallback");
   }
-  return "Agora";
+  return t("nav.now");
 }
 
 function PaletteButton() {
   const { setOpen } = useCommandPalette();
+  const { t } = useT();
   return (
     <Button
       variant="ghost"
       size="sm"
       className="gap-1.5 text-muted-foreground"
       onClick={() => setOpen(true)}
-      title="Buscar (Ctrl+K)"
-      aria-label="Abrir busca"
+      title={t("header.searchTitle")}
+      aria-label={t("header.searchAria")}
     >
       <Command />
       <kbd className="hidden font-mono text-[10px] font-medium tracking-widest sm:inline">Ctrl K</kbd>
@@ -55,22 +67,11 @@ function PaletteButton() {
 
 function Shell() {
   const { items, cfg, error, reload, loading } = useAppData();
-  const refresh = useContentRefresh(reload);
+  const { state: refreshState, start: startRefresh } = usePortalRefresh();
   const location = useLocation();
-  const title = pageTitle(location.pathname, items);
-
-  if (error && items.length === 0 && !loading) {
-    return (
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <div className="flex min-h-svh items-center justify-center p-4">
-            <ErrorState error={error} onRetry={reload} />
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
-    );
-  }
+  const { t } = useT();
+  const title = pageTitle(location.pathname, items, t);
+  const showError = Boolean(error) && items.length === 0 && !loading;
 
   return (
     <CommandPaletteProvider>
@@ -89,17 +90,22 @@ function Shell() {
             <PaletteButton />
             <AiSettingsDialog
               trigger={
-                <Button variant="ghost" size="icon" title="Perfil & IA" aria-label="Perfil & IA">
+                <Button variant="ghost" size="icon" title={t("header.profileAria")} aria-label={t("header.profileAria")}>
                   <Settings2 />
                 </Button>
               }
             />
-            <ContentRefreshButton state={refresh.state} onStart={refresh.start} />
+            <ContentRefreshButton state={refreshState} onStart={startRefresh} />
+            <LanguageToggle />
             <ThemeToggle />
           </header>
-          <ContentRefreshBanner state={refresh.state} />
+          <ContentRefreshBanner state={refreshState} />
 
-          {loading && items.length === 0 ? (
+          {showError ? (
+            <div className="flex min-h-[60svh] items-center justify-center p-4">
+              <ErrorState error={error ?? ""} onRetry={reload} />
+            </div>
+          ) : loading && items.length === 0 ? (
             <div className="p-4">
               <Skeleton className="h-24 w-full rounded-xl" />
               <div className="mt-4 grid grid-cols-3 gap-3">
@@ -127,12 +133,23 @@ function Shell() {
   );
 }
 
+function ShellWithRefresh() {
+  const { reload } = useAppData();
+  return (
+    <RefreshProvider onDone={reload}>
+      <Shell />
+    </RefreshProvider>
+  );
+}
+
 export default function App() {
   return (
-    <ThemeProvider>
-      <AppProviders>
-        <Shell />
-      </AppProviders>
-    </ThemeProvider>
+    <LangProvider>
+      <ThemeProvider>
+        <AppProviders>
+          <ShellWithRefresh />
+        </AppProviders>
+      </ThemeProvider>
+    </LangProvider>
   );
 }

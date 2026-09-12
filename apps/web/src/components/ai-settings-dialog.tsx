@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, Loader2, Save, SlidersHorizontal, UserRound } from "lucide-react";
 import { saveProfile } from "@/api";
 import { useAppData } from "@/lib/app-state";
+import { useT } from "@/lib/i18n";
 import {
   Sheet,
   SheetContent,
@@ -20,6 +21,7 @@ import type { AiProfile } from "@/types";
 
 export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
   const { cfg, patchConfig } = useAppData();
+  const { t } = useT();
   const profile = cfg?.profile ?? { nome: "", matricula: "" };
   const navigate = useNavigate();
 
@@ -51,7 +53,7 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
       const p: AiProfile = { nome: nome.trim(), matricula: matricula.trim() };
       await saveProfile(p);
       patchConfig({ profile: p });
-      setMsg("Perfil salvo.");
+      setMsg(t("profile.saved"));
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
     } finally {
@@ -66,27 +68,24 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <UserRound className="size-4 text-brand" aria-hidden />
-            Perfil
+            {t("profile.title")}
           </SheetTitle>
-          <SheetDescription>
-            Seu nome/matrícula alimentam os marcadores <code className="font-mono">{"{nome}"}</code> e{" "}
-            <code className="font-mono">{"{matricula}"}</code> na mensagem enviada à IA.
-          </SheetDescription>
+          <SheetDescription>{t("profile.desc")}</SheetDescription>
         </SheetHeader>
 
         <div className="space-y-5">
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label htmlFor="ai-nome">Nome</Label>
-              <Input id="ai-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Seu nome" />
+              <Label htmlFor="ai-nome">{t("profile.name")}</Label>
+              <Input id="ai-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder={t("profile.namePlaceholder")} />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="ai-matricula">Matrícula</Label>
+              <Label htmlFor="ai-matricula">{t("profile.id")}</Label>
               <Input
                 id="ai-matricula"
                 value={matricula}
                 onChange={(e) => setMatricula(e.target.value)}
-                placeholder="Ex.: 2023XXXXX"
+                placeholder={t("profile.idPlaceholder")}
               />
             </div>
           </div>
@@ -94,9 +93,7 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
           <Separator />
 
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              O texto enviado à IA e os parâmetros de geração ficam em outras telas.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("profile.otherScreens")}</p>
             <Button
               variant="outline"
               size="sm"
@@ -107,7 +104,7 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
               }}
             >
               <SlidersHorizontal aria-hidden />
-              Mais configurações
+              {t("profile.moreSettings")}
             </Button>
           </div>
 
@@ -121,11 +118,11 @@ export function AiSettingsDialog({ trigger }: { trigger: ReactElement }) {
 
         <SheetFooter className="mt-auto">
           <SheetClose render={<Button variant="outline" size="sm" />}>
-            Fechar
+            {t("profile.close")}
           </SheetClose>
           <Button size="sm" onClick={saveAll} disabled={busy}>
             {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-            {busy ? "Salvando…" : "Salvar perfil"}
+            {busy ? t("profile.saving") : t("profile.save")}
           </Button>
         </SheetFooter>
       </SheetContent>

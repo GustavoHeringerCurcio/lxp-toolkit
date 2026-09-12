@@ -1,0 +1,420 @@
+import type { Dict } from "./pt";
+
+/** English dictionary — must cover every key in `pt.ts` (enforced by `Dict`). */
+export const en: Dict = {
+  // app shell
+  "app.title": "Pauta · study copilot",
+  "app.activityFallback": "Activity",
+
+  // navigation (sidebar, header, palette)
+  "nav.now": "Now",
+  "nav.tasks": "Tasks",
+  "nav.progress": "Progress",
+  "nav.settings": "Settings",
+  "nav.design": "Design",
+  "nav.designGuide": "Design · system guide",
+  "nav.groupStudy": "Study",
+  "nav.groupSystem": "System",
+  "nav.groupProfessors": "Professors",
+  "nav.profile": "Profile",
+  "nav.backToTasks": "back to tasks",
+
+  // header
+  "header.searchTitle": "Search (Ctrl+K)",
+  "header.searchAria": "Open search",
+  "header.profileAria": "Profile & AI",
+
+  // language switcher
+  "lang.title": "Language",
+  "lang.aria": "Change language",
+  "lang.ptName": "Português (BR)",
+  "lang.enName": "English",
+
+  // theme
+  "theme.title": "Theme",
+  "theme.toLight": "Switch to light theme",
+  "theme.toDark": "Switch to dark theme",
+
+  // command palette
+  "palette.title": "Navigation",
+  "palette.desc": "Go to a page, task or action",
+  "palette.placeholder": "Search pages, actions and tasks…",
+  "palette.empty": "Nothing found.",
+  "palette.pages": "Pages",
+  "palette.actions": "Actions",
+  "palette.tasks": "Tasks",
+  "palette.toggleTheme": "Toggle theme",
+  "palette.refresh": "Refresh portal content",
+  "palette.reload": "Reload list",
+  "palette.toggleLang": "Switch language",
+
+  // agora page
+  "greeting.night": "Good night",
+  "greeting.morning": "Good morning",
+  "greeting.afternoon": "Good afternoon",
+  "greeting.evening": "Good evening",
+  "now.done": "completed",
+  "now.queue": "Open queue",
+  "now.seeAll": "view all",
+  "now.emptyTitle": "Nothing on the agenda",
+  "now.emptyDetail": "Your tasks appear here as soon as the portal content is synced.",
+  "now.queueEmptyTitle": "Nothing open",
+  "now.queueEmptyDetail": "All caught up — enjoy the smooth sailing.",
+
+  // hero
+  "hero.next": "Up next",
+  "hero.late": "late",
+  "hero.overdueBy": "late by {{t}}",
+  "hero.noDeadline": "no deadline",
+  "hero.modules": "Modules",
+  "hero.doneOfTotal": "completed / total",
+
+  // status (deadlineInfo)
+  "status.done": "Completed",
+  "status.late": "Late",
+  "status.lateDays": "Late {{n}}d",
+  "status.noDeadline": "No deadline",
+  "status.dueToday": "Due today",
+  "status.dueTomorrow": "Due tomorrow",
+  "status.dueIn": "Due in {{n}}d",
+
+  // scope tabs
+  "scope.open": "Open",
+  "scope.expired": "Late",
+  "scope.done": "Completed",
+  "scope.all": "All",
+
+  // plurals
+  "plural.questions.one": "{{n}} question",
+  "plural.questions.other": "{{n}} questions",
+  "plural.files.one": "{{n}} file",
+  "plural.files.other": "{{n}} files",
+
+  // tasks page
+  "tasks.filterAria": "Filter by status",
+  "tasks.modules": "Modules",
+  "tasks.type": "Type",
+  "tasks.emptyFilteredTitle": "Nothing with these filters",
+  "tasks.emptyTitle": "Nothing here",
+  "tasks.emptyFilteredDetail": "Try clearing the module or type filters.",
+  "tasks.emptyScopeDetail": "No tasks in “{{scope}}”.",
+  "tasks.clearFilters": "Clear filters",
+
+  // progress page
+  "progress.emptyTitle": "No data yet",
+  "progress.emptyDetail": "Sync the portal content to see progress.",
+  "progress.byModule": "By module",
+  "progress.byType": "By type",
+  "progress.legendDone": "completed",
+  "progress.legendLate": "late",
+  "progress.legendOpen": "open",
+
+  // activity card menu
+  "card.moreAria": "more options",
+  "menu.generate": "Generate draft",
+  "menu.mark": "Mark as completed",
+  "menu.open": "Open activity",
+  "menu.openPortal": "Open in portal",
+  "menu.copyLink": "Copy link",
+  "menu.downloadMd": "Download .md answer",
+
+  // badges
+  "badge.survey": "Survey",
+  "badge.surveyTitle": "Survey (answer sent straight to the portal)",
+  "badge.done": "Done",
+
+  // toasts
+  "toast.markLoading": "Marking as completed…",
+  "toast.markLoadingDesc": "Logging into the portal and recording it.",
+  "toast.markDone": "Marked as completed",
+  "toast.markFail": "Could not mark as completed",
+  "toast.sendLoading": "Submitting to the portal…",
+  "toast.sendLoadingDesc": "Logging into the portal and delivering the activity.",
+  "toast.sendOk": "Delivered to the portal",
+  "toast.sendOkAttachment": "Attachment {{name}} recorded.",
+  "toast.sendOkPlain": "The activity was recorded.",
+  "toast.sendAlready": "Already delivered",
+  "toast.sendUnknown": "Submission unconfirmed",
+  "toast.sendUnknownDesc": "{{detail}} Check the portal.",
+  "toast.sendFail": "Could not submit",
+
+  // mark panel
+  "mark.title": "Complete",
+  "mark.body":
+    "This activity is of type {{kind}} — there is no answer to submit. The portal completes the item by recording progress.",
+  "mark.doneBody": "Item already completed on the portal.",
+  "mark.busy": "Marking… (portal login)",
+  "mark.button": "Mark as completed",
+  "mark.openPortal": "open in portal",
+  "mark.portalOnly": "This activity ({{kind}}) is done directly in the portal.",
+  "mark.history": "History ({{n}})",
+  "sub.mark.ok": "Completed on the portal",
+  "sub.mark.already": "Already completed",
+  "sub.mark.unknown": "Unconfirmed",
+  "sub.mark.failed": "Failed",
+  "sub.mark.running": "Marking…",
+
+  // submissions (send flow)
+  "sub.send.ok": "Delivered to the portal",
+  "sub.send.already": "Already delivered",
+  "sub.send.unknown": "Submission unconfirmed",
+  "sub.send.failed": "Failed",
+  "sub.send.running": "Sending…",
+  "subs.title": "Submissions ({{n}})",
+
+  // send flow
+  "send.subInitDetail": "Opening a session in the portal…",
+  "send.mode.text.label": "Direct text",
+  "send.mode.text.hint": "typed into the portal's answer field",
+  "send.mode.txt.label": ".txt file",
+  "send.mode.txt.hint": "attached as a text file",
+  "send.mode.pdf.label": ".pdf file",
+  "send.mode.pdf.hint": "converted to PDF and attached",
+  "send.formatTitle": "Submission format",
+  "send.stepReview": "1 · Review",
+  "send.stepFormat": "2 · Format",
+  "send.stepConfirm3": "3 · Confirm",
+  "send.stepConfirm2": "2 · Confirm",
+  "send.warning": "You are about to submit to the real portal.",
+  "send.howSurvey":
+    "Your LXP account opens and the answer is sent straight to the survey endpoint (no attempt/grade).",
+  "send.howQuiz": "Your LXP account opens, the choices are selected and the quiz is submitted.",
+  "send.howText": "Your LXP account opens and the text is typed straight into the portal's answer field.",
+  "send.howPdf": "Your LXP account opens, the text is converted to PDF and attached to the answer.",
+  "send.howTxt": "Your LXP account opens, the text is attached as a file (.txt) and delivered.",
+  "send.irreversible": "The action is irreversible and may consume an attempt.",
+  "send.check": "Check the text and the deadline before confirming.",
+  "send.agree": "I confirm I want to submit this answer to the LXP now.",
+  "send.cancel": "Cancel",
+  "send.confirm": "Confirm and send",
+  "send.sending": "Sending… (portal login)",
+  "send.preview": "Preview",
+  "send.download": "Download",
+  "send.previewTitle": "File preview",
+  "send.button": "Submit to portal",
+  "send.answerSurvey": "Answer to be submitted",
+  "send.answerQuiz": "Selection to be submitted",
+  "send.blockedDone": "This activity is already completed — submission blocked.",
+
+  // draft panel
+  "draft.title": "Draft",
+  "draft.saved": "saved {{date}} · {{source}}",
+  "draft.sourceAi": "AI",
+  "draft.sourceManual": "manual",
+  "draft.donePortal": "completed on the portal",
+  "draft.generating": "Generating…",
+  "draft.new": "New draft",
+  "draft.generate": "Generate draft",
+  "draft.save": "Save draft",
+  "draft.copy": "copy",
+  "draft.uploadPlaceholder":
+    "Write the answer to submit — or generate it with AI and review before sending.",
+  "draft.quizHint":
+    "Click “Generate draft” — the selected option appears highlighted in green in the questions.",
+
+  // version history
+  "history.aria": "version history",
+  "history.title": "History",
+  "history.previous": "Previous versions",
+  "history.empty": "No previous versions — generate again to accumulate.",
+  "history.emptySnippet": "(empty)",
+  "history.clear": "Clear history",
+
+  // exercise page
+  "exercise.notFoundTitle": "Activity not found",
+  "exercise.notFoundDetail": "This exercise does not exist (or the index changed).",
+  "exercise.backToPanel": "Back to the dashboard",
+  "exercise.deadline": "due {{d}}",
+  "exercise.focusMode": "focus mode",
+  "exercise.focusTitle": "Expand the answer area",
+  "exercise.focusOn": "Focus mode — answer area only",
+  "exercise.focusOff": "exit focus",
+  "exercise.collapseDetails": "Collapse details",
+  "exercise.instructions": "Instructions",
+  "exercise.files": "Files",
+  "exercise.questions": "Questions",
+
+  // file preview
+  "files.previewUnavailable": "preview unavailable · open",
+  "files.open": "open",
+  "files.converting": "converting file…",
+
+  // shared
+  "common.hidePreview": "hide preview",
+  "common.showPreview": "show preview",
+
+  // settings page
+  "settings.saving": "Saving…",
+  "settings.saveAll": "Save all",
+  "settings.restore": "Restore defaults",
+  "settings.saved": "Settings saved.",
+  "settings.invalidTemperature": "Invalid temperature.",
+  "settings.invalidMaxTokens": "Invalid max tokens.",
+  "settings.voice": "AI voice",
+  "settings.voiceIntro1": "This becomes the system message: it tells the AI",
+  "settings.voiceIntroEm": "how",
+  "settings.voiceIntro2":
+    "to write. The activity content is sent separately, so the AI does not repeat the labels.",
+  "settings.personaLabel": "Who the AI is being",
+  "settings.personaPlaceholder": "E.g.: You are the student submitting this activity.",
+  "settings.voiceLabel": "Tone and language",
+  "settings.voiceHint": "Describe the expected writing style.",
+  "settings.voicePlaceholder": "E.g.: Write in simple, natural English, like a student.",
+  "settings.identityToggle": "Start with name and student ID",
+  "settings.identityHint": "“Name: …” and “Student ID: …” at the top of the answer.",
+  "settings.format": "Answer format",
+  "settings.mcqLabel": "Multiple choice questions",
+  "settings.mcqLetter": "Letter only",
+  "settings.mcqLetterText": "Letter + justification",
+  "settings.numbering": "Number the answers",
+  "settings.assocInline": "Matching on the same line",
+  "settings.assocHint": "E.g.: 1. item - answer",
+  "settings.noIntroOutro": "No introduction or farewell",
+  "settings.rules": "Rules",
+  "settings.noMetaLabels": "Do not repeat the activity labels",
+  "settings.noMetaHint": "Keeps the AI from copying ‘Activity:’, ‘Instructions:’, ‘Questions:’ etc.",
+  "settings.extraRules": "Extra rules",
+  "settings.extraRulesHint": "One rule per line. They become items in the rules list.",
+  "settings.extraRulesPlaceholder":
+    "E.g.:\nUse short sentences\nDo not use lists when the question asks for text",
+  "settings.contentSent": "Content sent",
+  "settings.contentSentIntro":
+    "Choose what goes into the user message, along with the activity instructions.",
+  "settings.secInstructions": "Instructions / brief",
+  "settings.secFiles": "Attached files",
+  "settings.secQuestions": "Quiz questions",
+  "settings.secNotes": "Student notes",
+  "settings.generation": "Generation parameters",
+  "settings.model": "Model",
+  "settings.temperature": "Temperature",
+  "settings.maxTokens": "Max tokens",
+  "settings.configPath": "config: {{path}}",
+  "settings.previewTitle": "Message preview (system)",
+  "settings.previewNote":
+    "Placeholders like {{nome}} and {{atividade}} are filled in at submission time.",
+
+  // profile sheet
+  "profile.title": "Profile",
+  "profile.desc":
+    "Your name/student ID feed the {{nome}} and {{matricula}} placeholders in the message sent to the AI.",
+  "profile.name": "Name",
+  "profile.namePlaceholder": "Your name",
+  "profile.id": "Student ID",
+  "profile.idPlaceholder": "E.g.: 2023XXXXX",
+  "profile.otherScreens": "The text sent to the AI and the generation parameters live in other screens.",
+  "profile.moreSettings": "More settings",
+  "profile.saved": "Profile saved.",
+  "profile.close": "Close",
+  "profile.saving": "Saving…",
+  "profile.save": "Save profile",
+
+  // ai request panel
+  "aiPanel.title": "What the AI receives",
+  "aiPanel.badge": "this activity only",
+  "aiPanel.intro":
+    "Extra instructions for this activity only. The general rules live in AI Settings and the rest of the message is assembled automatically.",
+  "aiPanel.placeholder": "E.g.: answer in short bullets / use Python code examples…",
+  "aiPanel.aria": "Extra instructions for this activity",
+  "aiPanel.save": "Save",
+  "aiPanel.remove": "Remove",
+  "aiPanel.savedMsg": "Instructions saved for this activity.",
+  "aiPanel.removedMsg": "Instructions removed.",
+  "aiPanel.previewTitle": "Message preview (system + user)",
+  "aiPanel.previewNote":
+    "The text of PDFs and Office files is extracted on the server and inserted into {{arquivos}} at submission time.",
+
+  // error / empty states
+  "errors.loadTitle": "We could not load your tasks.",
+  "errors.loadDetail":
+    "The dashboard does not have its data ready yet or the local service did not respond. Nothing is wrong with your account.",
+  "errors.retry": "Try again",
+  "errors.technical": "Technical details",
+  "errors.checklist": "What to check",
+  "errors.checkSetupA": "Run",
+  "errors.checkSetupB": "— it installs everything, asks for the credentials and does the first scrape.",
+  "errors.checkDumpA": "Or, at the repository root:",
+  "errors.checkDumpB": "and then",
+  "errors.checkRefreshA": "Then use the",
+  "errors.checkRefreshB": "Refresh",
+  "errors.checkRefreshC": "button up here to fetch new content.",
+  "collapsible.collapse": "Collapse",
+  "collapsible.expand": "Expand",
+
+  // ui primitives
+  "ui.close": "Close",
+  "ui.toggleSidebar": "Toggle sidebar",
+  "ui.sidebarTitle": "Sidebar",
+  "ui.sidebarDesc": "Displays the mobile sidebar.",
+  "ui.commandPalette": "Command palette",
+  "ui.searchCommand": "Search for a command to run...",
+
+  // content refresh
+  "refresh.starting": "Starting…",
+  "refresh.buttonTitle": "Fetch new portal content",
+  "refresh.buttonAria": "Refresh content",
+  "refresh.updating": "Updating…",
+  "refresh.update": "Refresh",
+  "refresh.failed": "Failed to refresh: {{error}}",
+
+  // server-provided refresh steps (translated client-side)
+  "server.step.fetching": "Fetching new portal content",
+  "server.step.building": "Building the activity list",
+  "server.step.done": "Completed",
+  "server.step.failed": "Failed",
+  "server.step.recaptcha": "Waiting for you to solve the reCAPTCHA",
+
+  // api-level messages surfaced in the UI
+  "api.nonJson": "non-JSON response. The server looks outdated: restart it and try again.",
+  "api.genFail": "generation failed",
+  "api.streamEnded": "stream ended without a response",
+  "api.unavailable": "service unavailable",
+
+  // kinds (labels live here; KIND_META keeps the PT payload labels for prompt-preview)
+  "kind.quiz.label": "Quiz",
+  "kind.quiz.short": "Quiz",
+  "kind.upload.label": "Assignment (file upload)",
+  "kind.upload.short": "Assignment",
+  "kind.mark.label": "Mark as completed",
+  "kind.mark.short": "Mark",
+  "kind.other.label": "Other",
+  "kind.other.short": "Other",
+
+  // content kinds
+  "content.pdf": "PDF",
+  "content.reading": "Reading",
+  "content.link": "Link",
+  "content.forum": "Forum",
+  "content.other": "Content",
+  "content.quiz": "Quiz",
+  "content.file_upload": "Assignment",
+
+  // design page
+  "design.system": "System",
+  "design.folio": "Design · Folio",
+  "design.intro": "Living guide to the design system. The source of truth is",
+  "design.introAfter": "and",
+  "design.palette": "Palette — surfaces",
+  "design.typography": "Typography",
+  "design.typographyBody": "Inter — interface body text. The quick brown fox jumps over the lazy dog.",
+  "design.monoBody": "font-mono · data and counts",
+  "design.buttons": "Buttons",
+  "design.btnPrimary": "Primary",
+  "design.btnSecondary": "Secondary",
+  "design.btnOutline": "Outline",
+  "design.btnGhost": "Ghost",
+  "design.btnDestructive": "Destructive",
+  "design.btnLink": "Link",
+  "design.btnDisabled": "Disabled",
+  "design.btnSmall": "Small",
+  "design.btnXSmall": "XSmall",
+  "design.badges": "Status and type badges",
+  "design.fields": "Fields",
+  "design.fieldText": "Text field",
+  "design.fieldArea": "Text area",
+  "design.icons": "Type icons",
+  "design.motion": "Motion",
+  "design.motionTitle": "Restrained by default",
+  "design.motionBody": "Durations 120 / 200 / 320 ms, easing",
+  "design.motionBody2": "Motion confirms actions — it never decorates.",
+  "design.motionBody3": "always respected.",
+};

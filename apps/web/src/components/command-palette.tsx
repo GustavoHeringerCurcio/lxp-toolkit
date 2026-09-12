@@ -2,10 +2,12 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { useNavigate } from "react-router-dom";
 import {
   ChartColumn,
+  Languages,
   ListChecks,
   Moon,
   Palette,
   RefreshCw,
+  RotateCw,
   SlidersHorizontal,
   Sun,
   Sunrise,
@@ -20,7 +22,9 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { useAppData, useScopePrefs } from "@/lib/app-state";
+import { usePortalRefresh } from "@/components/content-refresh";
 import { useTheme } from "@/lib/theme";
+import { useT, type Lang } from "@/lib/i18n";
 
 interface CommandPaletteValue {
   open: boolean;
@@ -45,8 +49,10 @@ export function CommandPalette() {
   const { open, setOpen } = useCommandPalette();
   const navigate = useNavigate();
   const { items, refresh } = useAppData();
+  const { start: startRefresh } = usePortalRefresh();
   const { setModuleFilter } = useScopePrefs();
   const { resolved, setTheme } = useTheme();
+  const { t, lang, setLang } = useT();
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -73,36 +79,36 @@ export function CommandPalette() {
     <CommandDialog
       open={open}
       onOpenChange={setOpen}
-      title="Navegação"
-      description="Ir para uma página, tarefa ou ação"
+      title={t("palette.title")}
+      description={t("palette.desc")}
     >
-      <CommandInput placeholder="Buscar páginas, ações e tarefas…" />
+      <CommandInput placeholder={t("palette.placeholder")} />
       <CommandList>
-        <CommandEmpty>Nada encontrado.</CommandEmpty>
-        <CommandGroup heading="Páginas">
+        <CommandEmpty>{t("palette.empty")}</CommandEmpty>
+        <CommandGroup heading={t("palette.pages")}>
           <CommandItem onSelect={() => go("/")}>
             <Sunrise />
-            Agora
+            {t("nav.now")}
           </CommandItem>
           <CommandItem onSelect={() => go("/tarefas")}>
             <ListChecks />
-            Tarefas
+            {t("nav.tasks")}
           </CommandItem>
           <CommandItem onSelect={() => go("/progresso")}>
             <ChartColumn />
-            Progresso
+            {t("nav.progress")}
           </CommandItem>
           <CommandItem onSelect={() => go("/ajustes")}>
             <SlidersHorizontal />
-            Ajustes
+            {t("nav.settings")}
           </CommandItem>
           <CommandItem onSelect={() => go("/design")}>
             <Palette />
-            Design · guia do sistema
+            {t("nav.designGuide")}
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />
-        <CommandGroup heading="Ações">
+        <CommandGroup heading={t("palette.actions")}>
           <CommandItem
             onSelect={() => {
               setOpen(false);
@@ -110,7 +116,25 @@ export function CommandPalette() {
             }}
           >
             {resolved === "dark" ? <Sun /> : <Moon />}
-            Alternar tema
+            {t("palette.toggleTheme")}
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              setOpen(false);
+              setLang((lang === "pt" ? "en" : "pt") as Lang);
+            }}
+          >
+            <Languages />
+            {t("palette.toggleLang")}
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              setOpen(false);
+              startRefresh();
+            }}
+          >
+            <RefreshCw />
+            {t("palette.refresh")}
           </CommandItem>
           <CommandItem
             onSelect={() => {
@@ -118,14 +142,14 @@ export function CommandPalette() {
               void refresh();
             }}
           >
-            <RefreshCw />
-            Atualizar conteúdo do portal
+            <RotateCw />
+            {t("palette.reload")}
           </CommandItem>
         </CommandGroup>
         {items.length > 0 && (
           <>
             <CommandSeparator />
-            <CommandGroup heading="Tarefas">
+            <CommandGroup heading={t("palette.tasks")}>
               {items.slice(0, 60).map((t) => (
                 <CommandItem key={t.id} value={`${t.title} ${t.moduleName} ${t.professor ?? ""}`} onSelect={() => go(`/tarefa/${t.id}`)}>
                   <ListChecks />

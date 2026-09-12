@@ -45,6 +45,7 @@ import { useAppData } from "@/lib/app-state";
 import { fmtDeadline } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { isOffice, previewUrl, remoteFileName } from "@/lib/files";
+import { useT, type TranslateFn } from "@/lib/i18n";
 import type { AnswerState, Exercise, RemoteFile } from "@/types";
 import { BackLink } from "@/components/app-sidebar";
 import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
@@ -67,14 +68,32 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const SEND_MODES: { value: SendMode; label: string; hint: string; icon: typeof Type }[] = [
-  { value: "text", label: "Texto direto", hint: "digitado no campo de resposta do portal", icon: Type },
-  { value: "txt", label: "Arquivo .txt", hint: "anexado como arquivo de texto", icon: FileText },
-  { value: "pdf", label: "Arquivo .pdf", hint: "convertido em PDF e anexado", icon: FileType },
+const SEND_MODES: { value: SendMode; labelKey: string; hintKey: string; icon: typeof Type }[] = [
+  { value: "text", labelKey: "send.mode.text.label", hintKey: "send.mode.text.hint", icon: Type },
+  { value: "txt", labelKey: "send.mode.txt.label", hintKey: "send.mode.txt.hint", icon: FileText },
+  { value: "pdf", labelKey: "send.mode.pdf.label", hintKey: "send.mode.pdf.hint", icon: FileType },
 ];
 
-function sendModeLabel(mode: SendMode): string {
-  return SEND_MODES.find((m) => m.value === mode)?.label ?? mode;
+function sendModeLabel(mode: SendMode, t: TranslateFn): string {
+  const mode0 = SEND_MODES.find((m) => m.value === mode);
+  return mode0 ? t(mode0.labelKey) : mode;
+}
+
+function submissionLabel(status: SubmissionDto["status"], t: TranslateFn): string {
+  switch (status) {
+    case "ok":
+      return t("sub.send.ok");
+    case "already":
+      return t("sub.send.already");
+    case "unknown":
+      return t("sub.send.unknown");
+    case "failed":
+      return t("sub.send.failed");
+    case "running":
+      return t("sub.send.running");
+    default:
+      return status;
+  }
 }
 
 function AnswerPanel({
@@ -110,6 +129,7 @@ function AnswerPanel({
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const { patchExercise } = useAppData();
+  const { t, locale } = useT();
 
   const loadSubs = useCallback(async () => {
     setSubs(await fetchSubmissions(e.id));
@@ -265,9 +285,9 @@ function AnswerPanel({
     setSending(true);
     setSendErr(null);
     cancelRef.current = false;
-    setSub({ status: "running", detail: "Abrindo sessão no portal…", at: new Date().toISOString() });
-    const toastId = toast.loading("Enviando para o portal…", {
-      description: "Fazendo login e entregando a atividade.",
+    setSub({ status: "running", detail: t("send.subInitDetail"), at: new Date().toISOString() });
+    const toastId = toast.loading(t("toast.sendLoading"), {
+      description: t("toast.sendLoadingDesc"),
     });
     try {
       const started = await sendAnswerToPortal(e.id, answer, sendMode, isQuiz ? e.selections : undefined);
@@ -284,23 +304,23 @@ function AnswerPanel({
         }
       }
       if (final.status === "ok") {
-        toast.success("Entregue no portal", {
+        toast.success(t("toast.sendOk"), {
           id: toastId,
           description: final.attachmentName
-            ? `Anexo ${final.attachmentName} registrado.`
-            : final.detail || "A atividade foi registrada.",
+            ? t("toast.sendOkAttachment", { name: final.attachmentName })
+            : final.detail || t("toast.sendOkPlain"),
         });
         patchExercise(e.id, { done: true, status: "done" });
       } else if (final.status === "already") {
-        toast.info("Já estava entregue", { id: toastId, description: final.detail });
+        toast.info(t("toast.sendAlready"), { id: toastId, description: final.detail });
         patchExercise(e.id, { done: true, status: "done" });
       } else if (final.status === "unknown") {
-        toast.warning("Envio sem confirmação", {
+        toast.warning(t("toast.sendUnknown"), {
           id: toastId,
-          description: `${final.detail} Confira no portal.`,
+          description: t("toast.sendUnknownDesc", { detail: final.detail }),
         });
       } else {
-        toast.error("Não foi possível enviar", { id: toastId, description: final.detail });
+        toast.error(t("toast.sendFail"), { id: toastId, description: final.detail });
       }
       onRefresh();
       void loadSubs();
@@ -308,7 +328,7 @@ function AnswerPanel({
       const msg = x instanceof Error ? x.message : String(x);
       setSendErr(msg);
       setSub(null);
-      toast.error("Não foi possível enviar", { id: toastId, description: msg });
+      toast.error(t("toast.sendFail"), { id: toastId, description: msg });
     } finally {
       setSending(false);
       setSendOpen(false);
@@ -366,18 +386,21 @@ function AnswerPanel({
     <CollapsibleCard
       id="resposta"
       icon={<Sparkles className="size-4 shrink-0 text-brand" aria-hidden />}
-      title="Rascunho"
+      title={t("draft.title")}
       className="xl:flex xl:h-full xl:min-h-0 xl:flex-col data-[open=false]:xl:h-auto"
       bodyClassName="flex-1 min-h-0 space-y-3 overflow-y-auto p-4"
       badge={
         <>
           {current && (
             <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-              salvo {fmtVersionDate(current.updatedAt)} · {current.source === "ai" ? "IA" : "manual"}
+              {t("draft.saved", {
+                date: fmtVersionDate(current.updatedAt, locale),
+                source: current.source === "ai" ? t("draft.sourceAi") : t("draft.sourceManual"),
+              })}
             </span>
           )}
           {e.status === "done" && (
-            <span className="rounded-full bg-ok/15 px-2 py-0.5 text-[10px] font-medium text-ok">concluída no portal</span>
+            <span className="rounded-full bg-ok/15 px-2 py-0.5 text-[10px] font-medium text-ok">{t("draft.donePortal")}</span>
           )}
         </>
       }
@@ -385,16 +408,16 @@ function AnswerPanel({
         (current || sortedHistory.length > 0) && (
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="outline" size="xs" className="gap-1.5" aria-label="histórico de versões" />}
+              render={<Button variant="outline" size="xs" className="gap-1.5" aria-label={t("history.aria")} />}
             >
               <History />
-              Histórico {sortedHistory.length > 0 && `(${sortedHistory.length})`}
+              {t("history.title")} {sortedHistory.length > 0 && `(${sortedHistory.length})`}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-64 max-w-xs">
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Versões anteriores</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("history.previous")}</DropdownMenuLabel>
                 {sortedHistory.length === 0 && (
-                  <DropdownMenuItem disabled>Nenhuma versão anterior — gere de novo para acumular.</DropdownMenuItem>
+                  <DropdownMenuItem disabled>{t("history.empty")}</DropdownMenuItem>
                 )}
                 {sortedHistory.map((h, i) => {
                   const realIndex = history.findIndex((x) => x.updatedAt === h.updatedAt);
@@ -403,10 +426,10 @@ function AnswerPanel({
                       <Undo2 className="mt-0.5 shrink-0" aria-hidden />
                       <span className="min-w-0">
                         <span className="block truncate font-medium">
-                          {snippet(h.answer, 46) || "(vazio)"}
+                          {snippet(h.answer, 46) || t("history.emptySnippet")}
                         </span>
                         <span className="block text-[11px] text-muted-foreground">
-                          {fmtVersionDate(h.updatedAt)} · {h.source === "ai" ? "IA" : "manual"}
+                          {fmtVersionDate(h.updatedAt, locale)} · {h.source === "ai" ? t("draft.sourceAi") : t("draft.sourceManual")}
                         </span>
                       </span>
                     </DropdownMenuItem>
@@ -417,7 +440,7 @@ function AnswerPanel({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" onClick={() => void wipeHistory()}>
                       <Trash2 aria-hidden />
-                      Limpar histórico
+                      {t("history.clear")}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -430,15 +453,15 @@ function AnswerPanel({
         <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-border/60 bg-card px-4 py-3">
           <Button size="sm" onClick={generate} disabled={busy}>
             {busy ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
-            {busy ? "Gerando…" : current ? "Novo rascunho" : "Gerar rascunho"}
+            {busy ? t("draft.generating") : current ? t("draft.new") : t("draft.generate")}
           </Button>
           <Button variant="outline" size="sm" onClick={save} disabled={busy || !draft.trim()}>
             {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-            Salvar rascunho
+            {t("draft.save")}
           </Button>
           <Button variant="ghost" size="sm" onClick={copy} disabled={!draft.trim()}>
             <Copy aria-hidden />
-            copiar
+            {t("draft.copy")}
           </Button>
           {current?.answer && (
             <a className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/api/export/${e.id}`}>
@@ -451,7 +474,7 @@ function AnswerPanel({
             {isDone ? (
               <Button size="sm" disabled className="bg-ok text-white disabled:opacity-100">
                 <CheckCircle2 aria-hidden />
-                Feito
+                {t("badge.done")}
               </Button>
             ) : (
               <Button
@@ -464,7 +487,7 @@ function AnswerPanel({
                 disabled={!canSend}
               >
                 <Send aria-hidden />
-                Enviar no portal
+                {t("send.button")}
               </Button>
             )}
           </div>
@@ -475,18 +498,18 @@ function AnswerPanel({
           <Textarea
             value={draft}
             onChange={(ev) => setDraft(ev.target.value)}
-            placeholder="Escreva a resposta para entregar — ou gere com a IA e revise antes de enviar."
+            placeholder={t("draft.uploadPlaceholder")}
             rows={6}
             className="min-h-36 field-sizing-fixed leading-relaxed"
           />
         ) : e.selections.length === 0 ? (
           <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
-            Clique em “Gerar rascunho” — a alternativa escolhida aparece destacada em verde nas questões.
+            {t("draft.quizHint")}
           </p>
         ) : (
           <div className="rounded-md border border-ok/40 bg-ok/10 p-3">
             <p className="mb-1.5 text-xs font-semibold text-ok">
-              {e.isSurvey ? "Resposta que será enviada" : "Seleção que será enviada"}
+              {e.isSurvey ? t("send.answerSurvey") : t("send.answerQuiz")}
             </p>
             <ul className="space-y-1">
               {e.questions.map((q, qi) => {
@@ -511,45 +534,45 @@ function AnswerPanel({
           <p className="text-xs text-muted-foreground">{sendCfg.reason}</p>
         )}
         {e.status === "done" && (
-          <p className="text-xs text-muted-foreground">Esta atividade já foi concluída — envio bloqueado.</p>
+          <p className="text-xs text-muted-foreground">{t("send.blockedDone")}</p>
         )}
 
         {sendOpen && (
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-3.5 text-sm">
             <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-brand">
-              <span>1 · Revise</span>
+              <span>{t("send.stepReview")}</span>
               <span className="text-muted-foreground" aria-hidden>→</span>
               {isUpload && (
                 <>
-                  <span>2 · Formato</span>
+                  <span>{t("send.stepFormat")}</span>
                   <span className="text-muted-foreground" aria-hidden>→</span>
                 </>
               )}
-              <span>{isUpload ? "3 · Confirme" : "2 · Confirme"}</span>
+              <span>{isUpload ? t("send.stepConfirm3") : t("send.stepConfirm2")}</span>
             </div>
             <div className="flex items-start gap-2 font-semibold text-foreground">
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden />
-              <span>Você está prestes a enviar para o portal de verdade.</span>
+              <span>{t("send.warning")}</span>
             </div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-foreground/90">
               <li>
                 {!isUpload
                   ? e.isSurvey
-                    ? "Sua conta LXP abre e a resposta é enviada direto ao endpoint da pesquisa (sem tentativa/nota)."
-                    : "Sua conta LXP abre, as alternativas são marcadas e o questionário é enviado."
+                    ? t("send.howSurvey")
+                    : t("send.howQuiz")
                   : sendMode === "text"
-                    ? "Sua conta LXP abre e o texto é digitado direto no campo de resposta do portal."
+                    ? t("send.howText")
                     : sendMode === "pdf"
-                      ? "Sua conta LXP abre, o texto é convertido em PDF e anexado à resposta."
-                      : "Sua conta LXP abre, o texto é anexado como arquivo (.txt) e entregue."}
+                      ? t("send.howPdf")
+                      : t("send.howTxt")}
               </li>
-              <li>A ação não é reversível e pode consumir uma tentativa.</li>
-              <li>Confira o texto e o prazo antes de confirmar.</li>
+              <li>{t("send.irreversible")}</li>
+              <li>{t("send.check")}</li>
             </ul>
 
             {isUpload && (
               <div className="mt-3">
-                <div className="mb-1.5 text-[13px] font-medium text-foreground">Formato do envio</div>
+                <div className="mb-1.5 text-[13px] font-medium text-foreground">{t("send.formatTitle")}</div>
                 <div className="grid grid-cols-3 gap-1.5">
                   {SEND_MODES.map((m) => {
                     const Icon = m.icon;
@@ -570,13 +593,16 @@ function AnswerPanel({
                         )}
                       >
                         <Icon className="size-4" aria-hidden />
-                        {m.label}
+                        {t(m.labelKey)}
                       </button>
                     );
                   })}
                 </div>
                 <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  {SEND_MODES.find((m) => m.value === sendMode)?.hint}
+                  {(() => {
+                    const m = SEND_MODES.find((x) => x.value === sendMode);
+                    return m ? t(m.hintKey) : "";
+                  })()}
                 </p>
 
                 {(sendMode === "txt" || sendMode === "pdf") && (
@@ -590,7 +616,7 @@ function AnswerPanel({
                         disabled={previewBusy || !draft.trim()}
                       >
                         {previewBusy ? <Loader2 className="animate-spin" aria-hidden /> : <Eye aria-hidden />}
-                        Pré-visualizar
+                        {t("send.preview")}
                       </Button>
                       <Button
                         type="button"
@@ -600,7 +626,7 @@ function AnswerPanel({
                         disabled={downloadBusy || !draft.trim()}
                       >
                         {downloadBusy ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
-                        Baixar
+                        {t("send.download")}
                       </Button>
                     </div>
                     {previewErr && (
@@ -611,7 +637,7 @@ function AnswerPanel({
                     {previewUrl && (
                       <iframe
                         src={previewUrl}
-                        title="Pré-visualização do arquivo"
+                        title={t("send.previewTitle")}
                         className="mt-2 h-72 w-full rounded-md border border-border bg-white"
                       />
                     )}
@@ -632,14 +658,14 @@ function AnswerPanel({
                 checked={agree}
                 onChange={(ev) => setAgree(ev.target.checked)}
               />
-              <span>Confirmo que quero enviar esta resposta para o LXP agora.</span>
+              <span>{t("send.agree")}</span>
             </label>
             {sendErr && (
               <p className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{sendErr}</p>
             )}
             <div className="mt-3 flex items-center justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setSendOpen(false)} disabled={sending}>
-                Cancelar
+                {t("send.cancel")}
               </Button>
               <Button
                 variant="default"
@@ -648,7 +674,7 @@ function AnswerPanel({
                 disabled={!agree || sending || (isUpload ? !draft.trim() : e.selections.length === 0)}
               >
                 {sending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
-                {sending ? "Enviando… (login no portal)" : "Confirmar e enviar"}
+                {sending ? t("send.sending") : t("send.confirm")}
               </Button>
             </div>
           </div>
@@ -670,7 +696,7 @@ function AnswerPanel({
               <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
             )}
             <div className="min-w-0">
-              <div className="font-semibold">{submissionLabel(sub.status)}</div>
+              <div className="font-semibold">{submissionLabel(sub.status, t)}</div>
               <p className="mt-0.5 break-words text-xs text-muted-foreground">{sub.detail}</p>
             </div>
           </div>
@@ -680,7 +706,7 @@ function AnswerPanel({
           <div className="rounded-md border border-border/60 p-3">
             <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
               <History className="size-3.5" aria-hidden />
-              Envios ({subs.length})
+              {t("subs.title", { n: subs.length })}
             </div>
             <ul className="space-y-2">
               {[...subs].reverse().map((s) => (
@@ -696,9 +722,9 @@ function AnswerPanel({
                     aria-hidden
                   />
                   <div className="min-w-0">
-                    <span className="font-medium">{submissionLabel(s.status)}</span>
-                    <span className="text-muted-foreground"> · {fmtVersionDate(s.at)}</span>
-                    {s.mode && <span className="text-muted-foreground"> · {sendModeLabel(s.mode)}</span>}
+                    <span className="font-medium">{submissionLabel(s.status, t)}</span>
+                    <span className="text-muted-foreground"> · {fmtVersionDate(s.at, locale)}</span>
+                    {s.mode && <span className="text-muted-foreground"> · {sendModeLabel(s.mode, t)}</span>}
                     {s.attachmentName && <span className="text-muted-foreground"> · {s.attachmentName}</span>}
                     <p className="break-words text-muted-foreground">{s.detail}</p>
                   </div>
@@ -711,26 +737,10 @@ function AnswerPanel({
   );
 }
 
-function submissionLabel(status: SubmissionDto["status"]): string {
-  switch (status) {
-    case "ok":
-      return "Entregue no portal";
-    case "already":
-      return "Já estava entregue";
-    case "unknown":
-      return "Envio sem confirmação";
-    case "failed":
-      return "Falhou";
-    case "running":
-      return "Enviando…";
-    default:
-      return status;
-  }
-}
-
 function FilePreview({ file }: { file: RemoteFile }) {
   const name = remoteFileName(file);
   const office = isOffice(file);
+  const { t } = useT();
   const [state, setState] = useState<"loading" | "ready" | "error">(office ? "loading" : "ready");
 
   useEffect(() => {
@@ -758,7 +768,7 @@ function FilePreview({ file }: { file: RemoteFile }) {
       >
         <Paperclip className="size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate">{name}</span>
-        <span className="text-xs text-muted-foreground">pré-visualização indisponível · abrir</span>
+        <span className="text-xs text-muted-foreground">{t("files.previewUnavailable")}</span>
       </a>
     );
   }
@@ -774,14 +784,14 @@ function FilePreview({ file }: { file: RemoteFile }) {
           rel="noreferrer"
           className="flex shrink-0 items-center gap-1 text-xs text-brand underline-offset-4 hover:underline"
         >
-          abrir
+          {t("files.open")}
           <ExternalLink className="size-3" aria-hidden />
         </a>
       </div>
       {office && state === "loading" ? (
         <div className="flex h-[28rem] w-full items-center justify-center gap-2 bg-white text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden />
-          convertendo arquivo…
+          {t("files.converting")}
         </div>
       ) : (
         <iframe src={previewUrl(file)} title={name} loading="lazy" className="h-[28rem] w-full bg-white" />
@@ -810,6 +820,7 @@ export function ExercisePage() {
   const { id } = useParams();
   const { items, loading, error, reload, refresh } = useAppData();
   const navigate = useNavigate();
+  const { t, locale } = useT();
   const [params, setParams] = useSearchParams();
   const [regenToken, setRegenToken] = useState(0);
   const [focus, setFocus] = useState(false);
@@ -841,11 +852,11 @@ export function ExercisePage() {
     return (
       <div className="p-4">
         <NoData
-          title="Atividade não encontrada"
-          detail={error ?? "Esse exercício não existe (ou o índice mudou)."}
+          title={t("exercise.notFoundTitle")}
+          detail={error ?? t("exercise.notFoundDetail")}
           action={
             <Button variant="outline" size="sm" onClick={() => navigate("/")}>
-              Voltar para o painel
+              {t("exercise.backToPanel")}
             </Button>
           }
         />
@@ -875,7 +886,7 @@ export function ExercisePage() {
               {e.deadlineAt && (
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="size-3" aria-hidden />
-                  prazo {fmtDeadline(e.deadlineAt)}
+                  {t("exercise.deadline", { d: fmtDeadline(e.deadlineAt, locale) })}
                 </span>
               )}
               <span className="ml-auto" />
@@ -883,11 +894,11 @@ export function ExercisePage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setFocus(true)}
-                title="Expandir a área de resposta"
+                title={t("exercise.focusTitle")}
                 aria-pressed={false}
               >
                 <Maximize2 aria-hidden />
-                modo foco
+                {t("exercise.focusMode")}
               </Button>
               <a
                 className={buttonVariants({ variant: "outline", size: "sm" })}
@@ -895,10 +906,10 @@ export function ExercisePage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                abrir no portal
+                {t("mark.openPortal")}
                 <ExternalLink className="size-3" aria-hidden />
               </a>
-              <CollapseButton open={headerCard.open} onToggle={headerCard.toggle} label="Recolher detalhes" />
+              <CollapseButton open={headerCard.open} onToggle={headerCard.toggle} label={t("exercise.collapseDetails")} />
             </div>
             {headerCard.open && (
               <div className="space-y-3 p-5 pt-3">
@@ -913,7 +924,7 @@ export function ExercisePage() {
           </header>
 
           {e.instructionsText && (
-            <CollapsibleCard id="enunciado" title="Enunciado" bodyClassName="p-4">
+            <CollapsibleCard id="enunciado" title={t("exercise.instructions")} bodyClassName="p-4">
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{e.instructionsText}</p>
             </CollapsibleCard>
           )}
@@ -921,7 +932,7 @@ export function ExercisePage() {
           {e.remoteFiles.length > 0 && (
             <CollapsibleCard
               id="arquivos"
-              title="Arquivos"
+              title={t("exercise.files")}
               badge={<span className="text-xs font-normal text-muted-foreground">({e.remoteFiles.length})</span>}
               bodyClassName="flex flex-col gap-3 p-4"
             >
@@ -934,7 +945,7 @@ export function ExercisePage() {
           {e.kind === "quiz" && e.questions.length > 0 && (
             <CollapsibleCard
               id="questoes"
-              title="Questões"
+              title={t("exercise.questions")}
               badge={<span className="text-xs font-normal text-muted-foreground">({e.questions.length})</span>}
               bodyClassName="space-y-2 p-4"
             >
@@ -981,11 +992,11 @@ export function ExercisePage() {
             <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2.5">
               <span className="flex items-center gap-2 text-sm font-medium">
                 <Sparkles className="size-4 text-brand" aria-hidden />
-                Modo foco — só a área de resposta
+                {t("exercise.focusOn")}
               </span>
               <Button variant="outline" size="sm" onClick={() => setFocus(false)}>
                 <Minimize2 aria-hidden />
-                sair do foco
+                {t("exercise.focusOff")}
               </Button>
             </div>
           )}

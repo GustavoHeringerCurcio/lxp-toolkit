@@ -13,9 +13,10 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Exercise } from "@/types";
 import { fmtDeadline } from "@/lib/status";
-import { CONTENT_LABEL, kindMeta } from "@/lib/kind";
+import { contentLabel, kindMeta } from "@/lib/kind";
 import { runMark } from "@/lib/mark";
 import { useAppData } from "@/lib/app-state";
+import { useT } from "@/lib/i18n";
 import { AccChips } from "./prof-chip";
 import { StatusBadge, DoneBadge } from "./status-badges";
 import {
@@ -30,17 +31,18 @@ import { Button } from "@/components/ui/button";
 export function ActivityCard({ e }: { e: Exercise }) {
   const navigate = useNavigate();
   const { patchExercise } = useAppData();
+  const { t, tn, locale } = useT();
   const [marking, setMarking] = useState(false);
   const meta = kindMeta(e.kind);
   const Icon = meta.icon;
   const fileCount = e.remoteFiles.length || e.files.length;
   const detail =
     e.kind === "quiz" && e.questions.length
-      ? `${e.questions.length} questão${e.questions.length > 1 ? "es" : ""}`
+      ? tn("plural.questions", e.questions.length)
       : e.kind === "upload" && fileCount
-        ? `${fileCount} arquivo${fileCount > 1 ? "s" : ""}`
+        ? tn("plural.files", fileCount)
         : e.kind === "mark" || e.kind === "other"
-          ? CONTENT_LABEL[e.contentKind]
+          ? contentLabel(e.contentKind, t)
           : "";
   const lateish = !e.done && e.status === "expired";
   const dateTone = lateish ? "text-late" : !e.done && e.daysLeft != null && e.daysLeft <= 3 ? "text-soon" : "text-muted-foreground";
@@ -53,17 +55,17 @@ export function ActivityCard({ e }: { e: Exercise }) {
   };
   const doMark = async () => {
     setMarking(true);
-    const t = toast.loading("Marcando como concluída…", { description: "Fazendo login e registrando no portal." });
+    const toastId = toast.loading(t("toast.markLoading"), { description: t("toast.markLoadingDesc") });
     try {
       const final = await runMark(e.id);
       if (final.status === "ok" || final.status === "already") {
-        toast.success("Marcada como concluída", { id: t, description: final.detail });
+        toast.success(t("toast.markDone"), { id: toastId, description: final.detail });
         patchExercise(e.id, { done: true, status: "done" });
       } else {
-        toast.error("Não foi possível marcar", { id: t, description: final.detail });
+        toast.error(t("toast.markFail"), { id: toastId, description: final.detail });
       }
     } catch (x) {
-      toast.error("Não foi possível marcar", { id: t, description: x instanceof Error ? x.message : String(x) });
+      toast.error(t("toast.markFail"), { id: toastId, description: x instanceof Error ? x.message : String(x) });
     } finally {
       setMarking(false);
     }
@@ -110,7 +112,7 @@ export function ActivityCard({ e }: { e: Exercise }) {
       <span className="flex shrink-0 flex-col items-end justify-center gap-1.5">
         <StatusBadge e={e} />
         {e.deadlineAt && (
-          <span className={cn("whitespace-nowrap text-[11px] tabular-nums", dateTone)}>{fmtDeadline(e.deadlineAt)}</span>
+          <span className={cn("whitespace-nowrap text-[11px] tabular-nums", dateTone)}>{fmtDeadline(e.deadlineAt, locale)}</span>
         )}
       </span>
 
@@ -120,14 +122,14 @@ export function ActivityCard({ e }: { e: Exercise }) {
         onKeyDown={(ev) => ev.stopPropagation()}
       >
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="mais opções" />}>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("card.moreAria")} />}>
             <MoreHorizontal />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-44">
             {meta.canAnswer && (
               <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); generate(); }}>
                 <Sparkles />
-                Gerar rascunho
+                {t("menu.generate")}
               </DropdownMenuItem>
             )}
             {meta.canMark && !e.done && (
@@ -139,7 +141,7 @@ export function ActivityCard({ e }: { e: Exercise }) {
                 }}
               >
                 <CircleCheckBig />
-                Marcar como concluída
+                {t("menu.mark")}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem
@@ -148,22 +150,22 @@ export function ActivityCard({ e }: { e: Exercise }) {
                 open();
               }}
             >
-              Abrir atividade
+              {t("menu.open")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); window.open(portalUrl, "_blank", "noopener"); }}>
               <ExternalLink />
-              Abrir no portal
+              {t("menu.openPortal")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); void copyLink(); }}>
               <Copy />
-              Copiar link
+              {t("menu.copyLink")}
             </DropdownMenuItem>
             {e.answer ? (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); window.location.href = `/api/export/${e.id}`; }}>
                   <Download />
-                  Baixar resposta .md
+                  {t("menu.downloadMd")}
                 </DropdownMenuItem>
               </>
             ) : null}

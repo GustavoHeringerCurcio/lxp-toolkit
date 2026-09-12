@@ -8,6 +8,7 @@ import type {
   ExercisesPayload,
   QuizSelection,
 } from "./types";
+import { getLang, localeFor, translate } from "./lib/i18n";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
@@ -25,7 +26,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const contentType = res.headers.get("content-type") ?? "";
   if (text && !contentType.includes("application/json")) {
     throw new Error(
-      `${init?.method ?? "GET"} ${path} → resposta não-JSON. O servidor parece desatualizado: reinicie-o e tente de novo.`,
+      `${init?.method ?? "GET"} ${path} → ${translate(getLang(), "api.nonJson")}`,
     );
   }
   return text ? (JSON.parse(text) as T) : ({} as T);
@@ -155,11 +156,11 @@ export async function streamGenerate(id: number, onEvent: (e: GenerateEvent) => 
         return { current: payload.current ?? null, history: payload.history ?? [] };
       }
       if (payload.type === "error") {
-        throw new Error(payload.error ?? "falha na geração");
+        throw new Error(payload.error ?? translate(getLang(), "api.genFail"));
       }
     }
   }
-  throw new Error("stream encerrou sem resposta");
+  throw new Error(translate(getLang(), "api.streamEnded"));
 }
 
 export async function generateAnswerPlain(id: number): Promise<AnswerState> {
@@ -176,7 +177,7 @@ export async function fetchSendConfig(): Promise<SendConfigDto> {
   try {
     return await req<SendConfigDto>("/api/send/config");
   } catch {
-    return { enabled: false, reason: "serviço indisponível" };
+    return { enabled: false, reason: translate(getLang(), "api.unavailable") };
   }
 }
 
@@ -286,18 +287,10 @@ export async function fetchSubmissions(id: number): Promise<SubmissionDto[]> {
   }
 }
 
-export function daysLabel(daysLeft: number | null): string {
-  if (daysLeft == null) return "sem prazo";
-  if (daysLeft < 0) return "atrasado";
-  if (daysLeft === 0) return "vence hoje";
-  if (daysLeft === 1) return "vence amanhã";
-  return `faltam ${daysLeft}d`;
-}
-
-export function fmtVersionDate(iso: string): string {
+export function fmtVersionDate(iso: string, locale = localeFor(getLang())): string {
   if (!iso) return "";
   const d = new Date(iso);
-  return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString(locale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 export function snippet(text: string, max = 80): string {
