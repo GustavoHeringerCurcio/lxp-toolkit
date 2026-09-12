@@ -2,6 +2,38 @@
 
 These are the real shapes returned by the API. Raw examples live in `scraped/raw/`.
 
+## Postgres store (source of truth)
+
+Since the database foundation, the canonical data lives in **Postgres** (local, per-user;
+`docker compose up -d db` + `npm run db:migrate`; schema in `apps/server/db/migrations/`).
+The JSON shapes below are the raw scrape / UI cache; the DB is what the app and future AI read.
+
+Domains (see `apps/server/db/migrations/0001_foundation.sql`):
+
+- **Identity/tenant** — `institution`, `student`, `enrollment`.
+- **Catalog** — `course`, `module`, `professor`, `module_professor`, `section`, `content_item`,
+  `attachment`.
+- **Question bank** — `question`, `question_option` (`question.text_hash` dedupes across terms).
+- **Student activity** — `item_state` (append-only snapshot per scrape), `answer_attempt`
+  (immutable attempts; the shown one is `is_current`), `answer_selection`, `submission`,
+  `submission_payload`, `item_annotation`.
+- **AI** — `ai_config`, `ai_run`.
+- **Read model** — view `v_exercise_current` → projected to `apps/server/data/exercises.json`.
+
+### Professor identity (stable ids)
+
+`context.teachers[]` is **course-wide** (the same faculty on every item), so it identifies who
+teaches the course, not who owns a module. The module→professor link is resolved by
+`apps/server/src/professor.ts`: it parses the `moduleTitle` suffix ("… - Profa. Débora Amorim"),
+normalizes it, and matches tokens against `professor.full_name`, storing
+`module_professor(module_id, professor_id, source, confidence)`. The app keys accents/grouping by
+`safeaUserId` (stable across renames), never by the display string. Raw shape per teacher:
+
+```json
+{ "userId": 8346005, "roleCourseName": "Professor1", "safeaRole": "teacher",
+  "name": "DEBORA AMORIM DE CARVALHO", "safeaUserId": 5723877, "externalUserId": "d72d…" }
+```
+
 ## Content item (normalized, in `scraped/raw/content-tree.json`)
 
 Each leaf item in the scraped content tree looks like:

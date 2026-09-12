@@ -24,7 +24,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { buttonVariants } from "@/components/ui/button";
-import { accentFor } from "@/lib/prof";
+import { accentFor, professorLabel } from "@/lib/prof";
 import { useAppData } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
 import { AiSettingsDialog } from "@/components/ai-settings-dialog";
@@ -51,7 +51,16 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const professors = [...new Set(items.map((e) => e.professor).filter((p): p is string => !!p))].sort();
+  const professors = [
+    ...new Map(
+      items
+        .filter((e) => e.professor)
+        .map((e) => [
+          e.professorId ?? `name:${e.professor}`,
+          { id: e.professorId, name: e.professor as string },
+        ]),
+    ).values(),
+  ].sort((a, b) => a.name.localeCompare(b.name, "pt"));
   const courseName = items[0]?.courseName ?? "LXP";
 
   const nowCount = items.filter(
@@ -141,11 +150,11 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <div className="flex flex-col gap-1 px-2">
                 {professors.map((p) => {
-                  const acc = accentFor(p);
+                  const acc = accentFor(p.id, p.name);
                   return (
-                    <div key={p ?? "?"} className="flex items-center gap-2 px-1 text-[13px] text-muted-foreground">
+                    <div key={p.id ?? p.name} className="flex items-center gap-2 px-1 text-[13px] text-muted-foreground">
                       <span className="size-2 shrink-0 rounded-full" style={{ background: acc }} />
-                      <span className="truncate">{p?.replace(/^Profa?\.\s*/i, "")}</span>
+                      <span className="truncate">{professorLabel(p.name)}</span>
                     </div>
                   );
                 })}

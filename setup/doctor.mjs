@@ -76,6 +76,34 @@ if (shellKey && keyOk && shellKey !== key) {
   add("OpenAI key source", "ok", "shell env matches .env");
 }
 
+// 5c. Postgres (required — source of truth)
+const dbUrl = server?.DATABASE_URL ?? "";
+let dbStatus = "fail";
+let dbDetail = "DATABASE_URL missing — run: npm run setup";
+if (dbUrl) {
+  try {
+    const u = new URL(dbUrl);
+    const host = u.hostname || "localhost";
+    const port = Number(u.port || 5432);
+    const reachable = await new Promise((resolve) => {
+      const sock = net.createConnection({ host, port }, () => {
+        sock.end();
+        resolve(true);
+      });
+      sock.once("error", () => resolve(false));
+      sock.setTimeout(1500, () => {
+        sock.destroy();
+        resolve(false);
+      });
+    });
+    dbStatus = reachable ? "ok" : "fail";
+    dbDetail = reachable ? `${host}:${port}` : `not reachable at ${host}:${port} — run: npm run db:up && npm run db:migrate`;
+  } catch {
+    dbDetail = "DATABASE_URL inválida — run: npm run setup";
+  }
+}
+add("Postgres (required)", dbStatus, dbDetail);
+
 // 6. Scraped content
 add(
   "Scraped content",

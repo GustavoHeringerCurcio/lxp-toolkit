@@ -985,7 +985,7 @@ export function ExercisePage() {
                   <h1 className="font-heading text-xl font-semibold leading-snug text-balance">{e.title}</h1>
                   {e.done && <DoneBadge />}
                 </div>
-                <AccChips professor={e.professor} moduleName={e.moduleName} />
+                <AccChips professorId={e.professorId} professor={e.professor} moduleName={e.moduleName} />
                 {e.sectionTitle && <p className="mt-1 text-xs text-muted-foreground">{e.sectionTitle}</p>}
               </div>
             )}

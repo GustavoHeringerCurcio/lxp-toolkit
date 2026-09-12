@@ -9,6 +9,8 @@
   },
   "scripts": {
     "index": "tsx src/load.ts",
+    "db:migrate": "tsx src/migrate.ts",
+    "db:import": "tsx src/import.ts",
     "start": "tsx server/server.ts",
     "web": "npm run build -w @lxp-toolkit/web && tsx server/server.ts",
     "test": "vitest run",
@@ -19,11 +21,13 @@
     "dotenv": "17.4.2",
     "openai": "^4.77.0",
     "pdf-parse": "^1.1.1",
+    "pg": "^8.13.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "26.2.0",
     "@types/pdf-parse": "^1.1.4",
+    "@types/pg": "^8.11.10",
     "tsx": "4.23.12",
     "typescript": "5.9.3",
     "vitest": "^3.2.7"

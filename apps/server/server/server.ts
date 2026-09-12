@@ -4,7 +4,9 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { ASSISTANT_DIR, dataDir, assist, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
 import { spawnCommand } from "../src/exec.js";
-import { loadExercises, buildExercises, writeExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
+import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
+import { healthCheck, runMigrations } from "../src/db.js";
+import { writeProjection } from "../src/project.js";
 import {
   loadAiConfig,
   loadAnswers,
@@ -670,25 +672,30 @@ const server = createServer(async (req, res) => {
 });
 
 /**
- * If the portal content was scraped but the app index was never built (common
- * on a fresh clone), build it now so the UI works without a manual `index:web`.
+ * Postgres is required: verify the connection, apply migrations, and build the
+ * UI cache once when it is missing (fresh clone). Then start serving.
  */
-function ensureIndex(): void {
-  if (existsSync(ASSISTANT_EXERCISES_FILE)) return;
-  if (!existsSync(raw("content-tree.json"))) return;
-  try {
-    console.log("   index: building exercises.json from scraped content…");
-    writeExercises(buildExercises());
-  } catch (err) {
-    console.warn(`   index: could not build (${err instanceof Error ? err.message : String(err)})`);
+async function bootstrap(): Promise<void> {
+  await healthCheck();
+  await runMigrations();
+  if (!existsSync(ASSISTANT_EXERCISES_FILE) && existsSync(raw("content-tree.json"))) {
+    try {
+      console.log("   index: building exercises.json from the database…");
+      const { count } = await writeProjection();
+      console.log(`   index: ${count} exercise(s) projected.`);
+    } catch (err) {
+      console.warn(`   index: could not build (${err instanceof Error ? err.message : String(err)})`);
+    }
   }
+  server.listen(PORT, () => {
+    console.log(`\n📝 Pauta (LXP ToolKit) → http://localhost:${PORT}`);
+    console.log(`   data: ${dataDir()}`);
+    console.log(`   ai config: ${assist("config", "ai-config.json")}`);
+    console.log(`   openai key: …${openaiKeyLast4()} (fonte: ${openaiKeySource()})\n`);
+  });
 }
 
-ensureIndex();
-
-server.listen(PORT, () => {
-  console.log(`\n📝 Pauta (LXP ToolKit) → http://localhost:${PORT}`);
-  console.log(`   data: ${dataDir()}`);
-  console.log(`   ai config: ${assist("config", "ai-config.json")}`);
-  console.log(`   openai key: …${openaiKeyLast4()} (fonte: ${openaiKeySource()})\n`);
+bootstrap().catch((err) => {
+  console.error(`\n✗ ${err instanceof Error ? err.message : String(err)}\n`);
+  process.exit(1);
 });

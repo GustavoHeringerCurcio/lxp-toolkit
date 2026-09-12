@@ -90,6 +90,8 @@ export interface Exercise {
   moduleTitle: string;
   moduleName: string;
   professor: string | null;
+  /** Stable professor id (`context.teachers[].safeaUserId`); null when unresolved. */
+  professorId: number | null;
   sectionTitle: string | null;
   topicTypeId: number;
   status: ExerciseStatus;

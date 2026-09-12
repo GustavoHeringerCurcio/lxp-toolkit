@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: lxp-toolkit-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lxp
+      POSTGRES_PASSWORD: lxp
+      POSTGRES_DB: lxp
+    ports:
+      - "5433:5432"
+    volumes:
+      - lxp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lxp -d lxp"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  lxp_pgdata:

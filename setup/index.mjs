@@ -18,8 +18,11 @@ import {
   ask,
   askHidden,
   confirm,
+  commandExists,
+  dockerCompose,
   envLine,
   writeWithBackup,
+  DATABASE_URL_DEFAULT,
 } from "./shared.mjs";
 
 log(`
@@ -112,6 +115,7 @@ const serverEnv = [
   envLine("OPENAI_API_KEY", openai),
   envLine("DATA_DIR", "../../scraped"),
   envLine("PORT", "4174"),
+  envLine("DATABASE_URL", DATABASE_URL_DEFAULT),
   "",
 ].join("\n");
 
@@ -122,6 +126,34 @@ if (nome || matricula) {
   mkdirSync(path.dirname(PROFILE_JSON), { recursive: true });
   writeFileSync(PROFILE_JSON, JSON.stringify({ nome, matricula }, null, 2), "utf8");
   ok("wrote apps/server/config/profile.json");
+}
+
+// 6b. Database (required)
+step("Starting the database (Postgres)");
+if (await commandExists("docker", ["--version"])) {
+  const up = await dockerCompose(["up", "-d", "db"], { tee: true });
+  if (up.code === 0) {
+    let ready = false;
+    for (let i = 0; i < 30 && !ready; i++) {
+      const probe = await dockerCompose(["exec", "-T", "db", "pg_isready", "-U", "lxp", "-d", "lxp"], {
+        capture: true,
+      });
+      if (probe.code === 0) ready = true;
+      else await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (ready) {
+      ok("Postgres is up.");
+      const mig = await run("npm", ["run", "db:migrate"], { tee: true });
+      if (mig.code === 0) ok("Schema migrated.");
+      else warn("Migration failed — run `npm run db:migrate` after fixing the error.");
+    } else {
+      warn("Postgres did not become ready in time — run `npm run db:migrate` once it is up.");
+    }
+  } else {
+    warn("Could not start Postgres with `docker compose up -d db`.");
+  }
+} else {
+  warn("Docker not found. Install it, then run `npm run db:up` and `npm run db:migrate`.");
 }
 
 // 7. PII commit guard

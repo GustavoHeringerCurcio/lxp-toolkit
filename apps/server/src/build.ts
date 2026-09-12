@@ -203,6 +203,7 @@ export function buildExercises(): Exercise[] {
         moduleTitle: it.moduleTitle,
         moduleName,
         professor,
+        professorId: null,
         sectionId: it.sectionId,
         sectionTitle: it.sectionTitle,
         topicTypeId: it.topicTypeId,

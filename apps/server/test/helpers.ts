@@ -15,6 +15,7 @@ export function makeExercise(overrides: Partial<Exercise> = {}): Exercise {
     moduleTitle: "Módulo 1",
     moduleName: "M1",
     professor: null,
+    professorId: null,
     sectionId: null,
     sectionTitle: null,
     topicTypeId: 8,

@@ -14,6 +14,9 @@ export const SERVER_ENV = path.join(ROOT, "apps", "server", ".env");
 export const PROFILE_JSON = path.join(ROOT, "apps", "server", "config", "profile.json");
 export const CONTENT_TREE = path.join(ROOT, "scraped", "raw", "content-tree.json");
 
+/** Default local Postgres provided by the repo's docker-compose.yml. */
+export const DATABASE_URL_DEFAULT = "postgres://lxp:lxp@localhost:5433/lxp";
+
 const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
 const wrap = (code) => (s) => (useColor ? `\x1b[${code}m${s}\x1b[0m` : s);
 export const c = {
@@ -69,6 +72,11 @@ export function run(command, args = [], opts = {}) {
 export async function commandExists(command, args = ["--version"]) {
   const res = await run(command, args, { capture: true });
   return res.code === 0;
+}
+
+/** Run `docker compose <args>` from the repo root. */
+export function dockerCompose(args, opts = {}) {
+  return run("docker", ["compose", ...args], opts);
 }
 
 // A single readline interface for interactive prompts, or a line queue when

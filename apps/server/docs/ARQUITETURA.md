@@ -3,18 +3,20 @@
 ## Visão geral
 
 ```
-                 (packages/portal)                          (apps/server + apps/web)
- portal  ──dump──►  scraped/courses/**, scraped/raw/**  ──index──►  data/exercises.json
+                 (packages/portal)                    (apps/server + apps/web)
+ portal ──dump──► scraped/courses/**, scraped/raw/** ──index──► Postgres (fonte da verdade)
+                                                                 │  migrate + import
+                                                                 ├─► project ─► data/exercises.json (cache da UI)
                                                                  │
                                                    OpenAI ◄──── ai.ts ◄── prompt.ts
                                                                  │
                                                                  ▼
-                                                         data/answers.json
+                                                         data/answers.json ──► answer_attempt
                                                                  │
                         packages/portal/scripts/submit-task.ts ◄── send.ts
                                      (Playwright)               │
                                         │                        ▼
-                                        └── portal ◄──── data/submissions.json
+                                        └── portal ◄──── data/submissions.json ──► submission
 ```
 
 ## Camadas
@@ -31,8 +33,15 @@
 
 ### apps/server + apps/web (produto)
 
-- `src/build.ts` + `src/load.ts` — transformam o `scraped/` raspado em
-  `data/exercises.json` (uploads e quizzes, com prazo, arquivos e questões).
+- `src/db.ts` + `db/migrations/` — Postgres (fonte da verdade): pool, transações e
+  migrações versionadas (`schema_migrations`). O banco é **obrigatório** (sem fallback JSON);
+  suba com `docker compose up -d db` e aplique com `npm run db:migrate`.
+- `src/import.ts` — importa `scraped/raw/content-tree.json` para o Postgres (idempotente) e faz
+  backfill do estado legado (`answers.json`, `submissions.json`, `overrides.json`, `ai-config.json`).
+- `src/professor.ts` — resolve o sufixo do título do módulo ("… - Profa. Débora Amorim") para o
+  `safeaUserId` estável de `context.teachers[]` e grava `module_professor` (fonte, confiança).
+- `src/project.ts` — projeta a view `v_exercise_current` para `data/exercises.json` (cache da UI).
+- `src/load.ts` — orquestra `migrate → import → project` (`npm run index`).
 - `src/view.ts` — enriquece cada atividade com resposta salva, override e as instruções
   extras de IA.
 - `src/prompt.ts` — compila as mensagens `system` (regras estruturadas) e `user`
@@ -47,13 +56,23 @@
 
 ## Dados
 
-- `config/ai-config.json` — modelo, temperatura, tokens, regras (`style`) e seções
-  enviadas (`activitySections`).
-- `config/profile.json` — nome e matrícula (entram no começo da resposta).
-- `config/overrides.json` — por atividade: nota, ocultar, instruções extras de IA.
-- `data/exercises.json` — lista normalizada (gerada pelo index).
-- `data/answers.json` — resposta atual + histórico (máx. 20 versões).
-- `data/submissions.json` — histórico de envios e status.
+Postgres é a **fonte da verdade** (local, por usuário, `DATABASE_URL` gitignored). Domínios:
+
+- **Identidade/tenant** — `institution`, `student`, `enrollment`.
+- **Catálogo acadêmico** — `course`, `module`, `professor`, `module_professor`, `section`,
+  `content_item` (com `raw_json` para proveniência), `attachment`.
+- **Banco de questões** — `question`, `question_option` (com `text_hash` para reuso entre períodos).
+- **Atividade do aluno** — `item_state` (snapshot append-only a cada scrape), `answer_attempt`
+  (tentativas imutáveis; a atual é a `is_current`), `answer_selection`, `submission`,
+  `submission_payload`, `item_annotation`.
+- **IA** — `ai_config`, `ai_run`.
+- **Leitura** — view `v_exercise_current` (alimenta a projeção `/api/exercises`).
+
+Os arquivos JSON continuam existindo como **cache/legado** e são regravados pelo index:
+
+- `config/ai-config.json`, `config/profile.json`, `config/overrides.json` — espelhados no banco.
+- `data/exercises.json` — projeção gerada a partir de `v_exercise_current` (cache da UI).
+- `data/answers.json`, `data/submissions.json` — legado; o banco guarda as tentativas/envios.
 
 ## Envio (write side)
 

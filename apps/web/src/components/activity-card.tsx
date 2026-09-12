@@ -102,7 +102,7 @@ export function ActivityCard({ e }: { e: Exercise }) {
           <span className={cn("truncate text-sm font-medium", e.done && "text-muted-foreground line-through")}>{e.title}</span>
           {e.done && <DoneBadge className="shrink-0" />}
         </span>
-        <AccChips professor={e.professor} moduleName={e.moduleName} />
+        <AccChips professorId={e.professorId} professor={e.professor} moduleName={e.moduleName} />
         {detail && (
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
             {e.kind === "upload" && <Paperclip className="size-3" aria-hidden />}
