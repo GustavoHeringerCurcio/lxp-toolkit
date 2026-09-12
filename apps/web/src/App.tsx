@@ -1,13 +1,12 @@
-import { useLocation, Route, Routes } from "react-router-dom";
+import { Link, useLocation, Route, Routes } from "react-router-dom";
 import { Command, Settings2 } from "lucide-react";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { AppProviders, useAppData } from "@/lib/app-state";
 import { ThemeProvider } from "@/lib/theme";
 import { LangProvider, useT } from "@/lib/i18n";
 import { AppSidebar } from "@/components/app-sidebar";
-import { AiSettingsDialog } from "@/components/ai-settings-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
 import {
@@ -93,13 +92,14 @@ function Shell() {
               </span>
             )}
             <PaletteButton />
-            <AiSettingsDialog
-              trigger={
-                <Button variant="ghost" size="icon" title={t("header.profileAria")} aria-label={t("header.profileAria")}>
-                  <Settings2 />
-                </Button>
-              }
-            />
+            <Link
+              to="/ajustes"
+              title={t("header.settingsAria")}
+              aria-label={t("header.settingsAria")}
+              className={buttonVariants({ variant: "ghost", size: "icon" })}
+            >
+              <Settings2 />
+            </Link>
             <ContentRefreshButton state={refreshState} onStart={startRefresh} />
             <LanguageToggle />
             <ThemeToggle />

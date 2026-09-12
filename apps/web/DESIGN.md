@@ -134,7 +134,7 @@ sit harmoniously on warm paper.
 | `/tarefa/:id` | **Atividade** | reading column (prose width) + sticky workbench; focus mode; version timeline; 3-step send flow |
 | `/treino/quiz` | **Treino de quiz** | gamified practice quiz (AI-generated or portal-sourced), one question at a time with feedback, score + readiness verdict + history |
 | `/treino/estudo` | **Perguntar à IA** | free-text study Q&A scoped to the selected subject; streamed markdown |
-| `/ajustes` | **Ajustes** | IA config, generation params, preview |
+| `/ajustes` | **Ajustes** | hub with pill tabs (Pessoal · IA · Avançado): profile + appearance, IA voice/format/rules/content, generation params + preview |
 | `/design` | **Design** | living style guide: tokens, type ramp, components, states |
 
 Global: **⌘K / Ctrl+K command palette** — navigate, jump to any tarefa, filter by module, toggle

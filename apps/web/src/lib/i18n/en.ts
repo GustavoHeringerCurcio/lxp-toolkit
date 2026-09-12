@@ -16,13 +16,12 @@ export const en: Dict = {
   "nav.groupStudy": "Study",
   "nav.groupSystem": "System",
   "nav.groupProfessors": "Professors",
-  "nav.profile": "Profile",
   "nav.backToTasks": "back to tasks",
 
   // header
   "header.searchTitle": "Search (Ctrl+K)",
   "header.searchAria": "Open search",
-  "header.profileAria": "Profile & AI",
+  "header.settingsAria": "Settings & profile",
 
   // language switcher
   "lang.title": "Language",
@@ -357,6 +356,17 @@ export const en: Dict = {
   "settings.previewTitle": "Message preview (system)",
   "settings.previewNote":
     "Placeholders like {{nome}} and {{atividade}} are filled in at submission time.",
+  "settings.tabsAria": "Settings sections",
+  "settings.tab.personal": "Personal",
+  "settings.tab.ai": "AI",
+  "settings.tab.advanced": "Advanced",
+  "settings.appearance": "Appearance",
+  "settings.appearanceHint": "Applied instantly — no need to save.",
+  "settings.themeLabel": "Theme",
+  "settings.themeLight": "Light",
+  "settings.themeDark": "Dark",
+  "settings.themeSystem": "System",
+  "settings.languageLabel": "Language",
 
   // profile sheet
   "profile.title": "Profile",
@@ -366,10 +376,7 @@ export const en: Dict = {
   "profile.namePlaceholder": "Your name",
   "profile.id": "Student ID",
   "profile.idPlaceholder": "E.g.: 2023XXXXX",
-  "profile.otherScreens": "The text sent to the AI and the generation parameters live in other screens.",
-  "profile.moreSettings": "More settings",
   "profile.saved": "Profile saved.",
-  "profile.close": "Close",
   "profile.saving": "Saving…",
   "profile.save": "Save profile",
 

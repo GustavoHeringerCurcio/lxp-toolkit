@@ -20,13 +20,12 @@ export const pt = {
   "nav.groupStudy": "Estudo",
   "nav.groupSystem": "Sistema",
   "nav.groupProfessors": "Professores",
-  "nav.profile": "Perfil",
   "nav.backToTasks": "voltar para tarefas",
 
   // header
   "header.searchTitle": "Buscar (Ctrl+K)",
   "header.searchAria": "Abrir busca",
-  "header.profileAria": "Perfil & IA",
+  "header.settingsAria": "Ajustes & perfil",
 
   // language switcher
   "lang.title": "Idioma",
@@ -361,6 +360,17 @@ export const pt = {
   "settings.previewTitle": "Prévia da mensagem (system)",
   "settings.previewNote":
     "Os marcadores como {{nome}} e {{atividade}} são preenchidos no momento do envio.",
+  "settings.tabsAria": "Seções dos ajustes",
+  "settings.tab.personal": "Pessoal",
+  "settings.tab.ai": "IA",
+  "settings.tab.advanced": "Avançado",
+  "settings.appearance": "Aparência",
+  "settings.appearanceHint": "Aplicado na hora — não precisa salvar.",
+  "settings.themeLabel": "Tema",
+  "settings.themeLight": "Claro",
+  "settings.themeDark": "Escuro",
+  "settings.themeSystem": "Sistema",
+  "settings.languageLabel": "Idioma",
 
   // profile sheet
   "profile.title": "Perfil",
@@ -370,10 +380,7 @@ export const pt = {
   "profile.namePlaceholder": "Seu nome",
   "profile.id": "Matrícula",
   "profile.idPlaceholder": "Ex.: 2023XXXXX",
-  "profile.otherScreens": "O texto enviado à IA e os parâmetros de geração ficam em outras telas.",
-  "profile.moreSettings": "Mais configurações",
   "profile.saved": "Perfil salvo.",
-  "profile.close": "Fechar",
   "profile.saving": "Salvando…",
   "profile.save": "Salvar perfil",
 

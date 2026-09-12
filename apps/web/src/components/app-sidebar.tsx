@@ -9,7 +9,6 @@ import {
   SlidersHorizontal,
   Sparkles,
   Sunrise,
-  UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -29,7 +28,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { accentFor, professorLabel } from "@/lib/prof";
 import { useAppData } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
-import { AiSettingsDialog } from "@/components/ai-settings-dialog";
 
 const NAV = [
   { to: "/", key: "nav.now", icon: Sunrise, end: true },
@@ -158,16 +156,6 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-              <SidebarMenuItem>
-                <AiSettingsDialog
-                  trigger={
-                    <SidebarMenuButton tooltip={t("nav.profile")} className="group-data-[collapsible=icon]:!px-2">
-                      <UserRound />
-                      <span>{t("nav.profile")}</span>
-                    </SidebarMenuButton>
-                  }
-                />
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
