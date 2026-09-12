@@ -6,7 +6,10 @@ import type { NoticeToken } from "./client.js";
 
 export class CaptchaRequiredError extends Error {
   constructor() {
-    super("reCAPTCHA challenge detected; automated login is not possible");
+    super(
+      "reCAPTCHA detected — automated login is blocked. Re-run with HEADFUL=true " +
+        "so you can solve it in the browser window.",
+    );
     this.name = "CaptchaRequiredError";
   }
 }
@@ -62,6 +65,21 @@ export async function loginToLyceum(
   }
 
   throw new Error("lyceum login failed after 3 attempts");
+}
+
+/**
+ * Wait until the reCAPTCHA challenge is gone (the user solved it in a visible
+ * browser) or the page leaves the login route. Returns true when resolved.
+ * Used as the default `onCaptcha` handler when running headful.
+ */
+export async function waitForCaptchaGone(page: Page, timeoutMs = 180_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const present = (await page.locator("#g-recaptcha iframe").count().catch(() => 0)) > 0;
+    if (!present || !page.url().includes("#/login")) return true;
+    await page.waitForTimeout(1_000);
+  }
+  return false;
 }
 
 function findLxpUrl(node: unknown, host: string): string | null {

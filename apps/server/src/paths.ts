@@ -5,7 +5,7 @@ import path from "node:path";
 // This file is apps/server/src/paths.ts
 export const ASSISTANT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-loadEnv({ override: true, path: path.join(ASSISTANT_DIR, ".env") });
+loadEnv({ path: path.join(ASSISTANT_DIR, ".env") });
 
 /** Directory that holds the scraped LXP data (the repo-root scraped/). */
 export function dataDir(): string {

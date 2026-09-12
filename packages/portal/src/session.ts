@@ -1,5 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import { authenticate, readToken, type AuthSession } from "./auth.js";
+import { authenticate, readToken, waitForCaptchaGone, CaptchaRequiredError, type AuthSession } from "./auth.js";
 import { ApiClient } from "./client.js";
 import { config, hasCredentials, logger } from "./config.js";
 import { storageStatePath } from "./util.js";
@@ -15,6 +15,8 @@ export interface Session {
 export interface SessionOptions {
   headful?: boolean;
   forceLogin?: boolean;
+  /** Called when a reCAPTCHA blocks login. Defaults to waiting for it to clear when headful. */
+  onCaptcha?: () => Promise<void>;
 }
 
 /**
@@ -56,7 +58,21 @@ export async function createSession(options: SessionOptions = {}): Promise<Sessi
       );
     }
 
-    page = await authenticate(context, page, { forceLogin: true });
+    // When a reCAPTCHA blocks login: headful runs wait for the user to solve it
+    // in the visible window (auto-continuing once it clears); headless runs get
+    // a clear error telling the user to set HEADFUL=true.
+    const onCaptcha =
+      options.onCaptcha ??
+      (headful
+        ? async () => {
+            logger.warn(
+              "reCAPTCHA detected — solve it in the browser window; the run continues automatically once it clears.",
+            );
+            if (!(await waitForCaptchaGone(page))) throw new CaptchaRequiredError();
+          }
+        : undefined);
+
+    page = await authenticate(context, page, { forceLogin: true, onCaptcha });
     const auth = await readToken(page);
     if (!auth) {
       throw new Error("plataforma_accessToken not found after login");

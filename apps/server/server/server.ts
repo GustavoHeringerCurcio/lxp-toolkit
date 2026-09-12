@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
-import { ASSISTANT_DIR, dataDir, assist } from "../src/paths.js";
+import { ASSISTANT_DIR, dataDir, assist, raw } from "../src/paths.js";
 import { spawnCommand } from "../src/exec.js";
-import { loadExercises } from "../src/build.js";
+import { loadExercises, buildExercises, writeExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import {
   loadAiConfig,
   loadAnswers,
@@ -64,11 +64,11 @@ function appendRefreshLog(chunk: string): void {
 }
 
 /** Run one pipeline step, capturing its output into the shared refresh state. */
-function runStep(args: string[], cwd: string, label: string): Promise<void> {
+function runStep(args: string[], cwd: string, label: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<void> {
   return new Promise((resolve, reject) => {
     refresh.step = label;
     appendRefreshLog(`\n$ npm ${args.join(" ")}\n`);
-    const child = spawnCommand(NPM, args, { cwd, env: process.env });
+    const child = spawnCommand(NPM, args, { cwd, env: { ...process.env, ...extraEnv } });
     child.stdout?.on("data", (d: Buffer) => appendRefreshLog(d.toString()));
     child.stderr?.on("data", (d: Buffer) => appendRefreshLog(d.toString()));
     child.on("error", (err) => reject(err));
@@ -77,6 +77,18 @@ function runStep(args: string[], cwd: string, label: string): Promise<void> {
       else reject(new Error(`${label}: o comando saiu com código ${code}`));
     });
   });
+}
+
+/** Turn a raw refresh failure into an actionable pt-BR message. */
+function friendlyRefreshError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/reCAPTCHA/i.test(refresh.log) || /reCAPTCHA/i.test(msg)) {
+    return "O portal pediu reCAPTCHA. Rode `HEADFUL=true npm run dump` no terminal e resolva no navegador.";
+  }
+  if (/no credentials|LXP_USERNAME|LXP_PASSWORD/i.test(msg) || /no credentials/i.test(refresh.log)) {
+    return "Credenciais do portal ausentes. Rode `npm run setup` (ou preencha packages/portal/.env).";
+  }
+  return msg;
 }
 
 /** Scrape fresh content from the portal, then rebuild the assistant's list. */
@@ -88,13 +100,31 @@ async function runContentRefresh(): Promise<void> {
   refresh.log = "";
   refresh.startedAt = new Date().toISOString();
   refresh.finishedAt = null;
+  let headfulRetryUsed = false;
   try {
     await runStep(["run", "dump"], REPO_ROOT, "Buscando conteúdo novo no portal");
     await runStep(["run", "index"], ASSISTANT_DIR, "Montando a lista de atividades");
     refresh.step = "Concluído";
   } catch (err) {
-    refresh.error = err instanceof Error ? err.message : String(err);
-    refresh.step = "Falhou";
+    // If the portal demanded a reCAPTCHA, retry the scrape once headful so the
+    // user can solve it in the browser window (the run auto-continues).
+    if (!headfulRetryUsed && /reCAPTCHA/i.test(refresh.log)) {
+      headfulRetryUsed = true;
+      appendRefreshLog("\nreCAPTCHA detectado — abrindo o navegador para você resolver…\n");
+      try {
+        await runStep(["run", "dump"], REPO_ROOT, "Aguardando você resolver o reCAPTCHA", {
+          HEADFUL: "true",
+        });
+        await runStep(["run", "index"], ASSISTANT_DIR, "Montando a lista de atividades");
+        refresh.step = "Concluído";
+      } catch (err2) {
+        refresh.error = friendlyRefreshError(err2);
+        refresh.step = "Falhou";
+      }
+    } else {
+      refresh.error = friendlyRefreshError(err);
+      refresh.step = "Falhou";
+    }
   } finally {
     refresh.running = false;
     refresh.finishedAt = new Date().toISOString();
@@ -634,6 +664,23 @@ const server = createServer(async (req, res) => {
     res.end();
   }
 });
+
+/**
+ * If the portal content was scraped but the app index was never built (common
+ * on a fresh clone), build it now so the UI works without a manual `index:web`.
+ */
+function ensureIndex(): void {
+  if (existsSync(ASSISTANT_EXERCISES_FILE)) return;
+  if (!existsSync(raw("content-tree.json"))) return;
+  try {
+    console.log("   index: building exercises.json from scraped content…");
+    writeExercises(buildExercises());
+  } catch (err) {
+    console.warn(`   index: could not build (${err instanceof Error ? err.message : String(err)})`);
+  }
+}
+
+ensureIndex();
 
 server.listen(PORT, () => {
   console.log(`\n📝 Pauta (LXP ToolKit) → http://localhost:${PORT}`);

@@ -179,49 +179,62 @@ lxp-toolkit/
 
 ## Getting it running
 
+### The easy way — one command
+
+From the repo root:
+
+```bash
+npm run setup
+```
+
+The wizard does the boring parts for you:
+
+1. installs dependencies + the Chromium browser;
+2. asks for your **portal login** (RA + password) and your **OpenAI API key**;
+3. optionally asks for your name/matrícula (to sign the AI drafts);
+4. writes the gitignored `.env` files and enables the commit guard;
+5. can run your **first scrape** and **start the app** right away.
+
+Check your machine any time with:
+
+```bash
+npm run doctor
+```
+
+### The manual way
+
 > [!IMPORTANT]
 > Run everything from the **repo root**. The commands know where to go from there.
-
-### 1. Install the stuff
 
 ```bash
 npm install
 npx playwright install chromium
-```
-
-### 2. Add your secrets
-
-```bash
-cp packages/portal/.env.example packages/portal/.env   # your portal login
-cp apps/server/.env.example apps/server/.env           # your OpenAI key
-```
-
-In `packages/portal/.env`:
-
-```ini
-LXP_USERNAME=seu_ra
-LXP_PASSWORD=sua_senha
-```
-
-In `apps/server/.env` — just the key, everything else already has good defaults:
-
-```ini
-OPENAI_API_KEY=sk-...
-```
-
-### 3. Grab your content
-
-```bash
+cp packages/portal/.env.example packages/portal/.env   # LXP_USERNAME / LXP_PASSWORD
+cp apps/server/.env.example apps/server/.env           # OPENAI_API_KEY
 npm run dump            # courses, quizzes, uploads + attachments → scraped/
 npm run dump-surfaces   # grades, calendar, notices, messages
-```
-
-### 4. Fire up the app
-
-```bash
 npm run index:web       # build the exercise index
 npm run web             # build + serve → http://localhost:4174
 ```
+
+### On a new machine
+
+Everything personal (`scraped/`, `.env`, `data/`) is gitignored, so a fresh clone starts clean —
+just clone, set up, run:
+
+```bash
+git clone <repo-url> && cd lxp-toolkit
+npm run setup
+npm run web
+```
+
+| If this happens… | Do this |
+|---|---|
+| Portal asks for a reCAPTCHA | Re-run `HEADFUL=true npm run dump` (a browser opens — solve it and the scrape continues). The app's **Atualizar** button also retries headful automatically. |
+| `.pdf` delivery / Office previews fail | Optional: install **LibreOffice**. On macOS, set `SOFFICE_BIN` to its `soffice` binary. |
+| Browser won't launch (Linux/containers) | Set `PLAYWRIGHT_NO_SANDBOX=true` in `packages/portal/.env`. |
+| Port 4174 already in use | Set `PORT=4175` in `apps/server/.env`. |
+| Not sure what's missing | `npm run doctor` tells you exactly what to fix. |
 
 ---
 

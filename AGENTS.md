@@ -22,10 +22,11 @@ Per-user scraped output lives in the gitignored `scraped/` folder (never commit 
   with `$nuxt.$router.push()`, never `page.goto`.
 - API base: `https://api.plataforma.grupoa.education`. `unifoa.lyceum.com.br` is login-only.
 - Each user logs in with their own `.env` credentials and scrapes their own enrolled courses.
-- Commands (run from the repo root; they delegate to the workspaces): `npm run dump`,
-  `npm run dump-surfaces`, `npm run crawl-routes`, `npm run capture-api`, `npm run agent`,
-  `npm run homework`, `npm run exercises`, `npm run index`, `npm run web`.
-  Run `npm run typecheck` after code changes.
+- Commands (run from the repo root; they delegate to the workspaces): `npm run setup`
+  (interactive onboarding: deps + browser + env files), `npm run doctor` (health check),
+  `npm run dump`, `npm run dump-surfaces`, `npm run crawl-routes`, `npm run capture-api`,
+  `npm run agent`, `npm run homework`, `npm run exercises`, `npm run index`, `npm run index:web`,
+  `npm run web`. Run `npm run typecheck` after code changes.
 - `scraped/raw/homework-index.json` (built by `npm run index`) links each open assignment to its
   section + sibling content + local files — prefer it over re-scraping. The web UI is
   `npm run web` (serves `apps/web` via `apps/server`).

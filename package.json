@@ -12,6 +12,8 @@
     "packages/*"
   ],
   "scripts": {
+    "setup": "node setup/index.mjs",
+    "doctor": "node setup/doctor.mjs",
     "login": "npm run login -w @lxp-toolkit/portal",
     "dump": "npm run dump -w @lxp-toolkit/portal",
     "dump-surfaces": "npm run dump-surfaces -w @lxp-toolkit/portal",

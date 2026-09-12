@@ -2,7 +2,9 @@ import { config as loadEnv } from "dotenv";
 import { z } from "zod";
 import pino from "pino";
 
-loadEnv({ override: true });
+// Real environment variables win over `.env` (so HEADFUL/PORT/etc. can be
+// overridden per run); `.env` only fills what's missing.
+loadEnv();
 
 const boolFromString = z.preprocess((value) => {
   if (typeof value === "string") {
