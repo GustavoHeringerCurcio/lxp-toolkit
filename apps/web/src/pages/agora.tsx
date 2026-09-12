@@ -5,7 +5,7 @@ import { useAppData, useScopePrefs } from "@/lib/app-state";
 import { cmpOpen, countInfo } from "@/lib/status";
 import { useT, type TranslateFn } from "@/lib/i18n";
 import { ActivityCard } from "@/components/activity-card";
-import { ModuleMiniBars, NextHero, ProgressRing, type ModuleProgress } from "@/components/agora-hero";
+import { NextHero, ProgressRing, ProgressSummary, type ModuleProgress } from "@/components/agora-hero";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
@@ -45,15 +45,18 @@ export function AgoraPage() {
 
   const counts = useMemo(() => countInfo(items), [items]);
   const next = useMemo(() => items.filter((e) => e.status === "open").sort((a, b) => cmpOpen(a, b, locale))[0] ?? null, [items, locale]);
-  const queue = useMemo(
+  const queueAll = useMemo(
     () =>
       items
         .filter((e) => e.status !== "done")
         .filter((e) => e.id !== next?.id)
-        .sort((a, b) => cmpOpen(a, b, locale))
-        .slice(0, 6),
+        .sort((a, b) => cmpOpen(a, b, locale)),
     [items, next, locale],
   );
+  const queue = useMemo(() => queueAll.slice(0, 6), [queueAll]);
+  const overdue = useMemo(() => queue.filter((e) => e.status === "expired"), [queue]);
+  const upcoming = useMemo(() => queue.filter((e) => e.status !== "expired"), [queue]);
+  const hidden = Math.max(0, queueAll.length - queue.length);
 
   const modules = useMemo<ModuleProgress[]>(() => {
     const map = new Map<string, ModuleProgress>();
@@ -66,7 +69,7 @@ export function AgoraPage() {
       else m.open += 1;
       map.set(e.moduleName, m);
     }
-    return [...map.values()].sort((a, b) => b.open + b.late - (a.open + a.late)).slice(0, 5);
+    return [...map.values()].sort((a, b) => b.open + b.late - (a.open + a.late));
   }, [items]);
 
   if (loading && items.length === 0) return <SkeletonMain />;
@@ -82,15 +85,12 @@ export function AgoraPage() {
             {greeting(t)}.
           </h1>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className="font-mono text-sm tabular-nums text-muted-foreground">
-              {counts.done}/{items.length}
-            </div>
-            <div className="text-[11px] text-muted-foreground">{t("now.done")}</div>
-          </div>
-          <ProgressRing done={counts.done} total={items.length} size={64} />
-        </div>
+        <ProgressRing
+          done={counts.done}
+          total={items.length}
+          size={64}
+          ariaLabel={t("now.ringAria", { done: counts.done, total: items.length })}
+        />
       </header>
 
       {items.length === 0 ? (
@@ -99,15 +99,14 @@ export function AgoraPage() {
         <>
           {next && <NextHero next={next} onClick={() => navigate(`/tarefa/${next.id}`)} />}
 
-          {modules.length > 0 && (
-            <ModuleMiniBars
-              modules={modules}
-              onSelect={(name) => {
-                setModuleFilter(name);
-                navigate("/tarefas");
-              }}
-            />
-          )}
+          <ProgressSummary
+            modules={modules}
+            totals={{ done: counts.done, late: counts.expired, open: counts.open, total: items.length }}
+            onSelect={(name) => {
+              setModuleFilter(name);
+              navigate("/tarefas");
+            }}
+          />
 
           <section>
             <div className="mb-2 flex items-center justify-between">
@@ -120,10 +119,38 @@ export function AgoraPage() {
             {queue.length === 0 ? (
               <NoData title={t("now.queueEmptyTitle")} detail={t("now.queueEmptyDetail")} />
             ) : (
-              <div className="grid gap-2.5">
-                {queue.map((e) => (
-                  <ActivityCard key={e.id} e={e} />
-                ))}
+              <div className="space-y-4">
+                {overdue.length > 0 && (
+                  <div>
+                    <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-late">
+                      {t("now.queueOverdue")}
+                    </h3>
+                    <div className="grid gap-2.5">
+                      {overdue.map((e) => (
+                        <ActivityCard key={e.id} e={e} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {upcoming.length > 0 && (
+                  <div>
+                    {overdue.length > 0 && (
+                      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        {t("now.queueUpcoming")}
+                      </h3>
+                    )}
+                    <div className="grid gap-2.5">
+                      {upcoming.map((e) => (
+                        <ActivityCard key={e.id} e={e} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {hidden > 0 && (
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => navigate("/tarefas")}>
+                    {t("now.queueMore", { n: hidden })}
+                  </Button>
+                )}
               </div>
             )}
           </section>

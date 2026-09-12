@@ -57,21 +57,23 @@ export const pt = {
   "greeting.morning": "Bom dia",
   "greeting.afternoon": "Boa tarde",
   "greeting.evening": "Boa noite",
-  "now.done": "concluídas",
   "now.queue": "Fila aberta",
   "now.seeAll": "ver todas",
   "now.emptyTitle": "Nada na pauta",
   "now.emptyDetail": "Suas tarefas aparecem aqui assim que o conteúdo do portal for sincronizado.",
   "now.queueEmptyTitle": "Nada aberto",
   "now.queueEmptyDetail": "Tudo em dia — aproveite a travessia.",
+  "now.progress": "Progresso",
+  "now.ringAria": "{{done}} de {{total}} concluídas",
+  "now.queueOverdue": "Atrasadas",
+  "now.queueUpcoming": "A seguir",
+  "now.queueMore": "+{{n}} mais",
 
   // hero
   "hero.next": "Próxima",
   "hero.late": "atrasada",
   "hero.overdueBy": "atrasada há {{t}}",
   "hero.noDeadline": "sem prazo",
-  "hero.modules": "Módulos",
-  "hero.doneOfTotal": "concluídas / total",
 
   // status (deadlineInfo)
   "status.done": "Concluída",

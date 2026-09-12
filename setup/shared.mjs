@@ -167,3 +167,20 @@ export function writeWithBackup(file, content) {
   }
   writeFileSync(file, content, "utf8");
 }
+
+/**
+ * Ensure `<key>=<value>` is present in an env file, appending it when missing.
+ * Returns true when the line was added (useful for existing installs that
+ * predate a newly required variable such as `DATABASE_URL`).
+ */
+export function ensureEnvLine(file, key, value) {
+  if (!existsSync(file)) {
+    writeFileSync(file, `${key}=${value}\n`, "utf8");
+    return true;
+  }
+  const content = readFileSync(file, "utf8");
+  if (new RegExp(`^\\s*${key}\\s*=`, "m").test(content)) return false;
+  const sep = content.length === 0 || content.endsWith("\n") ? "" : "\n";
+  writeFileSync(file, `${content}${sep}${key}=${value}\n`, "utf8");
+  return true;
+}

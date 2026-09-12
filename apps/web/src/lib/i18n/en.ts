@@ -53,21 +53,23 @@ export const en: Dict = {
   "greeting.morning": "Good morning",
   "greeting.afternoon": "Good afternoon",
   "greeting.evening": "Good evening",
-  "now.done": "completed",
   "now.queue": "Open queue",
   "now.seeAll": "view all",
   "now.emptyTitle": "Nothing on the agenda",
   "now.emptyDetail": "Your tasks appear here as soon as the portal content is synced.",
   "now.queueEmptyTitle": "Nothing open",
   "now.queueEmptyDetail": "All caught up — enjoy the smooth sailing.",
+  "now.progress": "Progress",
+  "now.ringAria": "{{done}} of {{total}} completed",
+  "now.queueOverdue": "Late",
+  "now.queueUpcoming": "Coming up",
+  "now.queueMore": "+{{n}} more",
 
   // hero
   "hero.next": "Up next",
   "hero.late": "late",
   "hero.overdueBy": "late by {{t}}",
   "hero.noDeadline": "no deadline",
-  "hero.modules": "Modules",
-  "hero.doneOfTotal": "completed / total",
 
   // status (deadlineInfo)
   "status.done": "Completed",

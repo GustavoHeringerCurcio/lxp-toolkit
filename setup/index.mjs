@@ -1,6 +1,6 @@
 // One-command onboarding: `npm run setup`
-// Installs deps + browser, collects credentials, writes env files, and can run
-// the first scrape and start the app.
+// Installs deps + browser, collects credentials, writes env files, starts
+// Postgres (Docker) + migrates, then can run the first scrape and start the app.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -20,6 +20,7 @@ import {
   confirm,
   commandExists,
   dockerCompose,
+  ensureEnvLine,
   envLine,
   writeWithBackup,
   DATABASE_URL_DEFAULT,
@@ -122,6 +123,11 @@ const serverEnv = [
 await maybeWrite(PORTAL_ENV, portalEnv, "packages/portal/.env");
 await maybeWrite(SERVER_ENV, serverEnv, "apps/server/.env");
 
+// Existing installs may predate the database; make sure the URL is present.
+if (ensureEnvLine(SERVER_ENV, "DATABASE_URL", DATABASE_URL_DEFAULT)) {
+  ok("added DATABASE_URL to apps/server/.env");
+}
+
 if (nome || matricula) {
   mkdirSync(path.dirname(PROFILE_JSON), { recursive: true });
   writeFileSync(PROFILE_JSON, JSON.stringify({ nome, matricula }, null, 2), "utf8");
@@ -130,6 +136,7 @@ if (nome || matricula) {
 
 // 6b. Database (required)
 step("Starting the database (Postgres)");
+let dbReady = false;
 if (await commandExists("docker", ["--version"])) {
   const up = await dockerCompose(["up", "-d", "db"], { tee: true });
   if (up.code === 0) {
@@ -144,8 +151,12 @@ if (await commandExists("docker", ["--version"])) {
     if (ready) {
       ok("Postgres is up.");
       const mig = await run("npm", ["run", "db:migrate"], { tee: true });
-      if (mig.code === 0) ok("Schema migrated.");
-      else warn("Migration failed — run `npm run db:migrate` after fixing the error.");
+      if (mig.code === 0) {
+        ok("Schema migrated.");
+        dbReady = true;
+      } else {
+        warn("Migration failed — run `npm run db:migrate` after fixing the error.");
+      }
     } else {
       warn("Postgres did not become ready in time — run `npm run db:migrate` once it is up.");
     }
@@ -174,7 +185,14 @@ if (doScrape) {
   }
   if (res.code === 0) {
     ok("Content scraped.");
-    await run("npm", ["run", "index:web"], { tee: true });
+    if (dbReady) {
+      const idx = await run("npm", ["run", "index:web"], { tee: true });
+      if (idx.code !== 0) warn("Index failed — retry with `npm run index:web`.");
+    } else {
+      warn(
+        "Skipping the index: the database isn't ready. Run `npm run db:up && npm run db:migrate && npm run index:web`.",
+      );
+    }
   } else {
     warn("The scrape did not finish — retry later with `npm run dump`.");
   }
@@ -186,6 +204,9 @@ if (doScrape) {
 step("All set");
 const start = await confirm("  Start the app now (http://localhost:4174)?", true);
 if (start) {
+  if (!dbReady) {
+    warn("The database isn't ready — `npm run web` will fail until `npm run db:up` and `npm run db:migrate` succeed.");
+  }
   log(c.dim("\n  Starting… press Ctrl+C to stop.\n"));
   await run("npm", ["run", "web"]);
 } else {

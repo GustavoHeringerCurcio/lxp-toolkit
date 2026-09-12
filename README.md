@@ -57,8 +57,8 @@ Honestly? Two things that go together:
 |---|---|
 | **The scraper** | `packages/portal` — Playwright login + a typed API client. Scrapes routes, content, and account surfaces into markdown/JSON. |
 | **The app** | `apps/web` + `apps/server` — **Pauta**: task board, deadlines, AI answer drafts, and (careful) submission. |
-| **The data** | `scraped/` (your stuff, gitignored) → `apps/server/data/*.json` (index, answers, submissions). |
-| **Runs on** | Node ≥ 22 · TypeScript ESM · npm workspaces · one `npm install`, one lockfile. |
+| **The data** | `scraped/` (your stuff, gitignored) → **Postgres** (source of truth) → `apps/server/data/*.json` (UI cache). |
+| **Runs on** | Node ≥ 22 · Docker (Postgres 16) · TypeScript ESM · npm workspaces · one `npm install`, one lockfile. |
 | **Open it at** | `npm run web` → <http://localhost:4174> |
 
 ---
@@ -85,7 +85,8 @@ flowchart LR
     end
 
     SCRAPED[("scraped/<br/>gitignored")]
-    DATA[("data/<br/>exercises · answers")]
+    PG[("Postgres<br/>source of truth")]
+    DATA[("data/<br/>UI cache")]
 
     LY --> LXP
     LXP --> API
@@ -93,8 +94,10 @@ flowchart LR
     CL --> API
     SCR --> CL
     SCR --> SCRAPED
-    SCRAPED -->|npm run index:web| DATA
+    SCRAPED -->|"npm run index:web<br/>migrate · import · project"| PG
+    PG -->|project| DATA
     WEB -->|HTTP /api| SRV
+    SRV --> PG
     SRV --> DATA
     SRV -->|prompt| OAI["OpenAI API"]
     SRV -->|spawn runner| SCR
@@ -119,6 +122,7 @@ sequenceDiagram
     actor U as You
     participant P as packages/portal
     participant S as apps/server
+    participant DB as Postgres
     participant W as apps/web
     participant O as OpenAI
     participant LXP as Grupoa LXP
@@ -129,7 +133,9 @@ sequenceDiagram
     P-->>U: scraped/ (markdown + raw JSON)
 
     U->>S: npm run index:web
-    S-->>U: data/exercises.json
+    S->>DB: migrate + import scraped content
+    DB-->>S: normalized rows
+    S-->>U: data/exercises.json (projected cache)
 
     U->>W: npm run web
     W->>S: GET /api/exercises
@@ -164,13 +170,15 @@ lxp-toolkit/
 │   ├── web/                        # the React UI (the fun part)
 │   │   └── src/                    #   pages · components · lib
 │   └── server/                     # the backend
-│       ├── src/                    #   build · view · prompt · ai · send · config
+│       ├── src/                    #   db · import · professor · project · prompt · ai · send · config
+│       ├── db/migrations/          #   versioned SQL — the source-of-truth schema
 │       ├── server/                 #   HTTP API + static server (port 4174)
 │       ├── config/                 #   ai-config.json (committed) · profile/overrides (gitignored)
-│       └── data/                   #   exercises.json · answers.json · submissions.json (gitignored)
+│       └── data/                   #   exercises.json (UI cache) · answers.json · submissions.json
 │
 ├── agent-docs/                     # notes for AI agents working on this repo
 ├── scraped/                        # YOUR scraped content + raw captures (gitignored)
+├── docker-compose.yml              # local Postgres 16 (source of truth)
 ├── package.json                    # workspace root — one install, one lockfile
 └── README.md
 ```
@@ -180,6 +188,9 @@ lxp-toolkit/
 ## Getting it running
 
 ### The easy way — one command
+
+You'll need **[Docker](https://www.docker.com/products/docker-desktop/)** running (the wizard starts
+Postgres for you) plus Node ≥ 22.
 
 From the repo root:
 
@@ -193,7 +204,8 @@ The wizard does the boring parts for you:
 2. asks for your **portal login** (RA + password) and your **OpenAI API key**;
 3. optionally asks for your name/matrícula (to sign the AI drafts);
 4. writes the gitignored `.env` files and enables the commit guard;
-5. can run your **first scrape** and **start the app** right away.
+5. starts **Postgres** (Docker) and applies the schema migrations;
+6. can run your **first scrape**, build the index, and **start the app** right away.
 
 Check your machine any time with:
 
@@ -210,10 +222,12 @@ npm run doctor
 npm install
 npx playwright install chromium
 cp packages/portal/.env.example packages/portal/.env   # LXP_USERNAME / LXP_PASSWORD
-cp apps/server/.env.example apps/server/.env           # OPENAI_API_KEY
+cp apps/server/.env.example apps/server/.env           # OPENAI_API_KEY + DATABASE_URL
+npm run db:up           # start Postgres 16 (Docker)
+npm run db:migrate      # apply the schema migrations
 npm run dump            # courses, quizzes, uploads + attachments → scraped/
 npm run dump-surfaces   # grades, calendar, notices, messages
-npm run index:web       # build the exercise index
+npm run index:web       # migrate + import into Postgres → data/exercises.json
 npm run web             # build + serve → http://localhost:4174
 ```
 
@@ -234,6 +248,9 @@ npm run web
 | `.pdf` delivery / Office previews fail | Optional: install **LibreOffice**. On macOS, set `SOFFICE_BIN` to its `soffice` binary. |
 | Browser won't launch (Linux/containers) | Set `PLAYWRIGHT_NO_SANDBOX=true` in `packages/portal/.env`. |
 | Port 4174 already in use | Set `PORT=4175` in `apps/server/.env`. |
+| `docker` command not found / Postgres down | Install & start Docker Desktop, then `npm run db:up`. |
+| `DATABASE_URL não configurada` | Run `npm run setup` (or add `DATABASE_URL` to `apps/server/.env`, see `.env.example`). |
+| Port 5432 busy (another Postgres) | The bundled container uses host port **5433** on purpose; keep `DATABASE_URL` pointing at `localhost:5433`. |
 | Not sure what's missing | `npm run doctor` tells you exactly what to fix. |
 
 ---
@@ -259,7 +276,11 @@ npm run web
 
 | Command | What it does |
 |---|---|
-| `npm run index:web` | Turns `scraped/` into `apps/server/data/exercises.json`. |
+| `npm run db:up` | Starts the local Postgres 16 container (Docker). |
+| `npm run db:down` | Stops the container (data stays in the volume). |
+| `npm run db:migrate` | Applies the versioned SQL migrations. |
+| `npm run db:import` | Imports `scraped/` + legacy JSON into Postgres (idempotent). |
+| `npm run index:web` | `migrate → import → project`: `scraped/` → Postgres → `data/exercises.json`. |
 | `npm run web` | Builds the UI and serves it → <http://localhost:4174>. |
 | `npm run web:dev` | Vite dev server with hot reload. |
 
@@ -295,7 +316,7 @@ Want the long version? It's in [`apps/server/README.md`](apps/server/README.md).
 | **Language** | TypeScript (ESM, NodeNext) on Node ≥ 22 |
 | **Monorepo** | npm workspaces (`apps/*`, `packages/*`) |
 | **Scraping** | Playwright, `node-html-markdown`, `zod`, `pino` |
-| **Backend** | Node `http`, OpenAI SDK, `pdf-parse`, LibreOffice (optional, for `.pdf`) |
+| **Backend** | Node `http`, Postgres (`pg`), OpenAI SDK, `pdf-parse`, LibreOffice (optional, for `.pdf`) |
 | **Frontend** | React 18, Vite 5, Tailwind v4, shadcn / Base UI, lucide-react, react-router, sonner |
 | **Runner** | `tsx` (no build step for scripts) |
 
@@ -317,15 +338,18 @@ Want the long version? It's in [`apps/server/README.md`](apps/server/README.md).
 
 ### The app
 
-1. **Index** — `build.ts` turns `scraped/raw/content-tree.json` into `data/exercises.json`, working
-   out `status` (`open` / `expired` / `done`) and `daysLeft`.
+1. **Index** — `import.ts` loads `scraped/raw/content-tree.json` into **Postgres** (normalized:
+   courses, modules, professors, questions, activity), then `project.ts` projects the
+   `v_exercise_current` view into `data/exercises.json`, working out `status`
+   (`open` / `expired` / `done`) and `daysLeft`. Professor identity is keyed by the stable
+   `safeaUserId` from `context.teachers[]`, never by the display string.
 2. **Compose** — `prompt.ts` builds two messages: a `system` one from the structured `style` rules,
    and a `user` one with just the activity content. No `===` markers get sent, so the model has
    nothing to parrot back.
-3. **Generate** — `ai.ts` streams a pt-BR draft from OpenAI and saves it as a new version in
-   `data/answers.json`.
-4. **Send** — `send.ts` writes a request file, spawns the portal runner, and logs the result in
-   `data/submissions.json`.
+3. **Generate** — `ai.ts` streams a pt-BR draft from OpenAI and saves it as an immutable
+   `answer_attempt` row (the current one is shown; `data/answers.json` remains a legacy mirror).
+4. **Send** — `send.ts` writes a request file, spawns the portal runner, and logs the result as a
+   `submission` row.
 
 ---
 
@@ -336,6 +360,8 @@ Want the long version? It's in [`apps/server/README.md`](apps/server/README.md).
   Both gitignored. Don't commit them. Ever.
 - 🧼 Logs redact passwords, tokens, and `authorization` headers.
 - 🌐 The web app **never** gets your portal credentials — submissions are spawned server-side.
+- 🗄️ The Postgres container is **local** and per-user; `DATABASE_URL` lives only in the gitignored
+  `apps/server/.env`. Your academic data never leaves your machine.
 - ✋ Nothing auto-submits. Every write needs you to click confirm.
 
 ---
