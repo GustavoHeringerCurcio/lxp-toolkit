@@ -2,11 +2,11 @@
 
 # 🎓 lxp-toolkit
 
-**Reverse-engineer the UniFOA / Grupoa LXP portal — then turn it into a study & homework assistant.**
+**It scrapes your UniFOA / Grupoa LXP portal, then turns it into a homework assistant.**
 
-A TypeScript monorepo with two cores: a **scraper toolkit** that maps the platform's API and dumps
-your course content, and the **LXP Homework** web app that reads it, tracks deadlines, and drafts
-answers with AI.
+A little TypeScript monorepo with two halves: a **scraper** that maps the platform's API and saves
+all your course stuff as markdown, and **LXP Homework** — a web app that reads it, watches your
+deadlines, and drafts answers with AI.
 
 ![Node](https://img.shields.io/badge/node-22%2B-339933?logo=nodedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
@@ -19,58 +19,67 @@ answers with AI.
 
 ---
 
+## What's in the box?
+
+Honestly? Two things that go together:
+
+- 🕷️ **The scraper** (`packages/portal`) — logs in as you, pokes the same JSON API the site uses,
+  and dumps every reading, quiz, and assignment to nice readable markdown. It also has the browser
+  bot that actually submits stuff.
+- 🎓 **LXP Homework** (`apps/web` + `apps/server`) — the web app. It reads what the scraper saved,
+  shows you what's due, and helps you write the answer.
+
+> [!NOTE]
+> No sketchy magic, promise. It's a Playwright login plus a bunch of small scripts talking to the
+> exact same API the website calls. The site is a Nuxt 3 app; the API is the real deal.
+
 ## Table of contents
 
-- [Project at a glance](#project-at-a-glance)
-- [Architecture](#architecture)
-- [End-to-end pipeline](#end-to-end-pipeline)
-- [Repository layout](#repository-layout)
-- [Quick start](#quick-start)
-- [Command reference](#command-reference)
-- [The LXP Homework web app](#the-lxp-homework-web-app)
-- [Tech stack](#tech-stack)
-- [How it works](#how-it-works)
-- [Security & privacy](#security--privacy)
-- [Gotchas](#gotchas)
-- [Documentation map](#documentation-map)
-- [Fair use](#fair-use)
+- [The two halves](#the-two-halves)
+- [How it all fits together](#how-it-all-fits-together)
+- [The whole flow, start to finish](#the-whole-flow-start-to-finish)
+- [What lives where](#what-lives-where)
+- [Getting it running](#getting-it-running)
+- [All the commands](#all-the-commands)
+- [The LXP Homework app](#the-lxp-homework-app)
+- [What it's built with](#what-its-built-with)
+- [How it actually works](#how-it-actually-works)
+- [Staying safe (and private)](#staying-safe-and-private)
+- [Things that will bite you](#things-that-will-bite-you)
+- [Where to read more](#where-to-read-more)
+- [Be cool about it](#be-cool-about-it)
 
 ---
 
-## Project at a glance
+## The two halves
 
 | | |
 |---|---|
-| **What** | A personal toolkit for the **UniFOA / Grupoa LXP** learning platform, reached through Lyceum SSO. |
-| **Core 1** | `packages/portal` — Playwright login + typed API client that scrapes routes, content, and surfaces to markdown/JSON. |
-| **Core 2** | `apps/web` + `apps/server` — the **LXP Homework** web app: task board, deadlines, AI answer drafts, gated submission. |
-| **Data** | `scraped/` (your content, gitignored) → `apps/server/data/*.json` (index, answers, submissions). |
-| **Runtime** | Node ≥ 22 · TypeScript ESM · npm workspaces · one `npm install`, one lockfile. |
-| **Web app** | `npm run web` → <http://localhost:4174> |
-
-> [!NOTE]
-> There is no black magic here — a Playwright login plus small scripts that talk to the **same JSON
-> API the website uses**. The platform is a Nuxt 3 SPA; the API is the real interface.
+| **The scraper** | `packages/portal` — Playwright login + a typed API client. Scrapes routes, content, and account surfaces into markdown/JSON. |
+| **The app** | `apps/web` + `apps/server` — **LXP Homework**: task board, deadlines, AI answer drafts, and (careful) submission. |
+| **The data** | `scraped/` (your stuff, gitignored) → `apps/server/data/*.json` (index, answers, submissions). |
+| **Runs on** | Node ≥ 22 · TypeScript ESM · npm workspaces · one `npm install`, one lockfile. |
+| **Open it at** | `npm run web` → <http://localhost:4174> |
 
 ---
 
-## Architecture
+## How it all fits together
 
 ```mermaid
 flowchart LR
-    subgraph External["🌐 External systems"]
+    subgraph External["🌐 Out there on the internet"]
         LY["Lyceum<br/>SSO login"]
         LXP["Grupoa LXP<br/>Nuxt 3 SPA"]
         API["Grupoa JSON API"]
     end
 
-    subgraph Portal["CORE 1 · packages/portal"]
+    subgraph Portal["The scraper · packages/portal"]
         PW["Playwright<br/>session"]
         CL["Typed API<br/>client"]
         SCR["Scrapers<br/>content · routes · surfaces"]
     end
 
-    subgraph App["CORE 2 · apps/"]
+    subgraph App["The app · apps/"]
         WEB["apps/web<br/>React UI"]
         SRV["apps/server<br/>index · AI · submit"]
     end
@@ -92,23 +101,17 @@ flowchart LR
     SCR -->|submit| LXP
 ```
 
-**The two cores**
+**Why two halves and not one big thing?** Mostly so the credentials stay in one place:
 
-| Core | Package | Responsibility |
-|---|---|---|
-| **Portal toolkit** | `packages/portal` | Authenticates through Lyceum SSO, extracts the single-use LXP bearer token, and drives the JSON API directly to scrape course content, routes, and account surfaces. It also hosts the gated **submit runner** (Playwright) that writes back to the portal. |
-| **LXP Homework** | `apps/web` + `apps/server` | Normalizes the scraped tree into an exercise index, serves the React UI, generates pt-BR answer drafts with OpenAI, and bridges submissions to the portal runner. |
-
-**Why it's split this way**
-
-- The scraper owns **all browser + credentials logic**. The web app never sees portal credentials.
-- `scraped/` is the clean seam between them: the scraper writes it, the app reads it.
-- Writes (quiz answers, file uploads) are the only portal mutations and always go through the
+- The scraper is the only part that touches a browser and your portal password.
+- The web app never, ever sees your portal login.
+- `scraped/` is the handoff: the scraper writes it, the app reads it.
+- The only time we *write* to the portal (answering a quiz, uploading a file) it goes through the
   Playwright runner in `packages/portal` — never a raw `fetch`.
 
 ---
 
-## End-to-end pipeline
+## The whole flow, start to finish
 
 ```mermaid
 sequenceDiagram
@@ -147,26 +150,26 @@ sequenceDiagram
 
 ---
 
-## Repository layout
+## What lives where
 
 ```
 lxp-toolkit/
 ├── packages/
-│   └── portal/                     # CORE 1 — reverse-engineering toolkit
+│   └── portal/                     # the scraper
 │       ├── src/                    #   auth · session · client · network · content · actions
 │       ├── scripts/                #   dump · dump-surfaces · crawl-routes · capture-api · submit-task
-│       └── docs/                   #   human reverse-engineering notes (auth, API, topic types, gaps)
+│       └── docs/                   #   the reverse-engineering notes
 │
 ├── apps/
-│   ├── web/                        # CORE 2 — React UI (main product)
+│   ├── web/                        # the React UI (the fun part)
 │   │   └── src/                    #   pages · components · lib
-│   └── server/                     # CORE 2 — Node backend
+│   └── server/                     # the backend
 │       ├── src/                    #   build · view · prompt · ai · send · config
 │       ├── server/                 #   HTTP API + static server (port 4174)
 │       ├── config/                 #   ai-config.json (committed) · profile/overrides (gitignored)
 │       └── data/                   #   exercises.json · answers.json · submissions.json (gitignored)
 │
-├── agent-docs/                     # distilled knowledge base for AI agents
+├── agent-docs/                     # notes for AI agents working on this repo
 ├── scraped/                        # YOUR scraped content + raw captures (gitignored)
 ├── package.json                    # workspace root — one install, one lockfile
 └── README.md
@@ -174,46 +177,46 @@ lxp-toolkit/
 
 ---
 
-## Quick start
+## Getting it running
 
 > [!IMPORTANT]
-> Run every command from the **repository root**. They delegate to the correct workspace.
+> Run everything from the **repo root**. The commands know where to go from there.
 
-### 1. Install
+### 1. Install the stuff
 
 ```bash
 npm install
 npx playwright install chromium
 ```
 
-### 2. Configure
+### 2. Add your secrets
 
 ```bash
-cp packages/portal/.env.example packages/portal/.env   # portal credentials
-cp apps/server/.env.example apps/server/.env           # OpenAI key
+cp packages/portal/.env.example packages/portal/.env   # your portal login
+cp apps/server/.env.example apps/server/.env           # your OpenAI key
 ```
 
-`packages/portal/.env` — your portal login:
+In `packages/portal/.env`:
 
 ```ini
 LXP_USERNAME=seu_ra
 LXP_PASSWORD=sua_senha
 ```
 
-`apps/server/.env` — the AI key (everything else has sensible defaults):
+In `apps/server/.env` — just the key, everything else already has good defaults:
 
 ```ini
 OPENAI_API_KEY=sk-...
 ```
 
-### 3. Scrape your content
+### 3. Grab your content
 
 ```bash
 npm run dump            # courses, quizzes, uploads + attachments → scraped/
 npm run dump-surfaces   # grades, calendar, notices, messages
 ```
 
-### 4. Run the web app
+### 4. Fire up the app
 
 ```bash
 npm run index:web       # build the exercise index
@@ -222,140 +225,138 @@ npm run web             # build + serve → http://localhost:4174
 
 ---
 
-## Command reference
+## All the commands
 
-### Portal toolkit (`packages/portal`)
+### The scraper (`packages/portal`)
 
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `npm run login` | Interactive login → saves a session to `data/storageState.json` (legacy; scripts re-login each run). |
-| `npm run dump` | Scrape all course content + download attachments → `scraped/courses/**`, `scraped/raw/content-tree.json`. |
-| `npm run dump-surfaces` | Scrape grades, calendar, notices, messages, achievements, communities, LTI → `scraped/*.md`. |
-| `npm run crawl-routes` | Crawl SPA routes via client-side navigation → `scraped/routes/**`, `scraped/portal-map.md`. |
-| `npm run capture-api` | Record network traffic → `scraped/api-captured.md`, `scraped/raw/api-calls.json`. |
-| `npm run agent` | List actionable items; `--read` / `--complete` auto-completes markable content. |
-| `npm run index` | Build the offline homework index → `scraped/raw/homework-index.json`. |
-| `npm run homework` | Friendly terminal board of open homework, deadline-first. |
-| `npm run exercises -- <itemId>` | Print one quiz's questions or an upload's info. |
-| `npm run submit-task` | Gated browser runner that submits an answer to the portal (spawned by the server). |
+| `npm run login` | Logs in interactively → `data/storageState.json` (legacy — scripts re-login anyway). |
+| `npm run dump` | Scrapes all course content + downloads attachments → `scraped/courses/**`. |
+| `npm run dump-surfaces` | Grades, calendar, notices, messages, achievements, communities, LTI → `scraped/*.md`. |
+| `npm run crawl-routes` | Crawls SPA routes via client-side nav → `scraped/routes/**`. |
+| `npm run capture-api` | Records network traffic → `scraped/api-captured.md`. |
+| `npm run agent` | Lists actionable items; `--read` / `--complete` auto-marks the markable ones. |
+| `npm run index` | Builds the offline homework index → `scraped/raw/homework-index.json`. |
+| `npm run homework` | A terminal board of what's due, deadline-first. |
+| `npm run exercises -- <itemId>` | Prints one quiz's questions or an upload's info. |
+| `npm run submit-task` | The gated browser bot that submits to the portal (the server spawns it). |
 
-### LXP Homework (`apps/server` + `apps/web`)
+### The app (`apps/server` + `apps/web`)
 
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `npm run index:web` | Normalize `scraped/` → `apps/server/data/exercises.json`. |
-| `npm run web` | Build `apps/web` and serve it via `apps/server` → <http://localhost:4174>. |
+| `npm run index:web` | Turns `scraped/` into `apps/server/data/exercises.json`. |
+| `npm run web` | Builds the UI and serves it → <http://localhost:4174>. |
 | `npm run web:dev` | Vite dev server with hot reload. |
 
-### Workspace
+### Handy ones
 
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `npm run typecheck` | Type-check every workspace. |
-| `npm run build` | Build every workspace. |
+| `npm run typecheck` | Type-checks everything. |
+| `npm run build` | Builds everything. |
 
 ---
 
-## The LXP Homework web app
+## The LXP Homework app
 
-| Area | Highlights |
+| Bit | What's cool about it |
 |---|---|
-| **Task board** | Every upload (`Tarefa`) and quiz (`Questionário`) ordered by deadline, with done / expired / due-soon badges and quick actions. |
-| **Activity detail** (`/tarefa/:id`) | Instructions, local + remote files (PDFs preview inline), quiz questions, and per-activity AI instructions. |
-| **Answer workbench** | Streams the AI draft, keeps a **version history**, and lets you restore any previous version. |
-| **Uploads** | Deliver as **direct text**, **`.txt`**, or **`.pdf`** — preview or download the exact artifact before sending. |
-| **Quizzes** | The AI returns structured selections (`Q<id>: <letter>`) that map onto the portal's options. |
-| **Content refresh** | The **Atualizar** button re-scrapes the portal and rebuilds the list, with live progress. |
-| **Profile & AI settings** | Set your name/matrícula and edit the structured writing rules, model, temperature, and token budget. |
+| **Task board** | Every `Tarefa` and `Questionário` sorted by deadline, with done / expired / due-soon badges. |
+| **Activity page** (`/tarefa/:id`) | Instructions, files (PDFs preview right there), quiz questions, and per-activity AI notes. |
+| **Answer workbench** | Streams the draft, keeps a **version history**, lets you restore any old version. |
+| **Uploads** | Send as **text**, **`.txt`**, or **`.pdf`** — and preview/download the exact file first. |
+| **Quizzes** | The AI answers in `Q<id>: <letter>` and it maps onto the portal's options. |
+| **Atualizar** | Re-scrapes the portal and rebuilds the list, with live progress. |
+| **Profile & settings** | Your name/matrícula, the writing rules, model, temperature, token budget. |
 
-See [`apps/server/README.md`](apps/server/README.md) for the full feature tour.
+Want the long version? It's in [`apps/server/README.md`](apps/server/README.md).
 
 ---
 
-## Tech stack
+## What it's built with
 
 | Layer | Tools |
 |---|---|
 | **Language** | TypeScript (ESM, NodeNext) on Node ≥ 22 |
 | **Monorepo** | npm workspaces (`apps/*`, `packages/*`) |
 | **Scraping** | Playwright, `node-html-markdown`, `zod`, `pino` |
-| **Backend** | Node `http`, OpenAI SDK, `pdf-parse`, LibreOffice (optional, for `.pdf` artifacts) |
+| **Backend** | Node `http`, OpenAI SDK, `pdf-parse`, LibreOffice (optional, for `.pdf`) |
 | **Frontend** | React 18, Vite 5, Tailwind v4, shadcn / Base UI, lucide-react, react-router, sonner |
-| **Runtime** | `tsx` (no build step for scripts) |
+| **Runner** | `tsx` (no build step for scripts) |
 
 ---
 
-## How it works
+## How it actually works
 
-### Portal toolkit
+### The scraper
 
-1. **Authenticate** — Playwright logs into `unifoa.lyceum.com.br`, follows the SSO exchange, and
-   reads `plataforma_accessToken` from `localStorage`. The token is **single-use / single-page
-   session**, so every run logs in fresh.
-2. **Drive the API** — a typed `ApiClient` calls `api.plataforma.grupoa.education` with the exact
-   headers the SPA uses (retry/backoff included).
-3. **Scrape & classify** — the content tree is walked, every topic is classified by `topicTypeId`
-   (reading, quiz, file upload, link, …), HTML is converted to markdown, and attachments are
-   downloaded.
-4. **Submit (gated)** — writes go through a real browser: `submit-task.ts` navigates via
-   `$nuxt.$router.push()`, fills/selects, and confirms.
+1. **Log in** — Playwright signs into `unifoa.lyceum.com.br`, follows the SSO dance, and grabs
+   `plataforma_accessToken` from `localStorage`. That token is **single-use / one page session**, so
+   every run logs in fresh. Yes, every time. That's normal.
+2. **Talk to the API** — a typed `ApiClient` calls `api.plataforma.grupoa.education` with the exact
+   headers the site uses (with retry/backoff so we don't get yelled at).
+3. **Scrape & sort it out** — walks the content tree, classifies each topic by `topicTypeId`
+   (reading, quiz, upload, link…), converts the HTML to markdown, and downloads the attachments.
+4. **Submit (carefully)** — writes go through a real browser: `submit-task.ts` navigates with
+   `$nuxt.$router.push()`, fills or selects the right thing, and confirms.
 
-### Assistant
+### The app
 
-1. **Index** — `build.ts` turns `scraped/raw/content-tree.json` into `data/exercises.json`,
-   computing `status` (`open` / `expired` / `done`) and `daysLeft`.
-2. **Compose** — `prompt.ts` builds two messages: a `system` message from structured `style` rules
-   and a `user` message with the selected activity content. No `===` markers are sent, so the model
-   has nothing to echo.
+1. **Index** — `build.ts` turns `scraped/raw/content-tree.json` into `data/exercises.json`, working
+   out `status` (`open` / `expired` / `done`) and `daysLeft`.
+2. **Compose** — `prompt.ts` builds two messages: a `system` one from the structured `style` rules,
+   and a `user` one with just the activity content. No `===` markers get sent, so the model has
+   nothing to parrot back.
 3. **Generate** — `ai.ts` streams a pt-BR draft from OpenAI and saves it as a new version in
    `data/answers.json`.
-4. **Submit** — `send.ts` writes a request JSON and spawns the portal runner, then records the
-   outcome in `data/submissions.json`.
+4. **Send** — `send.ts` writes a request file, spawns the portal runner, and logs the result in
+   `data/submissions.json`.
 
 ---
 
-## Security & privacy
+## Staying safe (and private)
 
-- 🔒 `scraped/` holds **your account's data** and is gitignored. Each user generates their own.
+- 🔒 `scraped/` is **your account's data** and it's gitignored. Everyone generates their own.
 - 🔑 Credentials live only in `packages/portal/.env`; the OpenAI key only in `apps/server/.env`.
-  Both are gitignored — never commit them.
-- 🧼 Logs redact passwords, tokens, and `authorization` headers (`pino` redaction).
-- 🌐 The web app **never** receives portal credentials. Submissions are spawned server-side.
-- ✋ Nothing is ever auto-submitted: every write requires an explicit confirmation dialog.
+  Both gitignored. Don't commit them. Ever.
+- 🧼 Logs redact passwords, tokens, and `authorization` headers.
+- 🌐 The web app **never** gets your portal credentials — submissions are spawned server-side.
+- ✋ Nothing auto-submits. Every write needs you to click confirm.
 
 ---
 
-## Gotchas
+## Things that will bite you
 
-- 🔑 **Single-use token** — the login token dies on a full page reload. Navigate the SPA with
+- 🔑 **The token is single-use.** A full page reload kills it. Navigate with
   `$nuxt.$router.push()`, never `page.goto`.
-- 🐢 **Keep request volume low** — repeated logins can trip rate-limits or a reCAPTCHA.
-- 🧩 **`tsx` + `page.evaluate`** throws `__name is not defined`; `createSession()` injects a shim
-  automatically.
-- 🛡️ **AWS WAF** fronts the API — GET reads work with the bearer token; POST/PUT may need a real
-  browser to solve the challenge.
-- 📄 **Upload formats** — the portal's uploader accepts `txt`/`pdf`/Office/archives but **not**
-  `.md`; the app converts drafts to `.txt` or `.pdf` for you.
+- 🐢 **Take it easy.** Repeated logins can trip rate-limits or a reCAPTCHA.
+- 🧩 **`tsx` + `page.evaluate`** throws `__name is not defined`; `createSession()` patches that for
+  you.
+- 🛡️ **AWS WAF** guards the API. GET reads are fine with the token; POST/PUT may need a real browser.
+- 📄 **Upload formats:** the portal takes `txt`/`pdf`/Office/archives but **not** `.md`. The app
+  converts drafts to `.txt` or `.pdf` so you don't have to think about it.
 
 ---
 
-## Documentation map
+## Where to read more
 
-| Doc | Contents |
+| Doc | What's in it |
 |---|---|
-| [`packages/portal/docs/README.md`](packages/portal/docs/README.md) | Reverse-engineering index. |
+| [`packages/portal/docs/README.md`](packages/portal/docs/README.md) | The reverse-engineering index. |
 | [`packages/portal/docs/auth.md`](packages/portal/docs/auth.md) | SSO flow, token lifecycle, headers. |
-| [`packages/portal/docs/api-endpoints.md`](packages/portal/docs/api-endpoints.md) | Every discovered endpoint. |
-| [`packages/portal/docs/topic-types.md`](packages/portal/docs/topic-types.md) | `topicTypeId` → content kind mapping. |
-| [`packages/portal/docs/gaps.md`](packages/portal/docs/gaps.md) | Write-side gap analysis. |
-| [`apps/server/README.md`](apps/server/README.md) | The web app's full feature tour. |
+| [`packages/portal/docs/api-endpoints.md`](packages/portal/docs/api-endpoints.md) | Every endpoint we found. |
+| [`packages/portal/docs/topic-types.md`](packages/portal/docs/topic-types.md) | `topicTypeId` → content kind. |
+| [`packages/portal/docs/gaps.md`](packages/portal/docs/gaps.md) | What's still unknown on the write side. |
+| [`apps/server/README.md`](apps/server/README.md) | The app's full feature tour. |
 | [`apps/server/docs/ARQUITETURA.md`](apps/server/docs/ARQUITETURA.md) | How the app's pieces connect. |
-| [`agent-docs/00-INDEX.md`](agent-docs/00-INDEX.md) | Distilled knowledge base for AI agents. |
+| [`agent-docs/00-INDEX.md`](agent-docs/00-INDEX.md) | Notes for AI agents working here. |
 
 ---
 
-## Fair use
+## Be cool about it
 
-This toolkit reads **your own** academic data for studying. Know what your institution allows, and
-don't use it to fake completion of coursework. Auto-submitting is gated behind explicit
-confirmation for exactly this reason — the student stands behind what they send.
+This thing reads **your own** academic data, for studying. Know what your school allows, and don't
+use it to fake your way through coursework. That's exactly why submitting is locked behind a
+confirmation dialog — you're the one standing behind what goes in.
