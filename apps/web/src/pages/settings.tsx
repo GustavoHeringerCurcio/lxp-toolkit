@@ -21,6 +21,7 @@ import { saveAiConfig, saveProfile } from "@/api";
 import { useAppData } from "@/lib/app-state";
 import { BackLink } from "@/components/app-sidebar";
 import { OrganizationSection } from "@/components/organization-section";
+import { ProjectSourceSection } from "@/components/project-source-section";
 import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_STYLE, renderStylePreview } from "@/lib/prompt-preview";
 import {
   ESTIMATED_GENERATION_TOKENS,
@@ -353,6 +354,7 @@ export function SettingsPage() {
         <Card icon={<Building2 className="size-4 text-brand" aria-hidden />} title={t("org.title")}>
           <p className="text-xs text-muted-foreground">{t("org.desc")}</p>
           <OrganizationSection />
+          <ProjectSourceSection />
         </Card>
       )}
 

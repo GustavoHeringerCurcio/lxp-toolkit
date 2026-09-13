@@ -13,6 +13,9 @@ import type {
   ProfessorLink,
   ProjectProfileDto,
   ProjectProfileMode,
+  ProjectReadmeStatus,
+  ProjectSourceFile,
+  ProjectSourceState,
   QuizSelection,
   TrainingQuiz,
   TrainingQuizMode,
@@ -95,6 +98,62 @@ export async function deleteProfessorPhoto(professorId: number): Promise<void> {
 export async function fetchOrganizations(): Promise<OrganizationDto[]> {
   const body = await req<{ organizations: OrganizationDto[] }>("/api/organizations");
   return body.organizations ?? [];
+}
+
+// ── External project source (Ajustes → Organização) ─────────────────────────
+
+export interface ProjectSourceStateDto {
+  source: ProjectSourceState;
+  files: ProjectSourceFile[];
+}
+
+export async function fetchProjectSource(): Promise<ProjectSourceStateDto> {
+  const body = await req<{ source: ProjectSourceState; files: ProjectSourceFile[] }>("/api/project-source");
+  return { source: body.source, files: body.files ?? [] };
+}
+
+export interface SaveProjectSourceInput {
+  title?: string;
+  githubUrl?: string;
+  notes?: string;
+}
+
+export async function saveProjectSource(input: SaveProjectSourceInput): Promise<ProjectSourceState> {
+  const res = (await post("/api/project-source", input)) as { source: ProjectSourceState };
+  return res.source;
+}
+
+export interface ProjectReadmeResult {
+  ok: boolean;
+  status: ProjectReadmeStatus;
+  detail: string;
+  source: ProjectSourceState;
+}
+
+/** Fetch the repo README server-side and cache it as project context. */
+export async function fetchProjectReadme(githubUrl?: string): Promise<ProjectReadmeResult> {
+  return (await post("/api/project-source/fetch", { githubUrl })) as ProjectReadmeResult;
+}
+
+/** Upload a project file (base64) and get its extracted-text status. */
+export async function uploadProjectFile(file: File): Promise<ProjectSourceFile> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+  const res = (await post("/api/project-source/file", {
+    filename: file.name,
+    mime: file.type || null,
+    data: dataUrl,
+  })) as { ok?: boolean; file?: ProjectSourceFile; error?: string };
+  if (!res.ok || !res.file) throw new Error(res.error ?? "upload failed");
+  return res.file;
+}
+
+export async function deleteProjectFile(id: number): Promise<void> {
+  await req(`/api/project-source/file/${id}`, { method: "DELETE" });
 }
 
 export interface AiRequestSaveResult {

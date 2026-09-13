@@ -21,7 +21,11 @@ import type {
   ProfessorLink,
   ProjectProfile,
   ProjectProfileMode,
+  ProjectReadmeStatus,
   ProjectSource,
+  ProjectSourceFile,
+  ProjectSourceFileStatus,
+  ProjectSourceState,
   QuizSelection,
   SubmissionEntry,
   Submissions,
@@ -832,4 +836,204 @@ export async function saveActivityProject(
   const saved = await getActivityProject(itemId);
   if (!saved) throw new Error(`falha ao salvar contexto do item ${itemId}`);
   return saved;
+}
+
+// ── External project source (Ajustes → Organização) ─────────────────────────
+
+interface ProjectSourceRow {
+  title: string | null;
+  github_url: string | null;
+  notes: string | null;
+  readme_text: string;
+  readme_status: string;
+  readme_fetched_at: Date | null;
+  updated_at: Date | null;
+}
+
+const PROJECT_SOURCE_COLS =
+  "title, github_url, notes, readme_text, readme_status, readme_fetched_at, updated_at";
+
+function toProjectSourceState(r: ProjectSourceRow | undefined): ProjectSourceState {
+  if (!r) {
+    return {
+      title: "",
+      githubUrl: "",
+      notes: "",
+      readmeText: "",
+      readmeStatus: "none",
+      readmeFetchedAt: null,
+      updatedAt: null,
+    };
+  }
+  const readmeStatus: ProjectReadmeStatus =
+    r.readme_status === "ok" || r.readme_status === "empty" || r.readme_status === "error"
+      ? r.readme_status
+      : "none";
+  return {
+    title: r.title ?? "",
+    githubUrl: r.github_url ?? "",
+    notes: r.notes ?? "",
+    readmeText: r.readme_text ?? "",
+    readmeStatus,
+    readmeFetchedAt: r.readme_fetched_at ? iso(r.readme_fetched_at) : null,
+    updatedAt: r.updated_at ? iso(r.updated_at) : null,
+  };
+}
+
+export async function getProjectSource(): Promise<ProjectSourceState> {
+  const studentId = await getStudentId();
+  const rows = await query<ProjectSourceRow>(
+    `SELECT ${PROJECT_SOURCE_COLS} FROM project_source WHERE student_id = $1`,
+    [studentId],
+  );
+  return toProjectSourceState(rows[0]);
+}
+
+export interface ProjectSourceInput {
+  title?: string;
+  githubUrl?: string;
+  notes?: string;
+}
+
+export async function saveProjectSource(input: ProjectSourceInput): Promise<ProjectSourceState> {
+  const studentId = await getStudentId();
+  const existing = await getProjectSource();
+  const title = input.title ?? existing.title;
+  const githubUrl = input.githubUrl ?? existing.githubUrl;
+  const notes = input.notes ?? existing.notes;
+  await query(
+    `INSERT INTO project_source(student_id, title, github_url, notes, updated_at)
+     VALUES ($1,$2,$3,$4, now())
+     ON CONFLICT (student_id) DO UPDATE SET
+       title = EXCLUDED.title,
+       github_url = EXCLUDED.github_url,
+       notes = EXCLUDED.notes,
+       updated_at = now()`,
+    [studentId, title, githubUrl, notes],
+  );
+  return getProjectSource();
+}
+
+export async function saveProjectSourceReadme(
+  text: string,
+  status: ProjectReadmeStatus,
+): Promise<ProjectSourceState> {
+  const studentId = await getStudentId();
+  await query(
+    `INSERT INTO project_source(student_id, readme_text, readme_status, readme_fetched_at, updated_at)
+     VALUES ($1,$2,$3, now(), now())
+     ON CONFLICT (student_id) DO UPDATE SET
+       readme_text = EXCLUDED.readme_text,
+       readme_status = EXCLUDED.readme_status,
+       readme_fetched_at = now(),
+       updated_at = now()`,
+    [studentId, text, status],
+  );
+  return getProjectSource();
+}
+
+interface ProjectSourceFileRow {
+  id: string;
+  filename: string;
+  mime: string | null;
+  size_bytes: string;
+  status: string;
+  char_count: number;
+  created_at: Date;
+}
+
+function toProjectSourceFile(r: ProjectSourceFileRow): ProjectSourceFile {
+  const status: ProjectSourceFileStatus =
+    r.status === "ok" || r.status === "unsupported" || r.status === "error" ? r.status : "empty";
+  return {
+    id: Number(r.id),
+    filename: r.filename,
+    mime: r.mime,
+    sizeBytes: Number(r.size_bytes),
+    status,
+    charCount: r.char_count,
+    createdAt: iso(r.created_at),
+  };
+}
+
+export async function listProjectSourceFiles(): Promise<ProjectSourceFile[]> {
+  const studentId = await getStudentId();
+  const rows = await query<ProjectSourceFileRow>(
+    `SELECT id, filename, mime, size_bytes, status, char_count, created_at
+       FROM project_source_file WHERE student_id = $1 ORDER BY id`,
+    [studentId],
+  );
+  return rows.map(toProjectSourceFile);
+}
+
+export interface ProjectSourceFileInput {
+  filename: string;
+  mime: string | null;
+  sizeBytes: number;
+  storedPath: string;
+  text: string;
+  status: ProjectSourceFileStatus;
+  contentHash: string | null;
+}
+
+export async function addProjectSourceFile(input: ProjectSourceFileInput): Promise<ProjectSourceFile> {
+  const studentId = await getStudentId();
+  const rows = await query<ProjectSourceFileRow>(
+    `INSERT INTO project_source_file(student_id, filename, mime, size_bytes, stored_path, text, char_count, status, content_hash)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING id, filename, mime, size_bytes, status, char_count, created_at`,
+    [
+      studentId,
+      input.filename,
+      input.mime,
+      input.sizeBytes,
+      input.storedPath,
+      input.text,
+      input.text.length,
+      input.status,
+      input.contentHash,
+    ],
+  );
+  return toProjectSourceFile(rows[0]);
+}
+
+export async function getProjectSourceFilePath(id: number): Promise<string | null> {
+  const studentId = await getStudentId();
+  const rows = await query<{ stored_path: string }>(
+    "SELECT stored_path FROM project_source_file WHERE id = $1 AND student_id = $2",
+    [id, studentId],
+  );
+  return rows[0]?.stored_path ?? null;
+}
+
+export async function deleteProjectSourceFile(id: number): Promise<boolean> {
+  const studentId = await getStudentId();
+  const rows = await query<{ id: string }>(
+    "DELETE FROM project_source_file WHERE id = $1 AND student_id = $2 RETURNING id",
+    [id, studentId],
+  );
+  return rows.length > 0;
+}
+
+/** Concatenate extracted text from the student's project files, capped. */
+export async function projectSourceText(maxChars: number): Promise<string> {
+  const studentId = await getStudentId();
+  const rows = await query<{ filename: string; text: string }>(
+    `SELECT filename, text FROM project_source_file
+      WHERE student_id = $1 AND status = 'ok' AND text <> '' ORDER BY id`,
+    [studentId],
+  );
+  const chunks: string[] = [];
+  let total = 0;
+  for (const r of rows) {
+    const block = `--- ${r.filename} ---\n${r.text}`;
+    if (total + block.length > maxChars) {
+      const remaining = maxChars - total;
+      if (remaining > 200) chunks.push(block.slice(0, remaining));
+      break;
+    }
+    chunks.push(block);
+    total += block.length;
+  }
+  return chunks.join("\n\n");
 }

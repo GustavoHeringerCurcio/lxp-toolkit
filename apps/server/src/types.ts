@@ -238,6 +238,33 @@ export interface ActivityProject {
   updatedAt: string;
 }
 
+// ── External project source (Ajustes → Organização) ─────────────────────────
+
+export type ProjectSourceFileStatus = "ok" | "empty" | "unsupported" | "error";
+export type ProjectReadmeStatus = "ok" | "empty" | "error" | "none";
+
+/** Global per-student project context: repo link + notes + fetched README. */
+export interface ProjectSourceState {
+  title: string;
+  githubUrl: string;
+  notes: string;
+  readmeText: string;
+  readmeStatus: ProjectReadmeStatus;
+  readmeFetchedAt: string | null;
+  updatedAt: string | null;
+}
+
+/** One uploaded project file with its extracted text status. */
+export interface ProjectSourceFile {
+  id: number;
+  filename: string;
+  mime: string | null;
+  sizeBytes: number;
+  status: ProjectSourceFileStatus;
+  charCount: number;
+  createdAt: string;
+}
+
 export interface AiConfig {
   provider: "openai";
   model: string;

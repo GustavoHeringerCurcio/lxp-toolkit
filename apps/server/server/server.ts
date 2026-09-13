@@ -21,6 +21,8 @@ import {
   getProfessorLinks,
   getProfile,
   getProjectProfile,
+  getProjectSource,
+  listProjectSourceFiles,
   recordAiRun,
   restoreAnswerVersion,
   saveActivityProject,
@@ -31,6 +33,8 @@ import {
   saveProfessorLink,
   saveProfile,
   saveProjectProfile,
+  saveProjectSource,
+  saveProjectSourceReadme,
   saveTag,
 } from "../src/store.js";
 import {
@@ -78,6 +82,13 @@ import { generateDiagramSpec, renderDiagramPng } from "../src/diagram.js";
 import { parseUseCases, type UseCase } from "../src/usecase.js";
 import { parseLinkedinUrl } from "../src/linkedin.js";
 import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/organizations.js";
+import {
+  PROJECT_FILE_MAX_BYTES,
+  addProjectFile,
+  buildExternalProjectBlock,
+  fetchGithubReadme,
+  removeProjectFile,
+} from "../src/project-source.js";
 
 const DIST = path.join(ASSISTANT_DIR, "..", "web", "dist");
 const PORT = Number(process.env.PORT || 4174);
@@ -276,10 +287,12 @@ async function generateAndSave(
 
   // Ground the generation in the activity's project context (when enabled).
   let projectBlock = "";
+  let externalBlock = "";
   if (cfg.projectAutoDetect !== false && isAnswerable(view)) {
     try {
       const analysis = await analyzeActivity(cfg, view, { notes: view.notes ?? "" });
       if (analysis.effective) projectBlock = buildProjectInstructionBlock(analysis.effective);
+      if (analysis.needsProject) externalBlock = await buildExternalProjectBlock();
     } catch {
       /* project context is best-effort */
     }
@@ -290,6 +303,7 @@ async function generateAndSave(
   const extra = composeEffectiveInstructions(
     view.aiRequestJson,
     projectBlock,
+    externalBlock,
     template ? "" : projectFormatHint(view),
   );
 
@@ -664,6 +678,18 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { activity });
     }
 
+    // external project source (Ajustes → Organização): repo + uploaded files
+    if (url === "/api/project-source" && method === "GET") {
+      const [source, files] = await Promise.all([getProjectSource(), listProjectSourceFiles()]);
+      return json(res, 200, { source, files });
+    }
+    if (url.startsWith("/api/project-source/file/") && method === "DELETE") {
+      const id = Number(url.split("/")[4]);
+      if (!id) return json(res, 400, { error: "id obrigatório" });
+      const removed = await removeProjectFile(id);
+      return json(res, 200, { ok: removed });
+    }
+
     if (method === "POST") {
       if (url === "/api/note") {
         const b = await readBody(req);
@@ -728,6 +754,47 @@ const server = createServer(async (req, res) => {
           source: "manual",
         });
         return json(res, 200, { ok: true, activity });
+      }
+      if (url === "/api/project-source") {
+        // Manual edit of the global project source (title/repo/notes).
+        const b = await readBody(req);
+        const source = await saveProjectSource({
+          title: b.title != null ? String(b.title) : undefined,
+          githubUrl: b.githubUrl != null ? String(b.githubUrl) : undefined,
+          notes: b.notes != null ? String(b.notes) : undefined,
+        });
+        return json(res, 200, { ok: true, source });
+      }
+      if (url === "/api/project-source/fetch") {
+        // Fetch the repo README (public; GITHUB_TOKEN enables private repos).
+        const b = await readBody(req);
+        const githubUrl = b.githubUrl != null ? String(b.githubUrl).trim() : (await getProjectSource()).githubUrl;
+        if (!githubUrl) return json(res, 400, { error: "Informe a URL do repositório." });
+        const result = await fetchGithubReadme(githubUrl);
+        const source = await saveProjectSourceReadme(result.text, result.status);
+        return json(res, 200, {
+          ok: result.status === "ok",
+          status: result.status,
+          detail: result.detail,
+          source,
+        });
+      }
+      if (url === "/api/project-source/file") {
+        // Receive a project file as base64 and extract its text (best-effort).
+        const b = await readBody(req);
+        const filename = String(b.filename ?? "").trim();
+        if (!filename) return json(res, 400, { error: "filename obrigatório" });
+        const rawData = String(b.data ?? "");
+        const comma = rawData.indexOf(",");
+        const buf = Buffer.from(comma >= 0 ? rawData.slice(comma + 1) : rawData, "base64");
+        if (buf.length === 0) return json(res, 400, { error: "Arquivo vazio." });
+        if (buf.length > PROJECT_FILE_MAX_BYTES) return json(res, 413, { error: "Arquivo grande demais (máx. 25 MB)." });
+        const file = await addProjectFile({
+          filename,
+          mime: b.mime != null ? String(b.mime) : null,
+          data: buf,
+        });
+        return json(res, 200, { ok: true, file });
       }
       if (url === "/api/tag") {
         // set/clear a manual anomaly tag (ghost | print | anomalia | null)
