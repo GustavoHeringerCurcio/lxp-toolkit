@@ -3,6 +3,7 @@ import { DEFAULT_ACTIVITY_SECTIONS } from "./config.js";
 import { kindLabel } from "./kind.js";
 import { extractFileText } from "./pdf.js";
 import { findTemplateDocx, type TemplateField } from "./template.js";
+import { buildTemplateFillContract } from "./usecase.js";
 
 export function isPlaceholder(value: string): boolean {
   return value.includes("{");
@@ -308,6 +309,7 @@ export async function buildMessages(
   sections: AiActivitySections,
   extraInstructions = "",
   notes = "",
+  opts: { wantsTemplate?: boolean; templateFields?: string[]; projectBlock?: string } = {},
 ): Promise<ChatMessage[]> {
   // Ghost/print tasks have no question: never send them to the model.
   if (e.flavor !== "question") return [];
@@ -316,23 +318,30 @@ export async function buildMessages(
   const messages: ChatMessage[] = [];
   const hasTemplate = Boolean(vars.modelo.trim());
 
+  // Generic "fill the professor's template" mode: the cheap model extracted the
+  // field labels; fall back to the professor's .docx labels when present.
+  const detectedFields = (opts.templateFields ?? []).map((f) => f.trim()).filter(Boolean);
+  const docxFields = hasTemplate
+    ? vars.modelo.split("\n").map((f) => f.trim()).filter(Boolean)
+    : [];
+  const templateFields = detectedFields.length ? detectedFields : docxFields;
+  const useTemplate = opts.wantsTemplate === true || templateFields.length > 0;
+
   // Quiz answers are pure option selections: never prefix them with the
   // student's name/matrícula.
   const effectiveStyle = e.kind === "quiz" ? { ...style, includeIdentity: false } : style;
   const system = renderTemplate(
-    buildStylePrompt(effectiveStyle, extraInstructions, { allowMarkdown: hasTemplate }),
+    buildStylePrompt(effectiveStyle, extraInstructions, { allowMarkdown: false }),
     vars,
   ).trim();
   if (system) messages.push({ role: "system", content: system });
 
   let user = buildActivityPrompt(vars, sections).trim();
-  if (hasTemplate) {
-    user +=
-      `\n\nPreencha o modelo acima para CADA caso de uso identificado no projeto. Formato da resposta:` +
-      `\n- Um bloco por caso de uso, começando por uma linha "## UC-01 — <nome do caso de uso>" (numere UC-01, UC-02, ...).` +
-      `\n- Em seguida, uma linha por campo no formato "<Campo>: <valor>", usando exatamente os nomes de campo do modelo.` +
-      `\n- Em campos com vários passos (ex.: Fluxo Principal), liste cada passo em uma linha seguinte, numerado.` +
-      `\n- Preencha todos os campos e não invente campos novos.`;
+  if (useTemplate) {
+    if (opts.projectBlock?.trim()) {
+      user += `\n\nContexto do projeto (projeto principal do curso):\n${opts.projectBlock.trim()}`;
+    }
+    user += `\n\n${buildTemplateFillContract(templateFields)}`;
   }
   if (e.kind === "quiz" && e.questions.length) {
     user +=

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import {
   clearAnswerHistory,
+  classifyFlavor,
   fetchAnswerState,
   fetchSendConfig,
   fetchSubmission,
@@ -144,7 +145,7 @@ function AnswerPanel({
     // Reset only when the activity changes: a refresh after generating/sending
     // must not wipe the draft or the submission status.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [e.id]);
+  }, [e.id, e.flavor]);
 
   const didAuto = useRef(false);
   useEffect(() => {
@@ -776,13 +777,14 @@ function ForumThread({ forum }: { forum: ForumInfo }) {
 
 export function ExercisePage() {
   const { id } = useParams();
-  const { items, loading, error, reload, refresh } = useAppData();
+  const { items, loading, error, reload, refresh, patchExercise } = useAppData();
   const navigate = useNavigate();
   const { t, locale } = useT();
   const [params, setParams] = useSearchParams();
   const [regenToken, setRegenToken] = useState(0);
   const [focus, setFocus] = useState(false);
   const headerCard = useCardCollapse("resumo");
+  const reviewedRef = useRef<number | null>(null);
 
   const exerciseId = Number(id);
   const e = items.find((x) => x.id === exerciseId) ?? null;
@@ -793,6 +795,31 @@ export function ExercisePage() {
     if (!e && !loading && !error) reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exerciseId, items.length, loading, error]);
+
+  // Lazy AI review: when the heuristic was inconclusive, confirm the flavor once
+  // (cached server-side). Never blocks the page.
+  useEffect(() => {
+    if (!e || !e.needsReview || e.flavorSource === "manual") return;
+    if (reviewedRef.current === e.id) return;
+    reviewedRef.current = e.id;
+    let cancelled = false;
+    void classifyFlavor(e.id)
+      .then((res) => {
+        if (cancelled) return;
+        patchExercise(e.id, {
+          flavor: res.flavor,
+          flavorSource: res.flavorSource,
+          anomalies: res.anomalies,
+          needsReview: false,
+        });
+      })
+      .catch(() => {
+        reviewedRef.current = null;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [e, patchExercise]);
 
   useEffect(() => {
     if (wantsAuto && e) setParams({}, { replace: true });

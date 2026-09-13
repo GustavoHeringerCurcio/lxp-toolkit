@@ -37,6 +37,8 @@ function activity(partial: Partial<ActivityProject> = {}): ActivityProject {
   return {
     contentItemId: 1,
     needsProject: true,
+    wantsTemplate: false,
+    templateFields: [],
     profileMode: "main",
     theme: null,
     atores: [],

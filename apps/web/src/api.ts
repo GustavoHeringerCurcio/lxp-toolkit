@@ -9,6 +9,7 @@ import type {
   AnswerEntry,
   AnswerState,
   ExercisesPayload,
+  FlavorSource,
   OrganizationDto,
   ProfessorLink,
   ProjectProfileDto,
@@ -21,6 +22,7 @@ import type {
   TrainingQuizMode,
   TrainingStats,
   TrainingSubject,
+  UploadFlavor,
 } from "./types";
 import { getLang, localeFor, translate } from "./lib/i18n";
 
@@ -215,6 +217,21 @@ export interface TagSaveResult {
 /** Set/clear a manual anomaly tag (ghost | print | anomalia). */
 export async function saveTag(id: number, tag: string | null): Promise<TagSaveResult> {
   return (await post("/api/tag", { id, tag })) as TagSaveResult;
+}
+
+export interface FlavorClassifyResult {
+  ok: boolean;
+  /** False when the call was skipped (manual tag / already cached / no verdict). */
+  classified: boolean;
+  flavor: UploadFlavor;
+  flavorSource: FlavorSource;
+  anomalies: Anomaly[];
+  reason?: string;
+}
+
+/** Lazy AI review of an ambiguous upload task (called when the task opens). */
+export async function classifyFlavor(id: number): Promise<FlavorClassifyResult> {
+  return (await post("/api/flavor/classify", { id })) as FlavorClassifyResult;
 }
 
 /** Upload a manual screenshot for a print task. Returns the stored file name. */

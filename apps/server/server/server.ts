@@ -29,6 +29,7 @@ import {
   saveAiConfig,
   saveAiRequest,
   saveAnswerVersion,
+  saveAutoFlavor,
   saveNote,
   saveProfessorLink,
   saveProfile,
@@ -52,6 +53,7 @@ import {
 } from "../src/training-store.js";
 import { enrich, type ExerciseView } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
+import { classifyFlavor } from "../src/classify.js";
 import {
   analyzeActivity,
   buildProjectInstructionBlock,
@@ -161,8 +163,13 @@ async function buildFilledDocx(
   const template = await findTemplateDocx(view.files);
   if (!template) return { error: "Esta atividade não tem um modelo .docx para preencher." };
   const labels = template.fields.map((f) => f.label);
+  // Parse against the .docx labels plus the labels the detection model read from
+  // the activity, so the draft and the filled document stay consistent.
+  const activity = await getActivityProject(view.id).catch(() => null);
+  const detected = activity?.templateFields ?? [];
+  const parseLabels = detected.length ? [...new Set([...labels, ...detected])] : labels;
   const profile = await getProfile().catch(() => null);
-  const cases = applyTemplateDefaults(parseUseCases(answer, labels), profile ?? {});
+  const cases = applyTemplateDefaults(parseUseCases(answer, parseLabels), profile ?? {});
   if (!cases.length) {
     return {
       error: "Não foi possível identificar os casos de uso na resposta. Gere a resposta novamente.",
@@ -175,19 +182,20 @@ async function buildFilledDocx(
 }
 
 /**
- * The UML system boundary label: the student's declared project ("Meu projeto")
- * wins, then the course main profile, then the course name as a last resort.
+ * The UML system boundary label: the course main project wins (template
+ * activities are grounded in it), then the student's declared project
+ * ("Meu projeto"), then the course name as a last resort.
  */
 async function resolveSystemName(view: ExerciseView): Promise<string> {
   try {
-    const source = await getProjectSource();
-    if (source.title.trim()) return source.title.trim();
+    const main = await getProjectProfile(view.courseId);
+    if (main?.theme.trim()) return main.theme.trim();
   } catch {
     /* best-effort */
   }
   try {
-    const main = await getProjectProfile(view.courseId);
-    if (main?.theme.trim()) return main.theme.trim();
+    const source = await getProjectSource();
+    if (source.title.trim()) return source.title.trim();
   } catch {
     /* best-effort */
   }
@@ -312,29 +320,54 @@ async function generateAndSave(
   const startedAt = Date.now();
 
   // Ground the generation in the activity's project context (when enabled).
-  // The student's declared project ("Meu projeto") wins over the course profile.
+  // For template-fill activities the course MAIN project is the source of truth;
+  // otherwise the student's declared project ("Meu projeto") still wins.
   let projectBlock = "";
   let externalBlock = "";
+  let wantsTemplate = false;
+  let templateFields: string[] = [];
   if (cfg.projectAutoDetect !== false && isAnswerable(view)) {
     try {
-      const resolved = await resolveProjectContext(cfg, view, { notes: view.notes ?? "" });
-      if (resolved.effective) projectBlock = buildProjectInstructionBlock(resolved.effective);
-      externalBlock = resolved.external;
+      const analysis = await analyzeActivity(cfg, view, { notes: view.notes ?? "" });
+      wantsTemplate = analysis.wantsTemplate;
+      templateFields = analysis.templateFields;
+      if (wantsTemplate) {
+        const main = analysis.mainProfile;
+        if (main) {
+          projectBlock = buildProjectInstructionBlock({
+            theme: main.theme,
+            atores: main.atores,
+            requisitos: main.requisitos,
+            origin: "main",
+          });
+        }
+      } else {
+        const resolved = await resolveProjectContext(cfg, view, { notes: view.notes ?? "" });
+        if (resolved.effective) projectBlock = buildProjectInstructionBlock(resolved.effective);
+        externalBlock = resolved.external;
+      }
     } catch {
       /* project context is best-effort */
     }
   }
-  // A professor-provided model (docx table) supersedes the generic "fill a
-  // Markdown table" hint — the structured contract takes over.
+  // A professor-provided model (docx table) or a detected template supersedes the
+  // generic "fill a Markdown table" hint — the structured contract takes over.
   const template = view.kind === "upload" ? await findTemplateDocx(view.files).catch(() => null) : null;
   const extra = composeEffectiveInstructions(
     view.aiRequestJson,
-    projectBlock,
-    externalBlock,
-    template ? "" : projectFormatHint(view),
+    wantsTemplate ? "" : projectBlock,
+    wantsTemplate ? "" : externalBlock,
+    template || wantsTemplate ? "" : projectFormatHint(view),
   );
 
-  const gen = await generateAnswer(cfg, view, extra, profile, { onDelta: opts.onDelta }, view.notes);
+  const gen = await generateAnswer(
+    cfg,
+    view,
+    extra,
+    profile,
+    { onDelta: opts.onDelta, wantsTemplate, templateFields, projectBlock },
+    view.notes,
+  );
   const selections = view.kind === "quiz" ? parseQuizSelections(gen.text, view.questions) : [];
   const shown = view.kind === "quiz" ? humanizeQuizAnswer(gen.text, view.questions) : gen.text;
   const rec = await saveAnswerVersion(id, shown, "ai", undefined, selections, {
@@ -837,6 +870,55 @@ const server = createServer(async (req, res) => {
           flavor: view.flavor,
           flavorSource: view.flavorSource,
           anomalies: view.anomalies,
+        });
+      }
+      if (url === "/api/flavor/classify") {
+        // Lazy AI review of an ambiguous upload task (called on open).
+        const b = await readBody(req);
+        const id = Number(b.id);
+        if (!id) return json(res, 400, { error: "id required" });
+        const view = await findView(id);
+        if (view.kind !== "upload" && view.kind !== "quiz" && view.kind !== "forum") {
+          return json(res, 400, { error: "Esta atividade não aceita classificação." });
+        }
+        // Manual tag wins; a cached AI verdict is returned as-is.
+        if (view.tag || view.flavorSource === "ai" || !view.needsReview) {
+          return json(res, 200, {
+            ok: true,
+            classified: false,
+            flavor: view.flavor,
+            flavorSource: view.flavorSource,
+            anomalies: view.anomalies,
+          });
+        }
+        const cfg = await getAiConfig();
+        const attachments = [
+          ...view.files.map((f) => f.name),
+          ...view.remoteFiles.map((r) => r.filename ?? r.url),
+        ];
+        const result = await classifyFlavor(cfg, {
+          title: view.title,
+          instructionsText: view.instructionsText,
+          attachments,
+        });
+        if (!result) {
+          return json(res, 200, {
+            ok: true,
+            classified: false,
+            flavor: view.flavor,
+            flavorSource: view.flavorSource,
+            anomalies: view.anomalies,
+          });
+        }
+        await saveAutoFlavor(id, result.flavor, result.reason, result.model);
+        const updated = await findView(id);
+        return json(res, 200, {
+          ok: true,
+          classified: true,
+          flavor: updated.flavor,
+          flavorSource: updated.flavorSource,
+          anomalies: updated.anomalies,
+          reason: result.reason,
         });
       }
       if (url === "/api/profile") {

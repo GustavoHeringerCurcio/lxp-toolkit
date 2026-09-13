@@ -12,6 +12,11 @@ function client(): OpenAI {
 
 export interface GenerateOpts {
   onDelta?: (text: string) => void;
+  /** Generic template-fill mode (professor-provided table/model). */
+  wantsTemplate?: boolean;
+  templateFields?: string[];
+  /** Course main project block to ground a template fill. */
+  projectBlock?: string;
 }
 
 export interface GeneratedAnswer {
@@ -48,6 +53,11 @@ export async function generateAnswer(
     cfg.activitySections,
     resolveExtraInstructions(extraInstructions),
     notes,
+    {
+      wantsTemplate: opts.wantsTemplate,
+      templateFields: opts.templateFields,
+      projectBlock: opts.projectBlock,
+    },
   );
 
   const stream = await client().chat.completions.create({
@@ -155,6 +165,10 @@ export interface ProposedProject {
 
 export interface ActivityRelevance {
   needsProject: boolean;
+  /** True when the activity asks to fill a professor-provided template/table. */
+  wantsTemplate: boolean;
+  /** Field labels the professor wants filled, in order (empty when none). */
+  templateFields: string[];
   confidence: number;
   /** One-line summary of what the activity asks for. */
   intent: string;
@@ -166,8 +180,8 @@ export interface ActivityRelevance {
 
 /**
  * Decide whether an activity requires a project (theme/actors/requirements)
- * and, if so, propose a quick project from the activity text alone. Cheap and
- * conservative: one short JSON completion.
+ * and/or asks the student to fill a professor-provided template/table. Cheap
+ * and conservative: one short JSON completion.
  */
 export async function detectActivityRelevance(
   cfg: AiConfig,
@@ -175,13 +189,22 @@ export async function detectActivityRelevance(
   notes = "",
 ): Promise<ActivityRelevance> {
   const system =
-    "Você decide se uma atividade acadêmica exige que o aluno escolha ou use um PROJETO " +
-    "(tema + atores + requisitos), por exemplo \"preencha a tabela do seu projeto\", " +
-    "\"caso de uso do seu sistema\", \"escolha um tema\", \"com base no projeto do seu grupo\". " +
+    "Você decide duas coisas sobre uma atividade acadêmica. " +
+    "1) Se ela exige que o aluno escolha ou use um PROJETO (tema + atores + requisitos), " +
+    "por exemplo \"preencha a tabela do seu projeto\", \"caso de uso do seu sistema\", " +
+    "\"escolha um tema\", \"com base no projeto do seu grupo\". " +
+    "2) Se ela pede para PREENCHER UM MODELO/TABELA fornecido pelo professor, por exemplo " +
+    "\"preencha a tabela\", \"complete o quadro\", \"siga o modelo\", \"preencha os campos\", " +
+    "\"preencha o quadro abaixo\". " +
     "Responda SOMENTE com um objeto JSON, sem texto ao redor, no formato " +
-    '{"needsProject": boolean, "confidence": number, "intent": string, "reason": string, ' +
+    '{"needsProject": boolean, "wantsTemplate": boolean, "templateFields": string[], ' +
+    '"confidence": number, "intent": string, "reason": string, ' +
     '"proposedTheme": string, "proposedAtores": string[], "proposedRequisitos": string[]}. ' +
-    "`intent` resume em uma frase o que a atividade pede. `proposedTheme`/`proposedAtores`/`proposedRequisitos` " +
+    "`intent` resume em uma frase o que a atividade pede. " +
+    "`wantsTemplate` é true quando a atividade pede para preencher um modelo/tabela com campos definidos. " +
+    "`templateFields` são os RÓTULOS exatos dos campos/colunas que o professor quer preenchidos, na ordem em que aparecem " +
+    "(deixe vazio quando não houver um modelo claro). " +
+    "`proposedTheme`/`proposedAtores`/`proposedRequisitos` " +
     "são um projeto RÁPIDO sugerido pela própria atividade (podem ficar vazios). " +
     "Nunca invente dados e seja conservador: só marque needsProject=true quando a atividade realmente pedir um projeto.";
   const user = [
@@ -194,13 +217,15 @@ export async function detectActivityRelevance(
     .filter(Boolean)
     .join("\n\n");
 
-  const { text, model } = await cheapJsonCompletion(cfg, system, user, 500);
+  const { text, model } = await cheapJsonCompletion(cfg, system, user, 600);
   const parsed = safeParse(text);
   const proposedTheme = str(parsed.proposedTheme);
   const proposedAtores = strArr(parsed.proposedAtores);
   const proposedRequisitos = strArr(parsed.proposedRequisitos);
   return {
     needsProject: parsed.needsProject === true,
+    wantsTemplate: parsed.wantsTemplate === true,
+    templateFields: strArr(parsed.templateFields),
     confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
     intent: str(parsed.intent),
     reason: str(parsed.reason),

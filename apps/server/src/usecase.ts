@@ -97,6 +97,27 @@ export function useCaseName(useCase: UseCase, nameLabel = "Nome do Caso de Uso")
   return useCase.name || useCase.fields[normalizeLabel(nameLabel)] || useCase.id;
 }
 
+/**
+ * Prompt contract for a generic "fill the professor's template" activity. The
+ * field labels are the ones the cheap detection model extracted from the
+ * activity content; when empty, the model is told to follow the model it finds
+ * in the enunciado. Output stays plain text (no Markdown table) so the draft
+ * reads like a normal answer while still being parseable for the .docx fill.
+ */
+export function buildTemplateFillContract(fields: string[] = []): string {
+  const list = fields.map((f) => f.trim()).filter(Boolean);
+  return (
+    "O professor pede para preencher um modelo/tabela. Preencha o modelo para CADA item identificado " +
+    '(por exemplo, um caso de uso por bloco). Comece cada bloco com uma linha "UC-01 — <nome do item>" ' +
+    "(numere UC-01, UC-02, ...). Em seguida, escreva uma linha por campo no formato \"<Campo>: <valor>\"." +
+    (list.length
+      ? ` Use exatamente estes campos, nesta ordem: ${list.join("; ")}.`
+      : " Use os campos do modelo apresentado no enunciado, na ordem em que aparecem.") +
+    " Em campos com vários passos (ex.: fluxos), liste cada passo em uma linha numerada." +
+    " Preencha todos os campos e não invente campos novos. Responda em texto simples, sem tabela Markdown."
+  );
+}
+
 /** A field value that is empty or still a template placeholder, e.g. "(dd/mm/aaaa)". */
 function isBlankOrPlaceholder(value: string | undefined): boolean {
   const v = (value ?? "").trim();

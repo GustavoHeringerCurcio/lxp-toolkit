@@ -5,7 +5,7 @@ export type AnswerSource = "ai" | "manual";
 
 /** What a task actually requires: a real question, a ghost (no question), or a print/screenshot. */
 export type UploadFlavor = "question" | "ghost" | "print";
-export type FlavorSource = "auto" | "manual";
+export type FlavorSource = "auto" | "ai" | "manual";
 
 /** A detected or tagged content anomaly (drives the combined activity badge). */
 export type AnomalyCode = "ghost" | "print";
@@ -100,6 +100,8 @@ export interface Exercise {
   flavorSource: FlavorSource;
   /** Content anomalies detected or tagged for this item (drives the badge). */
   anomalies: Anomaly[];
+  /** Auto-detection was inconclusive: a lazy AI review should confirm the flavor. */
+  needsReview: boolean;
   /** Manual anomaly tag (ghost | print | anomalia), or null. */
   tag: string | null;
   enrollmentId: number | null;

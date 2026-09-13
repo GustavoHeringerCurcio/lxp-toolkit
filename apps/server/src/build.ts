@@ -56,6 +56,44 @@ export function actionKindFor(item: Pick<TreeItem, "kind" | "isRecordProgress">)
 const PRINT_RE =
   /\bprint\b|printar|screenshot|captura de tela|captura|captur[ae]|foto(grafia)?|imagem|recorte/i;
 
+/**
+ * Informational-only items (roteiro, agenda, cronograma, "material de apoio")
+ * that tell the student what will happen without asking for an answer.
+ */
+const INFO_RE =
+  /\broteiro\b|\bcronograma\b|\bagenda\b|\bmaterial de apoio\b|\bsegue alinhamento\b|\bencontro presencial\b/i;
+
+/**
+ * Cues that a task really asks for an answer/deliverable. When present, an
+ * informational-looking item is still treated as a real question.
+ */
+const ANSWER_CUE_RE =
+  /\bresponda\b|\bquest[õo]es\b|\bperguntas?\b|\belabore\b|\bdescreva\b|\bexplique\b|\bjustifique\b|\bpreencha\b|\bresolva\b|\bcalcule\b|\bapresente\b/i;
+
+/** True for roteiro/agenda-style briefs with no explicit ask. */
+export function isInformationalOnly(title: string, html: string | null): boolean {
+  const text = `${title} ${stripHtml(html)}`;
+  return INFO_RE.test(text) && !ANSWER_CUE_RE.test(text);
+}
+
+/**
+ * Whether an upload task is ambiguous enough to warrant a lazy AI review: the
+ * deterministic heuristics found no anomaly, yet the brief carries no explicit
+ * answer cue. Quizzes/forums have structural signals and never need review.
+ */
+export function needsFlavorReview(input: {
+  kind: ContentKind;
+  title: string;
+  html: string | null;
+  anomalies: Anomaly[];
+}): boolean {
+  if (input.kind !== "file_upload") return false;
+  if (input.anomalies.length) return false;
+  const instructions = stripHtml(input.html);
+  if (!instructions) return false;
+  return !ANSWER_CUE_RE.test(`${input.title} ${instructions}`);
+}
+
 /** Badge tone per anomaly code: error = red outline, warn = amber outline. */
 export const ANOMALY_SEVERITY: Record<AnomalyCode, AnomalySeverity> = {
   ghost: "error",
@@ -69,7 +107,8 @@ export function makeAnomaly(code: AnomalyCode): Anomaly {
 /**
  * Detect content anomalies for a task (before any tag override):
  * - `ghost` — no question at all: a task with no upload box, a quiz with zero
- *   questions, or an item with empty instructions and no attachments.
+ *   questions, an item with empty instructions and no attachments, or an
+ *   informational/roteiro brief with no explicit ask.
  * - `print` — the instruction asks for a screenshot/print the student attaches.
  */
 export function detectAnomalies(input: {
@@ -98,6 +137,8 @@ export function detectAnomalies(input: {
 
     const instructions = stripHtml(html);
     if (!instructions && (!attachments || attachments.length === 0)) return [makeAnomaly("ghost")];
+
+    if (isInformationalOnly(title, html)) return [makeAnomaly("ghost")];
     return [];
   }
 
@@ -281,6 +322,12 @@ export function buildExercises(): Exercise[] {
         flavor: flavorFromAnomalies(anomalies),
         flavorSource: "auto",
         anomalies,
+        needsReview: needsFlavorReview({
+          kind: it.kind,
+          title: it.itemTitle,
+          html: it.html,
+          anomalies,
+        }),
         enrollmentId: it.context?.enrollmentId != null ? Number(it.context.enrollmentId) : null,
         isSurvey:
           kind === "quiz" &&
@@ -338,6 +385,7 @@ export function loadExercises(): Exercise[] {
       e.flavorSource = "auto";
     }
     if (!Array.isArray(e.anomalies)) e.anomalies = [];
+    if (typeof e.needsReview !== "boolean") e.needsReview = false;
     const { status, daysLeft: liveDays } = refreshLive(e);
     e.status = status;
     e.daysLeft = liveDays;

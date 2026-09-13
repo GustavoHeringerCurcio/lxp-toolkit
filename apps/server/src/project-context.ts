@@ -24,8 +24,9 @@ import {
 import type { ActivityProject, AiConfig, Exercise, ProjectProfile } from "./types.js";
 
 const STRONG_SIGNAL =
-  /\b(seu|teu|nosso|do grupo|da equipe)\s+(projeto|sistema|site|api|app|tema)\b|\b(caso de uso|casos de uso|diagrama de caso|escopo do projeto|requisitos do projeto|projeto do grupo|tema do grupo|escolha um tema|defina o tema|preencha a tabela)\b/i;
-const WEAK_SIGNAL = /\bprojeto\b|\btema\b|\bgrupo\b|\bequipe\b|\bcaso de uso\b|\brequisit/i;
+  /\b(seu|teu|nosso|do grupo|da equipe)\s+(projeto|sistema|site|api|app|tema)\b|\b(caso de uso|casos de uso|diagrama de caso|escopo do projeto|requisitos do projeto|projeto do grupo|tema do grupo|escolha um tema|defina o tema|preencha a tabela|preencha o quadro|preencha o modelo|preencha os campos|complete a tabela|complete o quadro|complete o modelo|siga o modelo)\b/i;
+const WEAK_SIGNAL =
+  /\bprojeto\b|\btema\b|\bgrupo\b|\bequipe\b|\bcaso de uso\b|\brequisit|\btabela\b|\bquadro\b|\bmodelo\b|\bpreench|\bcomplete\b|\bformul[aá]rio\b|\bcampos\b|\btemplate\b/i;
 
 export type ProjectSignal = "strong" | "weak" | "none";
 
@@ -37,10 +38,15 @@ export function projectSignal(text: string): ProjectSignal {
   return "none";
 }
 
+/** Bump when the detection semantics change, to invalidate cached rows. */
+const DETECT_VERSION = "v2";
+
 /** Stable hash of the activity fields that affect relevance. */
 export function activityContentHash(e: Exercise): string {
   const files = e.remoteFiles.map((f) => f.filename ?? f.url).join("|");
-  return createHash("sha256").update(`${e.title}\n${e.instructionsText}\n${files}`).digest("hex");
+  return createHash("sha256")
+    .update(`${DETECT_VERSION}\n${e.title}\n${e.instructionsText}\n${files}`)
+    .digest("hex");
 }
 
 export interface EffectiveProfile {
@@ -53,6 +59,10 @@ export interface EffectiveProfile {
 
 export interface AnalyzeResult {
   needsProject: boolean;
+  /** True when the activity asks to fill a professor-provided template/table. */
+  wantsTemplate: boolean;
+  /** Field labels the professor wants, in order (empty when none). */
+  templateFields: string[];
   confidence: number | null;
   intent: string | null;
   reason: string | null;
@@ -146,6 +156,8 @@ export async function analyzeActivity(
   if (!cacheValid) {
     const isManual = activity?.source === "manual";
     let needsProject = activity?.needsProject ?? false;
+    let wantsTemplate = activity?.wantsTemplate ?? false;
+    let templateFields = activity?.templateFields ?? [];
     let confidence: number | null = activity?.confidence ?? null;
     let intent: string | null = activity?.intent ?? null;
     let reason: string | null = activity?.reason ?? null;
@@ -153,19 +165,29 @@ export async function analyzeActivity(
 
     if (!isManual) {
       const signal = projectSignal(`${e.title}\n${e.instructionsText}`);
-      if (signal === "strong") {
-        needsProject = true;
-        confidence = 0.9;
-      } else if (signal === "weak") {
+      if (signal === "strong" || signal === "weak") {
+        // Let the cheap model classify the activity generically (project and/or
+        // template-fill). A strong textual signal only forces needsProject.
         try {
           const rel = await detectActivityRelevance(cfg, e, opts.notes ?? "");
-          needsProject = rel.needsProject;
-          confidence = rel.confidence;
+          wantsTemplate = rel.wantsTemplate;
+          templateFields = rel.templateFields;
+          if (signal === "strong") {
+            needsProject = true;
+            confidence = 0.9;
+          } else {
+            needsProject = rel.needsProject;
+            confidence = rel.confidence;
+          }
           intent = rel.intent || intent;
           reason = rel.reason || reason;
           proposed = rel.proposed;
           model = rel.model;
         } catch {
+          if (signal === "strong") {
+            needsProject = true;
+            confidence = 0.9;
+          }
           /* keep previous values */
         }
       } else {
@@ -178,6 +200,8 @@ export async function analyzeActivity(
 
     activity = await saveActivityProject(e.id, {
       needsProject,
+      wantsTemplate,
+      templateFields,
       profileMode: activity?.profileMode ?? "main",
       confidence,
       intent,
@@ -197,10 +221,11 @@ export async function analyzeActivity(
     });
   }
 
-  // Ensure the course main profile exists when a project is needed.
+  // Ensure the course main profile exists when a project/template is needed.
   let main = await getProjectProfile(e.courseId);
+  const needsMain = activity.needsProject || activity.wantsTemplate;
   const shouldDetectProfile =
-    (activity.needsProject && (!main || main.source === "auto")) || (opts.forceProfile === true && main?.source !== "manual");
+    (needsMain && (!main || main.source === "auto")) || (opts.forceProfile === true && main?.source !== "manual");
   if (shouldDetectProfile) {
     try {
       // Never let the activity's own example material (e.g. the professor's
@@ -227,6 +252,8 @@ export async function analyzeActivity(
 
   return {
     needsProject: activity.needsProject,
+    wantsTemplate: activity.wantsTemplate,
+    templateFields: activity.templateFields,
     confidence: activity.confidence,
     intent: activity.intent,
     reason: activity.reason,

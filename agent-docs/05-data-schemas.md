@@ -29,6 +29,15 @@ overrides, profile, AI config, `ai_run`). The old `answers.json` / `submissions.
 once by `import.ts` (reconciled by natural key) and then ignored. `exercises.json` is a cache
 invalidated by `catalogVersion`.
 
+### Flavor detection & lazy AI review
+
+`detectAnomalies()` (`apps/server/src/build.ts`) sets each upload task's `flavor`
+(`question` | `ghost` | `print`) and `needsReview` at projection time with deterministic
+heuristics (no AI). When `needsReview` is true, opening the task runs one lazy AI
+classification (`apps/server/src/classify.ts`, cheapest model) and caches the verdict in
+`item_annotation.auto_flavor` (`auto_flavor_reason` / `auto_flavor_model` / `auto_flavor_at`).
+Effective flavor precedence: manual `tag` → cached `auto_flavor` → heuristic.
+
 ### Professor identity (stable ids)
 
 `context.teachers[]` is **course-wide** (the same faculty on every item), so it identifies who

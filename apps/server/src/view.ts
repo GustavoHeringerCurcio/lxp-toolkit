@@ -68,11 +68,15 @@ export function enrich(
       }
     }
     const taggedAnomalies = anomaliesFromTag(o.tag);
+    // Precedence: manual tag → cached AI review → deterministic heuristic.
+    const aiAnomalies = taggedAnomalies ? null : anomaliesFromTag(o.autoFlavor);
+    const anomalies = taggedAnomalies ?? aiAnomalies ?? e.anomalies;
     return {
       ...e,
-      flavor: taggedAnomalies ? flavorFromAnomalies(taggedAnomalies) : e.flavor,
-      flavorSource: taggedAnomalies ? "manual" : e.flavorSource,
-      anomalies: taggedAnomalies ?? e.anomalies,
+      flavor: flavorFromAnomalies(anomalies),
+      flavorSource: taggedAnomalies ? "manual" : aiAnomalies ? "ai" : e.flavorSource,
+      anomalies,
+      needsReview: e.needsReview && !taggedAnomalies && !aiAnomalies,
       status,
       done,
       answer,

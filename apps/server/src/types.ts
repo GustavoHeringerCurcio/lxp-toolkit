@@ -20,8 +20,8 @@ export type ContentKind = "pdf" | "reading" | "quiz" | "file_upload" | "link" | 
  */
 export type UploadFlavor = "question" | "ghost" | "print";
 
-/** Where the effective flavor came from: auto-detected or manual tag override. */
-export type FlavorSource = "auto" | "manual";
+/** Where the effective flavor came from: auto-detected, lazy AI review, or manual tag override. */
+export type FlavorSource = "auto" | "ai" | "manual";
 
 /**
  * A detected (or tagged) content anomaly. Extensible: new codes plug into the
@@ -134,6 +134,8 @@ export interface Exercise {
   flavorSource: FlavorSource;
   /** Content anomalies detected or tagged for this item (drives the badge). */
   anomalies: Anomaly[];
+  /** Auto-detection was inconclusive: a lazy AI review should confirm the flavor. */
+  needsReview: boolean;
   /** Portal enrollment id (from the topic context); required to submit quizzes. */
   enrollmentId: number | null;
   /** A "Pesquisa": answered straight through the endpoint, no attempt/finish cycle. */
@@ -226,6 +228,10 @@ export interface ProjectProfile {
 export interface ActivityProject {
   contentItemId: number;
   needsProject: boolean;
+  /** True when the activity asks to fill a professor-provided template/table. */
+  wantsTemplate: boolean;
+  /** Field labels the professor wants, in order (empty when none). */
+  templateFields: string[];
   profileMode: ProjectProfileMode;
   /** Quick project (used when `profileMode === "activity"`). */
   theme: string | null;
@@ -300,6 +306,10 @@ export interface OverridesEntry {
   manualStatus?: ExerciseStatus;
   /** Raw JSON string of the per-exercise AiRequest override. */
   aiRequest?: string;
+  /** Cached lazy AI flavor classification (per student), when available. */
+  autoFlavor?: UploadFlavor;
+  /** One-line reason the AI classifier returned (for transparency/debugging). */
+  autoFlavorReason?: string;
 }
 
 export type Overrides = Record<string, OverridesEntry>;

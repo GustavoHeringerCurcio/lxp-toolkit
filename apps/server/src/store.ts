@@ -29,6 +29,7 @@ import type {
   QuizSelection,
   SubmissionEntry,
   Submissions,
+  UploadFlavor,
 } from "./types.js";
 
 const MAX_HISTORY = 20;
@@ -354,12 +355,15 @@ interface AnnotationRow {
   tag: string | null;
   manual_status: string | null;
   ai_request_json: unknown;
+  auto_flavor: string | null;
+  auto_flavor_reason: string | null;
 }
 
 export async function getOverrides(): Promise<Overrides> {
   const studentId = await getStudentId();
   const rows = await query<AnnotationRow>(
-    `SELECT content_item_id, notes, prompt_override, hidden, tag, manual_status, ai_request_json
+    `SELECT content_item_id, notes, prompt_override, hidden, tag, manual_status, ai_request_json,
+            auto_flavor, auto_flavor_reason
      FROM item_annotation WHERE student_id = $1`,
     [studentId],
   );
@@ -375,6 +379,10 @@ export async function getOverrides(): Promise<Overrides> {
       entry.aiRequest =
         typeof r.ai_request_json === "string" ? r.ai_request_json : JSON.stringify(r.ai_request_json);
     }
+    if (r.auto_flavor === "question" || r.auto_flavor === "ghost" || r.auto_flavor === "print") {
+      entry.autoFlavor = r.auto_flavor;
+    }
+    if (r.auto_flavor_reason != null) entry.autoFlavorReason = r.auto_flavor_reason;
     out[String(r.content_item_id)] = entry;
   }
   return out;
@@ -417,6 +425,27 @@ export async function saveTag(itemId: number, tag: string | null): Promise<void>
      VALUES ($1,$2,$3, now())
      ON CONFLICT (content_item_id, student_id) DO UPDATE SET tag = EXCLUDED.tag, updated_at = now()`,
     [itemId, studentId, value],
+  );
+}
+
+/** Cache the lazy AI flavor verdict for one item (per student). */
+export async function saveAutoFlavor(
+  itemId: number,
+  flavor: UploadFlavor,
+  reason: string,
+  model: string,
+): Promise<void> {
+  const studentId = await getStudentId();
+  await query(
+    `INSERT INTO item_annotation(content_item_id, student_id, auto_flavor, auto_flavor_reason, auto_flavor_model, auto_flavor_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5, now(), now())
+     ON CONFLICT (content_item_id, student_id) DO UPDATE SET
+       auto_flavor = EXCLUDED.auto_flavor,
+       auto_flavor_reason = EXCLUDED.auto_flavor_reason,
+       auto_flavor_model = EXCLUDED.auto_flavor_model,
+       auto_flavor_at = EXCLUDED.auto_flavor_at,
+       updated_at = now()`,
+    [itemId, studentId, flavor, reason || null, model || null],
   );
 }
 
@@ -724,6 +753,8 @@ export async function saveProjectProfile(
 interface ActivityProjectRow {
   content_item_id: string;
   needs_project: boolean;
+  wants_template: boolean;
+  template_fields: unknown;
   profile_mode: string;
   theme: string | null;
   atores: unknown;
@@ -743,6 +774,8 @@ function toActivityProject(r: ActivityProjectRow): ActivityProject {
   return {
     contentItemId: Number(r.content_item_id),
     needsProject: r.needs_project === true,
+    wantsTemplate: r.wants_template === true,
+    templateFields: toStrArray(r.template_fields),
     profileMode: mode,
     theme: r.theme,
     atores: toStrArray(r.atores),
@@ -758,7 +791,7 @@ function toActivityProject(r: ActivityProjectRow): ActivityProject {
 }
 
 const ACTIVITY_PROJECT_COLS =
-  "content_item_id, needs_project, profile_mode, theme, atores, requisitos, confidence, intent, reason, source, model, content_hash, updated_at";
+  "content_item_id, needs_project, wants_template, template_fields, profile_mode, theme, atores, requisitos, confidence, intent, reason, source, model, content_hash, updated_at";
 
 export async function getActivityProject(itemId: number): Promise<ActivityProject | null> {
   const studentId = await getStudentId();
@@ -771,6 +804,8 @@ export async function getActivityProject(itemId: number): Promise<ActivityProjec
 
 export interface ActivityProjectInput {
   needsProject?: boolean;
+  wantsTemplate?: boolean;
+  templateFields?: string[];
   profileMode?: ProjectProfileMode;
   theme?: string | null;
   atores?: string[];
@@ -790,6 +825,8 @@ export async function saveActivityProject(
   const studentId = await getStudentId();
   const existing = await getActivityProject(itemId);
   const needsProject = input.needsProject ?? existing?.needsProject ?? false;
+  const wantsTemplate = input.wantsTemplate ?? existing?.wantsTemplate ?? false;
+  const templateFields = input.templateFields ?? existing?.templateFields ?? [];
   const profileMode = input.profileMode ?? existing?.profileMode ?? "main";
   const theme = input.theme !== undefined ? input.theme : (existing?.theme ?? null);
   const atores = input.atores ?? existing?.atores ?? [];
@@ -801,10 +838,12 @@ export async function saveActivityProject(
   const model = input.model !== undefined ? input.model : (existing?.model ?? null);
   const contentHash = input.contentHash !== undefined ? input.contentHash : (existing?.contentHash ?? null);
   await query(
-    `INSERT INTO activity_project(student_id, content_item_id, needs_project, profile_mode, theme, atores, requisitos, confidence, intent, reason, source, model, content_hash, detected_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now(), now())
+    `INSERT INTO activity_project(student_id, content_item_id, needs_project, wants_template, template_fields, profile_mode, theme, atores, requisitos, confidence, intent, reason, source, model, content_hash, detected_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15, now(), now())
      ON CONFLICT (content_item_id, student_id) DO UPDATE SET
        needs_project = EXCLUDED.needs_project,
+       wants_template = EXCLUDED.wants_template,
+       template_fields = EXCLUDED.template_fields,
        profile_mode = EXCLUDED.profile_mode,
        theme = EXCLUDED.theme,
        atores = EXCLUDED.atores,
@@ -821,6 +860,8 @@ export async function saveActivityProject(
       studentId,
       itemId,
       needsProject,
+      wantsTemplate,
+      JSON.stringify(templateFields),
       profileMode,
       theme,
       JSON.stringify(atores),

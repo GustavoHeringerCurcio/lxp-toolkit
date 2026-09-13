@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anomaliesFromTag, detectAnomalies, flavorFromAnomalies, flavorFromTag } from "../src/build.js";
+import { anomaliesFromTag, detectAnomalies, flavorFromAnomalies, flavorFromTag, needsFlavorReview } from "../src/build.js";
 import { buildMessages, composeGhostAnswer } from "../src/prompt.js";
 import { makeExercise, makeQuizQ } from "./helpers.js";
 
@@ -119,6 +119,36 @@ describe("detectAnomalies", () => {
     ).toEqual([]);
   });
 
+  it("roteiro/encontro presencial sem pergunta → ghost", () => {
+    expect(
+      codes(
+        detectAnomalies({
+          kind: "file_upload",
+          title: "Roteiro para o Encontro Presencial em 03/11/2025",
+          html: "<p>Material de apoio: tragam o Relatório Técnico preenchido, em WORD, no dia do encontro.</p>",
+          content: { hasFileUpload: true },
+          attachments: [{ url: "https://x/modelo.docx" }],
+          questions: [],
+        }),
+      ),
+    ).toEqual(["ghost"]);
+  });
+
+  it("roteiro com pedido explícito continua pergunta", () => {
+    expect(
+      codes(
+        detectAnomalies({
+          kind: "file_upload",
+          title: "Roteiro do encontro",
+          html: "<p>Material de apoio. Responda as questões do modelo anexo.</p>",
+          content: { hasFileUpload: true },
+          attachments: [{ url: "https://x/modelo.docx" }],
+          questions: [],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   it("severidade por código: ghost=error, print=warn", () => {
     const [ghost] = detectAnomalies({
       kind: "file_upload",
@@ -138,6 +168,47 @@ describe("detectAnomalies", () => {
     });
     expect(ghost.severity).toBe("error");
     expect(print.severity).toBe("warn");
+  });
+});
+
+describe("needsFlavorReview", () => {
+  it("upload sem pista de resposta → revisão", () => {
+    expect(
+      needsFlavorReview({
+        kind: "file_upload",
+        title: "Atividade",
+        html: "<p>Assista à palestra e produza um resumo.</p>",
+        anomalies: [],
+      }),
+    ).toBe(true);
+  });
+
+  it("upload com pista de resposta → sem revisão", () => {
+    expect(
+      needsFlavorReview({
+        kind: "file_upload",
+        title: "Atividade",
+        html: "<p>Responda as questões do modelo.</p>",
+        anomalies: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("item já anômalo → sem revisão", () => {
+    expect(
+      needsFlavorReview({
+        kind: "file_upload",
+        title: "Roteiro",
+        html: "<p>Texto.</p>",
+        anomalies: [{ code: "ghost", severity: "error" }],
+      }),
+    ).toBe(false);
+  });
+
+  it("quiz → sem revisão", () => {
+    expect(
+      needsFlavorReview({ kind: "quiz", title: "Quiz", html: "<p>Texto.</p>", anomalies: [] }),
+    ).toBe(false);
   });
 });
 

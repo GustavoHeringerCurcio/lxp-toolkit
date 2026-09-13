@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyTemplateDefaults, normalizeLabel, parseUseCases, useCaseName } from "../src/usecase.js";
+import {
+  applyTemplateDefaults,
+  buildTemplateFillContract,
+  normalizeLabel,
+  parseUseCases,
+  useCaseName,
+} from "../src/usecase.js";
 
 const LABELS = [
   "Identificador",
@@ -88,6 +94,20 @@ describe("useCaseName", () => {
   it("cai no campo Nome quando o cabeçalho não traz nome", () => {
     const cases = parseUseCases("## UC-01\nNome do Caso de Uso: Fazer Login", LABELS);
     expect(useCaseName(cases[0])).toBe("Fazer Login");
+  });
+});
+
+describe("buildTemplateFillContract", () => {
+  it("lista os campos detectados na ordem", () => {
+    const contract = buildTemplateFillContract(["Identificador", "Atores", "Fluxo Principal"]);
+    expect(contract).toContain("Identificador; Atores; Fluxo Principal");
+    expect(contract).toContain("UC-01");
+    expect(contract).toContain("sem tabela Markdown");
+  });
+
+  it("pede para seguir o modelo do enunciado quando não há campos", () => {
+    const contract = buildTemplateFillContract();
+    expect(contract).toContain("enunciado");
   });
 });
 

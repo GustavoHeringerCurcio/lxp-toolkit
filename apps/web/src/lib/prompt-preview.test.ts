@@ -42,6 +42,7 @@ export function makeExercise(overrides: Partial<Exercise> = {}): Exercise {
     flavor: "question",
     flavorSource: "auto",
     anomalies: [],
+    needsReview: false,
     tag: null,
     enrollmentId: null,
     isSurvey: false,
