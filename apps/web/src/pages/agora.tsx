@@ -56,7 +56,7 @@ export function AgoraPage() {
   const queue = useMemo(() => queueAll.slice(0, 6), [queueAll]);
   const overdue = useMemo(() => queue.filter((e) => e.status === "expired"), [queue]);
   const upcoming = useMemo(() => queue.filter((e) => e.status !== "expired"), [queue]);
-  const hidden = Math.max(0, queueAll.length - queue.length);
+  const hidden = Math.max(0, counts.open - (next ? 1 : 0) - upcoming.length);
 
   const modules = useMemo<ModuleProgress[]>(() => {
     const map = new Map<string, ModuleProgress>();
