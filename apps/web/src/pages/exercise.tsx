@@ -354,8 +354,8 @@ function AnswerPanel({
       id="resposta"
       icon={<Sparkles className="size-4 shrink-0 text-brand" aria-hidden />}
       title={t("draft.title")}
-      className="xl:flex xl:h-full xl:min-h-0 xl:flex-col data-[open=false]:xl:h-auto"
-      bodyClassName="flex-1 min-h-0 space-y-3 overflow-y-auto p-4"
+      className="xl:flex xl:max-h-[calc(100vh-6rem)] xl:min-h-0 xl:flex-col data-[open=false]:xl:h-auto"
+      bodyClassName="flex-auto min-h-0 space-y-3 overflow-y-auto p-4"
       badge={
         <>
           {current && !isGhost && (
