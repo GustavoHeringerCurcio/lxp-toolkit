@@ -249,6 +249,15 @@
     scrollbar-color: color-mix(in oklab, var(--border) 90%, transparent) transparent;
 }
 
+/* hide scrollbars while keeping the element scrollable */
+@utility no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
 /* subject identity (components set --subj inline from --subject-1..12) */
 .subject-avatar {
     color: var(--subj);
