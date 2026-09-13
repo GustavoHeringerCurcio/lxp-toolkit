@@ -42,15 +42,21 @@ function runText(fragment: string): string {
   return parts.join("").replace(/\s+/g, " ").trim();
 }
 
+/** First `<w:tbl>` element of a `document.xml` string, or null. */
+export function extractFirstTable(xml: string): string | null {
+  const table = xml.match(/<w:tbl\b[\s\S]*?<\/w:tbl>/);
+  return table ? table[0] : null;
+}
+
 /**
  * Parse the first table of a `word/document.xml` document into `{label, value}`
  * rows. Only the first two columns are used (the model is a 2-column table).
  * Returns null when there is no table or no usable rows.
  */
 export function extractFirstTableFields(xml: string): TemplateField[] | null {
-  const table = xml.match(/<w:tbl\b[\s\S]*?<\/w:tbl>/);
+  const table = extractFirstTable(xml);
   if (!table) return null;
-  const rows = table[0].match(/<w:tr\b[\s\S]*?<\/w:tr>/g) ?? [];
+  const rows = table.match(/<w:tr\b[\s\S]*?<\/w:tr>/g) ?? [];
   const fields: TemplateField[] = [];
   for (const row of rows) {
     const cells = row.match(/<w:tc\b[\s\S]*?<\/w:tc>/g) ?? [];

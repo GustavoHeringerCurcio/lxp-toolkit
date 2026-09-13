@@ -1,9 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { renderRichPdf } from "../src/pdf.js";
+import { looksLikeMarkdown, renderRichPdf } from "../src/pdf.js";
 
 function asLatin1(buf: Buffer): string {
   return buf.toString("latin1");
 }
+
+describe("looksLikeMarkdown", () => {
+  it("detecta tabelas, títulos, listas e negrito", () => {
+    expect(looksLikeMarkdown("| a | b |\n|---|---|\n| 1 | 2 |")).toBe(true);
+    expect(looksLikeMarkdown("## Caso de Uso")).toBe(true);
+    expect(looksLikeMarkdown("- item um\n- item dois")).toBe(true);
+    expect(looksLikeMarkdown("texto com **negrito**")).toBe(true);
+  });
+
+  it("não confunde texto simples", () => {
+    expect(looksLikeMarkdown("Apenas um parágrafo comum, sem marcação.")).toBe(false);
+  });
+});
 
 describe("renderRichPdf (fill mode)", () => {
   it("produces a valid PDF header and footer", () => {

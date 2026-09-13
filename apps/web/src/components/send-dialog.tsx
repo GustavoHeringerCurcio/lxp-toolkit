@@ -63,9 +63,11 @@ export function SendDialog({
           ? "send.action.text"
           : mode === "pdf"
             ? "send.action.pdf"
-            : mode === "fill"
-              ? "send.action.fill"
-              : "send.action.txt";
+            : mode === "docx"
+              ? "send.action.docx"
+              : mode === "fill"
+                ? "send.action.fill"
+                : "send.action.txt";
 
   useEffect(() => {
     setPreviewUrl(null);
@@ -193,23 +195,25 @@ export function SendDialog({
               </div>
               <p className="mt-2 text-xs text-muted-foreground">{t(actionKey)}</p>
 
-              {(mode === "txt" || mode === "pdf" || mode === "fill") && (
+              {(mode === "txt" || mode === "pdf" || mode === "fill" || mode === "docx") && (
                 <div className="mt-3">
                   <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="xs"
-                      onClick={() => void previewArtifact()}
-                      disabled={previewBusy || !draft.trim()}
-                    >
-                      {previewBusy ? (
-                        <SpinnerIcon className="size-3.5 animate-spin" />
-                      ) : (
-                        <EyeIcon className="size-3.5" />
-                      )}
-                      {t("send.preview")}
-                    </Button>
+                    {mode !== "docx" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => void previewArtifact()}
+                        disabled={previewBusy || !draft.trim()}
+                      >
+                        {previewBusy ? (
+                          <SpinnerIcon className="size-3.5 animate-spin" />
+                        ) : (
+                          <EyeIcon className="size-3.5" />
+                        )}
+                        {t("send.preview")}
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="outline"
@@ -225,6 +229,9 @@ export function SendDialog({
                       {t("send.download")}
                     </Button>
                   </div>
+                  {mode === "docx" && (
+                    <p className="mt-2 text-xs text-muted-foreground">{t("send.docxHint")}</p>
+                  )}
                   {previewErr && (
                     <p className="mt-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                       {previewErr}

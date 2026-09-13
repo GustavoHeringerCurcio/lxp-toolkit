@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
-import { ASSISTANT_DIR, dataDir, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
+import { ASSISTANT_DIR, assist, dataDir, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
 import { createRefreshController } from "../src/refresh.js";
 import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import { healthCheck, query, runMigrations } from "../src/db.js";
@@ -73,6 +73,8 @@ import {
 } from "../src/send.js";
 import { officeToPdf, previewCacheDir } from "../src/office.js";
 import { answerToPdf } from "../src/pdf.js";
+import { renderFilledDocx } from "../src/docx.js";
+import { parseUseCases, type UseCase } from "../src/usecase.js";
 import { parseLinkedinUrl } from "../src/linkedin.js";
 import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/organizations.js";
 
@@ -133,6 +135,34 @@ function safeFilename(name: string, ext: string): string {
     .slice(0, 120)
     .trim();
   return `${base || "resposta"}.${ext}`;
+}
+
+/**
+ * Build the filled `.docx` for a template activity (a .docx model attached to
+ * the task), pouring the parsed use cases into a clone of the model table.
+ * Returns `{ error }` when the task has no model or the answer has no cases.
+ */
+async function buildFilledDocx(
+  view: ExerciseView,
+  answer: string,
+): Promise<{ buffer: Buffer; filename: string } | { error: string }> {
+  const template = await findTemplateDocx(view.files);
+  if (!template) return { error: "Esta atividade não tem um modelo .docx para preencher." };
+  const labels = template.fields.map((f) => f.label);
+  const cases = parseUseCases(answer, labels);
+  if (!cases.length) {
+    return {
+      error: "Não foi possível identificar os casos de uso na resposta. Gere a resposta novamente.",
+    };
+  }
+  const diagramPng = await buildDiagramPng(view, cases).catch(() => null);
+  const buffer = await renderFilledDocx(template.path, labels, cases, diagramPng);
+  return { buffer, filename: safeFilename(await uploadBaseName(view), "docx") };
+}
+
+/** UML diagram PNG for the parsed use cases (rendered in a later phase). */
+async function buildDiagramPng(_view: ExerciseView, _cases: UseCase[]): Promise<Buffer | null> {
+  return null;
 }
 
 function readBody(req: import("node:http").IncomingMessage): Promise<Record<string, unknown>> {
@@ -564,12 +594,28 @@ const server = createServer(async (req, res) => {
       const b = await readBody(req);
       const id = Number(b.id);
       const answer = String(b.answer ?? "");
-      const rich = b.mode === "fill";
-      const isPdf = b.mode === "pdf" || rich;
+      const mode = String(b.mode ?? "");
+      const rich = mode === "fill";
+      const isPdf = mode === "pdf" || rich;
       const download = b.download === true;
       if (!id) return json(res, 400, { error: "id obrigatório" });
       if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de gerar o arquivo." });
       const view = await findView(id);
+
+      if (mode === "docx") {
+        const built = await buildFilledDocx(view, answer);
+        if ("error" in built) return json(res, 400, { error: built.error });
+        res.writeHead(200, {
+          "content-type":
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "content-length": built.buffer.length,
+          "content-disposition": `${download ? "attachment" : "inline"}; filename="${built.filename}"`,
+          "x-filename": built.filename,
+          "cache-control": "no-store",
+        });
+        return res.end(built.buffer);
+      }
+
       const baseName = await uploadBaseName(view);
       const ext = isPdf ? "pdf" : "txt";
       const filename = safeFilename(baseName, ext);
@@ -825,7 +871,12 @@ const server = createServer(async (req, res) => {
         let answer = String(b.answer ?? "");
         const rawMode = String(b.mode ?? "");
         const mode: SendMode =
-          rawMode === "text" || rawMode === "pdf" || rawMode === "txt" || rawMode === "image" || rawMode === "fill"
+          rawMode === "text" ||
+          rawMode === "pdf" ||
+          rawMode === "txt" ||
+          rawMode === "docx" ||
+          rawMode === "image" ||
+          rawMode === "fill"
             ? rawMode
             : "txt";
         const view = await findView(id);
@@ -860,7 +911,14 @@ const server = createServer(async (req, res) => {
             submission = await launchForumSubmit(view, answer);
           } else {
             let filePath: string | undefined;
-            if (mode === "pdf" || mode === "fill") {
+            if (mode === "docx") {
+              const built = await buildFilledDocx(view, answer);
+              if ("error" in built) return json(res, 400, { error: built.error });
+              const dir = assist("data", "send");
+              mkdirSync(dir, { recursive: true });
+              filePath = path.join(dir, built.filename);
+              writeFileSync(filePath, built.buffer);
+            } else if (mode === "pdf" || mode === "fill") {
               const pdf = await answerToPdf(answer, await uploadBaseName(view), { rich: mode === "fill" });
               if (!pdf)
                 return json(res, 500, {

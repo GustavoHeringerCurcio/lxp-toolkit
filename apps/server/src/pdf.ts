@@ -572,19 +572,34 @@ function markdownToHtml(src: string): string {
 }
 
 /**
+ * Heuristic: does this answer carry Markdown structure (table/heading/list/bold)
+ * that the plain renderer would print as literal symbols? Used to auto-route the
+ * default `.pdf` mode through the rich renderer.
+ */
+export function looksLikeMarkdown(text: string): boolean {
+  return (
+    /^\s*\|.*\|\s*$/m.test(text) ||
+    /^#{1,6}\s+\S/m.test(text) ||
+    /^\s*[-*]\s+\S/m.test(text) ||
+    /\*\*[^*\n]+\*\*/.test(text)
+  );
+}
+
+/**
  * Render an answer to a PDF, cached by content + title. Uses LibreOffice when
  * available (styled HTML output) and otherwise falls back to the built-in
  * renderer, so `.pdf` delivery works without LibreOffice.
  *
  * `rich` (the "fill" send mode) preserves headings/lists/tables/bold; the
- * default is the plain line-by-line layout.
+ * default is the plain line-by-line layout — unless the answer itself contains
+ * Markdown, in which case the rich layout is used so symbols aren't printed raw.
  */
 export async function answerToPdf(
   answer: string,
   baseName: string,
   opts: { rich?: boolean } = {},
 ): Promise<string | null> {
-  const rich = opts.rich === true;
+  const rich = opts.rich === true || looksLikeMarkdown(answer);
   const cache = answerPdfCacheDir();
   const key = createHash("sha256").update(`${rich ? "rich" : "plain"}\n${baseName}\n${answer}`).digest("hex");
   const htmlPath = path.join(cache, `${key}.html`);

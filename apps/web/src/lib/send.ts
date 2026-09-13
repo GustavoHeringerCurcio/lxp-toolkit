@@ -1,6 +1,7 @@
 import type { SendMode } from "@/api";
 import type { TranslateFn } from "@/lib/i18n";
 import {
+  DocxIcon,
   FillIcon,
   PdfIcon,
   TextIcon,
@@ -17,6 +18,7 @@ export const SEND_MODES: {
   { value: "text", labelKey: "send.mode.text.label", icon: TextIcon },
   { value: "txt", labelKey: "send.mode.txt.label", icon: TxtIcon },
   { value: "pdf", labelKey: "send.mode.pdf.label", icon: PdfIcon },
+  { value: "docx", labelKey: "send.mode.docx.label", icon: DocxIcon },
   { value: "fill", labelKey: "send.mode.fill.label", icon: FillIcon },
 ];
 

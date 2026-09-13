@@ -110,6 +110,24 @@ export function PdfIcon(props: SendIconProps) {
   );
 }
 
+/** .docx — Word document with a filled table. */
+export function DocxIcon(props: SendIconProps) {
+  return (
+    <IconBase {...props}>
+      <path
+        d="M13.75 3.5H7.5A2.25 2.25 0 0 0 5.25 5.75v12.5A2.25 2.25 0 0 0 7.5 20.5h9a2.25 2.25 0 0 0 2.25-2.25V8.5z"
+        fill="currentColor"
+        fillOpacity=".12"
+      />
+      <path d="M13.75 3.5v5h5" />
+      <path d="M8.5 12.5h7" />
+      <path d="M8.5 15.5h7" />
+      <path d="M8.5 18.5h7" />
+      <path d="M12 12.5v6" />
+    </IconBase>
+  );
+}
+
 /** "Fill" — the exercise completed in place (form + check). */
 export function FillIcon(props: SendIconProps) {
   return (

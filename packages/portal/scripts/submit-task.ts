@@ -68,7 +68,7 @@ interface QuizItem {
   optionText: string;
 }
 
-type UploadMode = "text" | "txt" | "pdf" | "image" | "fill";
+type UploadMode = "text" | "txt" | "pdf" | "docx" | "image" | "fill";
 
 type SubmitRequest =
   | {
@@ -1040,7 +1040,7 @@ async function main(): Promise<void> {
     // Resolve the attachment according to the requested mode.
     const mode: UploadMode = req.mode ?? "txt";
     let attachedPath: string | null = null;
-    if (mode === "pdf" || mode === "fill") {
+    if (mode === "pdf" || mode === "fill" || mode === "docx") {
       if (!req.filePath) return fail(`${mode} mode requires a filePath`);
       if (!existsSync(req.filePath)) return fail(`attachment not found: ${req.filePath}`);
       attachedPath = req.filePath;

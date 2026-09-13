@@ -312,7 +312,7 @@ export async function fetchSendPreview(id: number): Promise<SendPreviewDto> {
 export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
 
 /** How an upload answer reaches the portal. */
-export type SendMode = "text" | "txt" | "pdf" | "image" | "fill";
+export type SendMode = "text" | "txt" | "pdf" | "docx" | "image" | "fill";
 
 export interface SubmissionDto {
   status: SubmissionStatus;

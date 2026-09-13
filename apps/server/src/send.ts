@@ -119,7 +119,8 @@ export async function launchUploadSubmit(
     filename,
   };
   if (mode === "txt") payload.ext = "txt";
-  if ((mode === "pdf" || mode === "image" || mode === "fill") && filePath) payload.filePath = filePath;
+  if ((mode === "pdf" || mode === "docx" || mode === "image" || mode === "fill") && filePath)
+    payload.filePath = filePath;
   writeFileSync(reqFile, JSON.stringify(payload, null, 2), "utf-8");
 
   const entry: SubmissionEntry = {
