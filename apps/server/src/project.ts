@@ -3,6 +3,7 @@ import path from "node:path";
 import { query } from "./db.js";
 import { ASSISTANT_EXERCISES_FILE } from "./build.js";
 import { actionKindFor, detectAnomalies, flavorFromAnomalies, isSurveyItem, localFilesFor, parseForumInfo, stripHtml } from "./build.js";
+import { sanitizeHtml } from "./sanitize.js";
 import { computeStatus, daysLeft } from "./status.js";
 import type { ContentKind, Exercise, ExerciseKind, ForumInfo, QuizQ, QuizOption } from "./types.js";
 
@@ -171,6 +172,7 @@ export async function buildProjection(): Promise<Exercise[]> {
       files: localFilesFor(courseId, itemId),
       remoteFiles: attachments.get(itemId) ?? [],
       instructionsText: stripHtml(raw.html),
+      instructionsHtml: sanitizeHtml(raw.html),
       questions: itemQuestions,
       forum: kind === "forum" ? parseForumInfo(raw.content) : null,
       ai: { status: "none", answer: null, updatedAt: null },
@@ -184,7 +186,7 @@ export async function buildProjection(): Promise<Exercise[]> {
  * update invalidates the cached `exercises.json` on the next server boot even
  * when the underlying catalog rows are unchanged.
  */
-const PROJECTION_VERSION = "3";
+const PROJECTION_VERSION = "4";
 
 /** Stable hash of the catalog + state snapshots the projection depends on. */
 export async function getCatalogVersion(): Promise<string> {

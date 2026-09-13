@@ -48,6 +48,7 @@ import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/c
 import { ProfessorTag, SubjectLabel } from "@/components/identity";
 import { AiRequestPanel } from "@/components/ai-request-panel";
 import { ProjectPanel } from "@/components/project-panel";
+import { RichText } from "@/components/rich-text";
 import { MarkPanel, PortalOnlyPanel } from "@/components/mark-panel";
 import { SendDialog } from "@/components/send-dialog";
 import { SendIcon } from "@/components/icons/send-icons";
@@ -888,9 +889,9 @@ export function ExercisePage() {
             )}
           </header>
 
-          {e.instructionsText && (
+          {(e.instructionsHtml || e.instructionsText) && (
             <CollapsibleCard id="enunciado" title={t("exercise.instructions")} bodyClassName="p-4">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{e.instructionsText}</p>
+              <RichText html={e.instructionsHtml} fallback={e.instructionsText} />
             </CollapsibleCard>
           )}
 

@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { assist, dataDir, raw } from "./paths.js";
+import { sanitizeHtml } from "./sanitize.js";
 import { computeStatus, daysLeft, refreshLive } from "./status.js";
 import type { Anomaly, AnomalyCode, AnomalySeverity, ContentKind, Exercise, ExerciseKind, ForumInfo, ForumPost, PdfRef, QuizQ, UploadFlavor } from "./types.js";
 
@@ -304,6 +305,7 @@ export function buildExercises(): Exercise[] {
         files: localFilesFor(course.courseId, it.itemId),
         remoteFiles: it.attachments.map((a) => ({ filename: a.filename, url: a.url })),
         instructionsText: stripHtml(it.html),
+        instructionsHtml: sanitizeHtml(it.html),
         questions,
         forum: kind === "forum" ? parseForumInfo(it.content) : null,
         ai: { status: "none", answer: null, updatedAt: null },

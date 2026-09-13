@@ -161,6 +161,8 @@ export interface Exercise {
   files: PdfRef[];
   remoteFiles: { filename: string | null; url: string }[];
   instructionsText: string;
+  /** Sanitized HTML of the activity brief, for rich display (falls back to `instructionsText`). */
+  instructionsHtml?: string;
   questions: QuizQ[];
   /** Forum state when `contentKind === "forum"`, else null. */
   forum: ForumInfo | null;
