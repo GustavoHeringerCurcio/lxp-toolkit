@@ -379,7 +379,8 @@ export async function fetchSendArtifact(
     throw new Error(`POST /api/send/artifact → HTTP ${res.status}${detail}`);
   }
   const blob = await res.blob();
-  const filename = res.headers.get("x-filename") ?? `resposta.${mode === "pdf" ? "pdf" : "txt"}`;
+  const fallbackExt = mode === "pdf" || mode === "fill" ? "pdf" : mode === "docx" ? "docx" : "txt";
+  const filename = res.headers.get("x-filename") ?? `resposta.${fallbackExt}`;
   return { blob, filename };
 }
 

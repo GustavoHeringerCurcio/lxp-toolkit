@@ -102,7 +102,7 @@ export function SendDialog({
   };
 
   const downloadArtifact = async () => {
-    if (mode !== "txt" && mode !== "pdf" && mode !== "fill") return;
+    if (mode !== "txt" && mode !== "pdf" && mode !== "fill" && mode !== "docx") return;
     setDownloadBusy(true);
     setPreviewErr(null);
     try {
