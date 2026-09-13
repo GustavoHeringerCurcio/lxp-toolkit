@@ -1,4 +1,6 @@
 import type { AiRequest, Exercise, Answers, Overrides, ProfessorLink, QuizSelection } from "./types.js";
+import type { OrgDirectory } from "./organizations.js";
+import { normalizeName } from "./professor.js";
 import { humanizeQuizAnswer, parseAiRequest } from "./prompt.js";
 
 export interface ExerciseView extends Exercise {
@@ -40,6 +42,7 @@ export function enrich(
   answers: Answers,
   overrides: Overrides,
   professorLinks: ProfessorLink[] = [],
+  orgDirectory?: OrgDirectory,
 ): ExerciseView[] {
   const requests = effectiveExtraInstructions(exercises, overrides);
   const linksById = new Map(professorLinks.map((l) => [l.professorId, l]));
@@ -54,8 +57,15 @@ export function enrich(
       rawAnswer && e.kind === "quiz" && e.questions.length
         ? humanizeQuizAnswer(rawAnswer, e.questions)
         : rawAnswer;
-    const professorPhotoUrl =
-      e.professorId != null ? linksById.get(e.professorId)?.photoUrl ?? null : null;
+    // Precedence: personal link → org directory → nothing (icon/monogram).
+    let professorPhotoUrl =
+      (e.professorId != null ? linksById.get(e.professorId)?.photoUrl : undefined) || null;
+    if (!professorPhotoUrl && orgDirectory) {
+      if (e.professorId != null) professorPhotoUrl = orgDirectory.byId.get(e.professorId) ?? null;
+      if (!professorPhotoUrl && e.professor) {
+        professorPhotoUrl = orgDirectory.byName.get(normalizeName(e.professor)) ?? null;
+      }
+    }
     return {
       ...e,
       status,

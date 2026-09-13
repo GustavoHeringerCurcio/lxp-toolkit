@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Check,
-  Camera,
+  Building2,
   Eye,
   ListChecks,
   Loader2,
@@ -19,7 +19,7 @@ import {
 import { saveAiConfig, saveProfile } from "@/api";
 import { useAppData } from "@/lib/app-state";
 import { BackLink } from "@/components/app-sidebar";
-import { ProfessorPhotoList } from "@/components/professor-photo-list";
+import { OrganizationSection } from "@/components/organization-section";
 import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_STYLE, renderStylePreview } from "@/lib/prompt-preview";
 import {
   ESTIMATED_GENERATION_TOKENS,
@@ -38,9 +38,9 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-type SettingsTab = "personal" | "ai" | "advanced";
+type SettingsTab = "personal" | "ai" | "advanced" | "organizacao";
 
-const TABS: SettingsTab[] = ["personal", "ai", "advanced"];
+const TABS: SettingsTab[] = ["personal", "ai", "advanced", "organizacao"];
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -341,12 +341,14 @@ export function SettingsPage() {
               />
             </Field>
           </Card>
-
-          <Card icon={<Camera className="size-4 text-brand" aria-hidden />} title={t("settings.professors")}>
-            <p className="text-xs text-muted-foreground">{t("settings.professorsHint")}</p>
-            <ProfessorPhotoList />
-          </Card>
         </>
+      )}
+
+      {tab === "organizacao" && (
+        <Card icon={<Building2 className="size-4 text-brand" aria-hidden />} title={t("org.title")}>
+          <p className="text-xs text-muted-foreground">{t("org.desc")}</p>
+          <OrganizationSection />
+        </Card>
       )}
 
       {tab === "ai" && (

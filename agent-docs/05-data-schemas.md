@@ -41,18 +41,22 @@ normalizes it, and matches tokens against `professor.full_name`, storing
   "name": "DEBORA AMORIM DE CARVALHO", "safeaUserId": 5723877, "externalUserId": "d72d…" }
 ```
 
-### Professor photos (`professor_link`)
+### Professor photos (`professor_link`) + organization directory
 
-Per-student customization (`0005_professor_link.sql`): the student pastes a LinkedIn profile URL
-(or a direct image URL fallback) and the server resolves the public photo via
-`unavatar.io/linkedin/<slug>` (`apps/server/src/linkedin.ts`), caching the bytes under
-`apps/server/data/avatars/` (gitignored). Keyed `(student_id, professor_id)` so one photo is reused
-across every module/card the professor teaches. unavatar's SVG placeholder is rejected; a failed
-resolution leaves `status = 'failed'` and the UI falls back to the subject pictogram/monogram. The
-runtime projection attaches `professorPhotoUrl` to each exercise in `view.ts::enrich` (never written
-to the `exercises.json` cache). Endpoints: `GET /api/professor-links`,
-`POST /api/professor-link`, `DELETE /api/professor-link/:professorId`,
-`GET /api/professor-avatar/:professorId`.
+Photos are **not downloaded server-side**. The browser loads them straight from
+`https://unavatar.io/linkedin/<slug>`; `SubjectAvatar` falls back to the subject pictogram, then the
+module monogram, on error. Two sources are resolved in `view.ts::enrich` (personal wins):
+
+1. `professor_link` (`0005_professor_link.sql`) — per-student override keyed
+   `(student_id, professor_id)`, storing a `linkedin_url` or a manual `image_url`. Endpoints:
+   `GET /api/professor-links`, `POST /api/professor-link`, `DELETE /api/professor-link/:professorId`.
+2. **Organization directory** — hardcoded in `apps/server/config/organizations.json` (org metadata +
+   `professors: [{ name, linkedin, professorId? }]`), loaded by `apps/server/src/organizations.ts`
+   and matched to local `professor` rows by normalized name (exact first, then a conservative
+   token-subset flagged "probable"). `GET /api/organizations` feeds the Ajustes → Organização tab.
+
+`professorPhotoUrl` is attached per exercise at request time (never written to the `exercises.json`
+cache).
 
 ## Content item (normalized, in `scraped/raw/content-tree.json`)
 

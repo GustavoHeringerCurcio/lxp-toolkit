@@ -291,17 +291,14 @@ export interface TrainingStats {
 // ── Professor photos (per student) ──────────────────────────────────────────
 
 export type ProfessorLinkSource = "linkedin" | "manual";
-export type ProfessorLinkStatus = "pending" | "ok" | "failed";
 
 export interface ProfessorLink {
   professorId: number;
   linkedinUrl: string | null;
   imageUrl: string | null;
   source: ProfessorLinkSource;
-  status: ProfessorLinkStatus;
-  fetchedAt: string | null;
   updatedAt: string;
-  /** Relative URL the UI uses for the avatar (`/api/professor-avatar/:id?v=…`). */
+  /** Avatar URL for the browser (manual image, else unavatar). Empty when none. */
   photoUrl: string;
 }
 

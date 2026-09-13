@@ -367,6 +367,7 @@ export const pt = {
   "settings.tab.personal": "Pessoal",
   "settings.tab.ai": "IA",
   "settings.tab.advanced": "Avançado",
+  "settings.tab.organizacao": "Organização",
   "settings.appearance": "Aparência",
   "settings.appearanceHint": "Aplicado na hora — não precisa salvar.",
   "settings.themeLabel": "Tema",
@@ -413,6 +414,20 @@ export const pt = {
   "settings.professorsEmpty": "Nenhum professor com matéria aberta no momento.",
   "settings.professorsNone": "Sem foto",
   "settings.professorsSave": "Salvar",
+
+  // organization
+  "org.title": "Organização",
+  "org.desc":
+    "Sua instituição e o diretório de professores. As fotos vêm do LinkedIn via unavatar e podem ser aplicadas aos cartões.",
+  "org.directory": "Diretório de professores",
+  "org.directoryHint":
+    "Lista fixa em apps/server/config/organizations.json — edite o arquivo para adicionar ou corrigir professores.",
+  "org.unmatched": "Sem correspondência",
+  "org.apply": "Usar esta foto",
+  "org.applyAll": "Aplicar todas",
+  "org.applied": "Aplicada",
+  "org.empty": "Nenhuma organização configurada.",
+  "org.openLinkedin": "Abrir LinkedIn",
 
   // ai request panel
   "aiPanel.title": "O que a IA recebe",

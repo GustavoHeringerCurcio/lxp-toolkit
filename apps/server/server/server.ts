@@ -17,7 +17,6 @@ import {
   getAnswers,
   getCurrentAttemptId,
   getOverrides,
-  getProfessorLink,
   getProfessorLinks,
   getProfile,
   recordAiRun,
@@ -28,7 +27,6 @@ import {
   saveNote,
   saveProfessorLink,
   saveProfile,
-  setProfessorLinkStatus,
 } from "../src/store.js";
 import {
   buildSubjectContext,
@@ -60,7 +58,8 @@ import {
 } from "../src/send.js";
 import { officeToPdf, previewCacheDir } from "../src/office.js";
 import { answerToPdf } from "../src/pdf.js";
-import { loadProfessorAvatar, parseLinkedinUrl } from "../src/linkedin.js";
+import { parseLinkedinUrl } from "../src/linkedin.js";
+import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/organizations.js";
 
 const DIST = path.join(ASSISTANT_DIR, "..", "web", "dist");
 const PORT = Number(process.env.PORT || 4174);
@@ -281,12 +280,13 @@ async function servePreview(res: import("node:http").ServerResponse, rawUrl: str
 
 /** Load answers + overrides + professor photos from Postgres and enrich the cached exercises. */
 async function loadViews(): Promise<ExerciseView[]> {
-  const [answers, overrides, professorLinks] = await Promise.all([
+  const [answers, overrides, professorLinks, orgDirectory] = await Promise.all([
     getAnswers(),
     getOverrides(),
     getProfessorLinks(),
+    buildOrgDirectory(),
   ]);
-  return enrich(loadExercises(), answers, overrides, professorLinks);
+  return enrich(loadExercises(), answers, overrides, professorLinks, orgDirectory);
 }
 
 /** Look up an enriched, non-hidden exercise view or throw a clear error. */
@@ -409,7 +409,26 @@ const server = createServer(async (req, res) => {
       return json(res, 200, await getProfile());
     }
 
-    // professor photos (per student, resolved + cached server-side)
+    // organizations (hardcoded directory; avatars load from unavatar in the browser)
+    if (url === "/api/organizations" && method === "GET") {
+      const orgs = loadOrganizations();
+      const selectedHost =
+        (await query<{ host: string | null }>("SELECT host FROM institution ORDER BY id LIMIT 1"))[0]
+          ?.host ?? null;
+      const organizations = await Promise.all(
+        orgs.map(async (o, index) => ({
+          id: o.id,
+          name: o.name,
+          host: o.host,
+          logo: o.logo,
+          selected: selectedHost ? o.host === selectedHost : index === 0,
+          professors: await matchOrganization(o),
+        })),
+      );
+      return json(res, 200, { organizations });
+    }
+
+    // professor photos (per student; stored LinkedIn/manual URL, no server download)
     if (url === "/api/professor-links" && method === "GET") {
       return json(res, 200, { links: await getProfessorLinks() });
     }
@@ -432,34 +451,13 @@ const server = createServer(async (req, res) => {
       }
 
       const saved = await saveProfessorLink(professorId, { linkedinUrl, imageUrl: rawImage || null });
-      const avatar = await loadProfessorAvatar(saved);
-      await setProfessorLinkStatus(professorId, avatar ? "ok" : "failed");
-      return json(res, 200, {
-        ok: true,
-        resolved: Boolean(avatar),
-        link: await getProfessorLink(professorId),
-      });
+      return json(res, 200, { ok: true, link: saved });
     }
     if (url.startsWith("/api/professor-link/") && method === "DELETE") {
       const professorId = Number(url.split("/")[3]);
       if (!professorId) return json(res, 400, { error: "professorId obrigatório" });
       await deleteProfessorLink(professorId);
       return json(res, 200, { ok: true });
-    }
-    if (url.startsWith("/api/professor-avatar/") && method === "GET") {
-      const professorId = Number(url.split("/")[3]);
-      if (!professorId) return json(res, 400, { error: "professorId obrigatório" });
-      const link = await getProfessorLink(professorId);
-      if (!link) return json(res, 404, { error: "sem foto" });
-      const avatar = await loadProfessorAvatar(link);
-      if (!avatar) return json(res, 404, { error: "foto indisponível" });
-      res.writeHead(200, {
-        "content-type": avatar.contentType,
-        "content-length": statSync(avatar.file).size,
-        "cache-control": "private, max-age=86400",
-      });
-      createReadStream(avatar.file).pipe(res);
-      return;
     }
 
     // answers / history

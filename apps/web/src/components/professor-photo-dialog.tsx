@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Camera, Check, ImageOff, Link2, Loader2, Trash, TriangleAlert } from "lucide-react";
+import { Camera, ImageOff, Link2, Loader2, Trash, TriangleAlert } from "lucide-react";
 import { saveProfessorPhoto } from "@/api";
 import type { ProfessorLink } from "@/types";
 import { useT } from "@/lib/i18n";
@@ -35,36 +35,25 @@ export function ProfessorPhotoDialog({
   const [imageUrl, setImageUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setLinkedin(link?.linkedinUrl ?? "");
     setImageUrl(link?.imageUrl ?? "");
     setErr(null);
-    setNotice(null);
   }, [open, link]);
 
   const save = async () => {
     setBusy(true);
     setErr(null);
-    setNotice(null);
     try {
-      const res = await saveProfessorPhoto({
+      await saveProfessorPhoto({
         professorId,
         linkedinUrl: linkedin.trim(),
         imageUrl: imageUrl.trim(),
       });
       await onSaved();
-      if (res.removed) {
-        setNotice(t("profPhoto.removed"));
-        onOpenChange(false);
-      } else if (res.resolved) {
-        setNotice(t("profPhoto.saved"));
-        onOpenChange(false);
-      } else {
-        setErr(t("profPhoto.unresolved"));
-      }
+      onOpenChange(false);
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
     } finally {
@@ -75,7 +64,6 @@ export function ProfessorPhotoDialog({
   const remove = async () => {
     setBusy(true);
     setErr(null);
-    setNotice(null);
     try {
       await saveProfessorPhoto({ professorId, linkedinUrl: "", imageUrl: "" });
       await onSaved();
@@ -161,11 +149,6 @@ export function ProfessorPhotoDialog({
           <p className="text-[11px] text-muted-foreground">{t("profPhoto.imageHint")}</p>
         </div>
 
-        {notice && (
-          <p className="flex items-center gap-1.5 rounded-md border border-ok/30 bg-ok/10 px-2.5 py-1.5 text-xs text-ok">
-            <Check className="size-3.5" aria-hidden /> {notice}
-          </p>
-        )}
         {err && (
           <p className="flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
             <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden /> {err}

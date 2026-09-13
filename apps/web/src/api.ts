@@ -6,6 +6,7 @@ import type {
   AnswerEntry,
   AnswerState,
   ExercisesPayload,
+  OrganizationDto,
   ProfessorLink,
   QuizSelection,
   TrainingQuiz,
@@ -72,7 +73,6 @@ export interface SaveProfessorPhotoInput {
 
 export interface SaveProfessorPhotoResult {
   ok: boolean;
-  resolved?: boolean;
   removed?: boolean;
   link: ProfessorLink | null;
 }
@@ -83,6 +83,13 @@ export async function saveProfessorPhoto(input: SaveProfessorPhotoInput): Promis
 
 export async function deleteProfessorPhoto(professorId: number): Promise<void> {
   await req(`/api/professor-link/${professorId}`, { method: "DELETE" });
+}
+
+// ── Organizations (hardcoded directory) ─────────────────────────────────────
+
+export async function fetchOrganizations(): Promise<OrganizationDto[]> {
+  const body = await req<{ organizations: OrganizationDto[] }>("/api/organizations");
+  return body.organizations ?? [];
 }
 
 export interface AiRequestSaveResult {

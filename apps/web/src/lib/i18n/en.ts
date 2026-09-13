@@ -363,6 +363,7 @@ export const en: Dict = {
   "settings.tab.personal": "Personal",
   "settings.tab.ai": "AI",
   "settings.tab.advanced": "Advanced",
+  "settings.tab.organizacao": "Organization",
   "settings.appearance": "Appearance",
   "settings.appearanceHint": "Applied instantly — no need to save.",
   "settings.themeLabel": "Theme",
@@ -408,6 +409,20 @@ export const en: Dict = {
   "settings.professorsEmpty": "No professor with open subjects right now.",
   "settings.professorsNone": "No photo",
   "settings.professorsSave": "Save",
+
+  // organization
+  "org.title": "Organization",
+  "org.desc":
+    "Your institution and its professor directory. Photos come from LinkedIn via unavatar and can be applied to the cards.",
+  "org.directory": "Professor directory",
+  "org.directoryHint":
+    "Hardcoded in apps/server/config/organizations.json — edit the file to add or fix professors.",
+  "org.unmatched": "No match",
+  "org.apply": "Use this photo",
+  "org.applyAll": "Apply all",
+  "org.applied": "Applied",
+  "org.empty": "No organization configured.",
+  "org.openLinkedin": "Open LinkedIn",
 
   // ai request panel
   "aiPanel.title": "What the AI receives",

@@ -1,0 +1,32 @@
+{
+  "organizations": [
+    {
+      "id": "unifoa",
+      "name": "UNIFOA",
+      "host": "unifoa2.grupoa.education",
+      "logo": "https://bucket.safea.grupoa.education/tenant/unifoa_prod/1605136944711_Unifoa.png",
+      "professors": [
+        {
+          "name": "Debora Amorim de Carvalho",
+          "linkedin": "https://www.linkedin.com/in/d%C3%A9bora-amorim-de-carvalho-33867462/"
+        },
+        {
+          "name": "Leonardo Dias da Silva",
+          "linkedin": "https://www.linkedin.com/in/leodiassbr/"
+        },
+        {
+          "name": "Rafael Iacillo Soares",
+          "linkedin": "https://www.linkedin.com/in/rafael-iacillo/"
+        },
+        {
+          "name": "Marcelo Passos dos Santos",
+          "linkedin": "https://www.linkedin.com/in/marcelo-santos-8061421a/"
+        },
+        {
+          "name": "Osni Augusto Souza Da Silva",
+          "linkedin": "https://www.linkedin.com/in/osni-silva-segtecinfo/"
+        }
+      ]
+    }
+  ]
+}

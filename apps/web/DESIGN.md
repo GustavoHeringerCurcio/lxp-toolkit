@@ -154,9 +154,10 @@ e.g. "Banco de Dados" → `Database`, "Arquitetura de Software" → `Network`), 
 2-letter monogram (`subjectInitials`) when nothing matches. A small monochrome type icon sits in the
 corner as a badge. `SubjectLabel` repeats the color on the module name.
 
-`SubjectAvatar` also accepts an optional `imageUrl` — the professor's photo configured per student
-(§8, Ajustes). When present it fills the tile (`object-cover`) while the subject-colored frame and
-the type badge stay; a broken/failed image falls back to the pictogram, then the monogram.
+`SubjectAvatar` also accepts an optional `imageUrl` — the professor's photo from the hardcoded
+organization directory or a per-professor override (Ajustes → Organização). When present it fills
+the tile (`object-cover`) while the subject-colored frame and the type badge stay; a broken/failed
+image falls back to the pictogram, then the monogram.
 
 `ProfessorTag` + `lib/prof.ts`: professors are secondary identity. A neutral initials avatar + name
 (optionally the configured photo), never a competing color. The sidebar "Professores" list uses the
@@ -172,7 +173,7 @@ same neutral treatment.
 | `/tarefa/:id` | **Atividade** | reading column (prose width) + sticky workbench; focus mode; version timeline; send-confirmation modal |
 | `/treino/quiz` | **Treino de quiz** | gamified practice quiz (AI-generated or portal-sourced), one question at a time with feedback, score + readiness verdict + history |
 | `/treino/estudo` | **Perguntar à IA** | free-text study Q&A scoped to the selected subject; streamed markdown |
-| `/ajustes` | **Ajustes** | hub with pill tabs (Pessoal · IA · Avançado): profile + appearance, IA voice/format/rules/content, generation params + preview |
+| `/ajustes` | **Ajustes** | hub with pill tabs (Pessoal · IA · Avançado · Organização): profile + appearance, IA voice/format/rules/content, generation params + preview, institution + professor directory |
 | `/design` | **Design** | living style guide: tokens, type ramp, components, states |
 
 Global: **⌘K / Ctrl+K command palette** — navigate, jump to any tarefa, filter by module, toggle
@@ -233,9 +234,10 @@ grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid;
 ## History
 
 - **v3.3 (2026-09):** subject tiles show an automatic domain pictogram (`lib/subject-icon.ts`,
-  monogram fallback); professor photos can be configured per student from a LinkedIn URL (resolved
-  via unavatar, proxied/cached server-side) or a manual image URL, shown on the subject tile and
-  `ProfessorTag`; managed in Ajustes → Pessoal and the card ⋯ menu.
+  monogram fallback); professor photos come from a hardcoded organization directory
+  (`apps/server/config/organizations.json`) or a per-professor LinkedIn override, loaded by the
+  browser straight from unavatar (no server download/cache), shown on the subject tile and
+  `ProfessorTag`; managed in Ajustes → Organização and the card ⋯ menu.
 - **v3.2 (2026-09):** send modal decluttered to a minimal confirm (title + one warning line + one
   action line); format becomes a segmented control; all modal icons replaced by the custom duotone
   `send-icons` family.

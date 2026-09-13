@@ -165,18 +165,38 @@ export interface AiConfigDto {
 // ── Professor photos ────────────────────────────────────────────────────────
 
 export type ProfessorLinkSource = "linkedin" | "manual";
-export type ProfessorLinkStatus = "pending" | "ok" | "failed";
 
 export interface ProfessorLink {
   professorId: number;
   linkedinUrl: string | null;
   imageUrl: string | null;
   source: ProfessorLinkSource;
-  status: ProfessorLinkStatus;
-  fetchedAt: string | null;
   updatedAt: string;
-  /** Relative URL the UI uses for the avatar. */
+  /** Avatar URL for the browser (manual image, else unavatar). Empty when none. */
   photoUrl: string;
+}
+
+// ── Organizations (hardcoded directory) ─────────────────────────────────────
+
+export type OrgMatchConfidence = "exact" | "probable" | "none";
+
+export interface OrganizationProfessor {
+  professorName: string;
+  professorId: number | null;
+  displayName: string | null;
+  linkedin: string;
+  photoUrl: string | null;
+  confidence: OrgMatchConfidence;
+  matched: boolean;
+}
+
+export interface OrganizationDto {
+  id: string;
+  name: string;
+  host: string | null;
+  logo: string | null;
+  selected: boolean;
+  professors: OrganizationProfessor[];
 }
 
 // ── Training ("Treino") ─────────────────────────────────────────────────────
