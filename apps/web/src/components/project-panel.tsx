@@ -3,7 +3,11 @@ import { Check, FolderKanban, Loader2, Save, Sparkles } from "lucide-react";
 import { detectActivityContext, saveAiRequest } from "@/api";
 import { useAppData } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
-import { PROJECT_THEMES, composeContextInstructions } from "@/lib/themes";
+import {
+  PROJECT_THEMES,
+  composeContextInstructions,
+  parseContextInstructions,
+} from "@/lib/themes";
 import type { Exercise } from "@/types";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/collapsible-card";
@@ -28,12 +32,35 @@ export function ProjectPanel({ e, onSaved }: { e: Exercise; onSaved?: () => void
   const [requisitos, setRequisitos] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [warn, setWarn] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     setMsg(null);
+    setWarn(null);
     setErr(null);
   }, [e.id]);
+
+  useEffect(() => {
+    const parsed = parseContextInstructions(e.aiRequestJson);
+    if (!parsed) {
+      setTheme("");
+      setCustomTheme("");
+      setAtores("");
+      setRequisitos("");
+      return;
+    }
+    const known = (PROJECT_THEMES as readonly string[]).includes(parsed.theme);
+    if (known) {
+      setTheme(parsed.theme);
+      setCustomTheme("");
+    } else {
+      setTheme(parsed.theme ? CUSTOM : "");
+      setCustomTheme(parsed.theme);
+    }
+    setAtores(parsed.atores.join(", "));
+    setRequisitos(parsed.requisitos.join("\n"));
+  }, [e.id, e.aiRequestJson]);
 
   const effectiveTheme = customTheme.trim() || theme;
   const splitList = (value: string): string[] =>
@@ -46,19 +73,28 @@ export function ProjectPanel({ e, onSaved }: { e: Exercise; onSaved?: () => void
     setBusy(true);
     setErr(null);
     setMsg(null);
+    setWarn(null);
     try {
       const d = await detectActivityContext(e.id);
-      const known = (PROJECT_THEMES as readonly string[]).includes(d.theme);
+      const detectedTheme = d.theme.trim();
+      const known = (PROJECT_THEMES as readonly string[]).includes(detectedTheme);
       if (known) {
-        setTheme(d.theme);
+        setTheme(detectedTheme);
         setCustomTheme("");
-      } else {
+      } else if (detectedTheme) {
         setTheme(CUSTOM);
-        setCustomTheme(d.theme);
+        setCustomTheme(detectedTheme);
+      } else {
+        setTheme("");
+        setCustomTheme("");
       }
       setAtores(d.atores.join(", "));
       setRequisitos(d.requisitos.join("\n"));
-      setMsg(t("project.detected", { model: d.model }));
+      if (detectedTheme || d.atores.length || d.requisitos.length) {
+        setMsg(t("project.detected", { model: d.model }));
+      } else {
+        setWarn(t("project.detectedEmpty"));
+      }
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
     } finally {
@@ -169,6 +205,11 @@ export function ProjectPanel({ e, onSaved }: { e: Exercise; onSaved?: () => void
       {msg && (
         <p className="flex items-center gap-1.5 rounded-md border border-ok/30 bg-ok/10 px-2.5 py-1.5 text-xs text-ok">
           <Check className="size-3.5" aria-hidden /> {msg}
+        </p>
+      )}
+      {warn && (
+        <p className="rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+          {warn}
         </p>
       )}
       {err && (
