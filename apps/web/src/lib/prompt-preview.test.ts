@@ -41,6 +41,7 @@ export function makeExercise(overrides: Partial<Exercise> = {}): Exercise {
     kind: "upload",
     flavor: "question",
     flavorSource: "auto",
+    anomalies: [],
     tag: null,
     enrollmentId: null,
     isSurvey: false,

@@ -6,7 +6,7 @@ import type { Exercise } from "@/types";
 import { countdownParts, fmtDeadline } from "@/lib/status";
 import { contentLabel } from "@/lib/kind";
 import { useT, type TranslateFn } from "@/lib/i18n";
-import { StatusBadge, TypeBadge } from "./status-badges";
+import { StatusBadge, ActivityBadge } from "./status-badges";
 import { SubjectAvatar } from "./identity";
 
 function useNow(intervalMs = 30_000): number {
@@ -61,7 +61,7 @@ export function NextHero({ next, onClick }: { next: Exercise; onClick: () => voi
           {next.title}
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-2">
-          <TypeBadge kind={next.kind} contentKind={next.contentKind} isSurvey={next.isSurvey} />
+          <ActivityBadge e={next} />
           {meta && <span className="text-xs text-muted-foreground">{meta}</span>}
         </span>
       </span>

@@ -2,7 +2,7 @@ import type { AiRequest, Exercise, Answers, Overrides, ProfessorLink, QuizSelect
 import type { OrgDirectory } from "./organizations.js";
 import { normalizeName } from "./professor.js";
 import { humanizeQuizAnswer, parseAiRequest } from "./prompt.js";
-import { flavorFromTag } from "./build.js";
+import { anomaliesFromTag, flavorFromAnomalies } from "./build.js";
 
 export interface ExerciseView extends Exercise {
   answer: string | null;
@@ -67,11 +67,12 @@ export function enrich(
         professorPhotoUrl = orgDirectory.byName.get(normalizeName(e.professor)) ?? null;
       }
     }
-    const manualFlavor = flavorFromTag(o.tag);
+    const taggedAnomalies = anomaliesFromTag(o.tag);
     return {
       ...e,
-      flavor: manualFlavor ?? e.flavor,
-      flavorSource: manualFlavor ? "manual" : e.flavorSource,
+      flavor: taggedAnomalies ? flavorFromAnomalies(taggedAnomalies) : e.flavor,
+      flavorSource: taggedAnomalies ? "manual" : e.flavorSource,
+      anomalies: taggedAnomalies ?? e.anomalies,
       status,
       done,
       answer,

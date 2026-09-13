@@ -50,8 +50,8 @@ import { AiRequestPanel } from "@/components/ai-request-panel";
 import { MarkPanel, PortalOnlyPanel } from "@/components/mark-panel";
 import { SendDialog } from "@/components/send-dialog";
 import { SendIcon } from "@/components/icons/send-icons";
-import { StatusBadge, TypeBadge, DoneBadge } from "@/components/status-badges";
-import { kindMeta, canAiAnswer, flavorMeta } from "@/lib/kind";
+import { StatusBadge, ActivityBadge, DoneBadge } from "@/components/status-badges";
+import { kindMeta, canAiAnswer } from "@/lib/kind";
 import { sendModeLabel } from "@/lib/send";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
@@ -334,8 +334,6 @@ function AnswerPanel({
   const isForum = e.kind === "forum";
   const isGhost = e.flavor === "ghost";
   const isPrint = e.flavor === "print";
-  const fmeta = flavorMeta(e.flavor);
-  const FlavorIcon = fmeta.icon;
   const wantsText = (isUpload && !isPrint) || isForum;
   const canAi = canAiAnswer(e);
   const isDone = e.done || e.status === "done";
@@ -360,18 +358,6 @@ function AnswerPanel({
                 date: fmtVersionDate(current.updatedAt, locale),
                 source: current.source === "ai" ? t("draft.sourceAi") : t("draft.sourceManual"),
               })}
-            </span>
-          )}
-          {e.flavor && e.flavor !== "question" && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                fmeta.badgeClass,
-              )}
-              title={e.flavorSource === "manual" ? t("flavor.tagged") : t("flavor.detected")}
-            >
-              <FlavorIcon className="size-3" aria-hidden />
-              {t(`flavor.${e.flavor}`)}
             </span>
           )}
           {e.status === "done" && (
@@ -844,7 +830,7 @@ export function ExercisePage() {
         <div className={cn("min-w-0 space-y-4", focus && "hidden")}>
           <header className="overflow-hidden rounded-xl border border-border bg-card">
             <div className={cn("flex flex-wrap items-center gap-2 p-5", headerCard.open && "pb-0")}>
-              <TypeBadge kind={e.kind} contentKind={e.contentKind} isSurvey={e.isSurvey} />
+              <ActivityBadge e={e} />
               {e.done && <DoneBadge />}
               <StatusBadge e={e} />
               {e.deadlineAt && (

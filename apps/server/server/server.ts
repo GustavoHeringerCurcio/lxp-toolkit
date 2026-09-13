@@ -595,7 +595,13 @@ const server = createServer(async (req, res) => {
         const tag = b.tag == null ? null : String(b.tag).trim() || null;
         await saveTag(id, tag);
         const view = await findView(id);
-        return json(res, 200, { ok: true, tag: view.tag, flavor: view.flavor, flavorSource: view.flavorSource });
+        return json(res, 200, {
+          ok: true,
+          tag: view.tag,
+          flavor: view.flavor,
+          flavorSource: view.flavorSource,
+          anomalies: view.anomalies,
+        });
       }
       if (url === "/api/profile") {
         const b = await readBody(req);

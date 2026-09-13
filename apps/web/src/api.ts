@@ -3,6 +3,7 @@ import type {
   AiConfigDto,
   AiProfile,
   AiStyle,
+  Anomaly,
   AnswerEntry,
   AnswerState,
   ExercisesPayload,
@@ -107,6 +108,7 @@ export interface TagSaveResult {
   tag: string | null;
   flavor: string;
   flavorSource: string;
+  anomalies: Anomaly[];
 }
 
 /** Set/clear a manual anomaly tag (ghost | print | anomalia). */

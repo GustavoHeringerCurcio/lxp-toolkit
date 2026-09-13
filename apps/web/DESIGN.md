@@ -85,9 +85,19 @@ This rule prevents the overload that made type badges collide with status (blue 
 | Dimension | Encoding | Where |
 |---|---|---|
 | Status | semantic tone + icon + label | `TONE_CLS` / `StatusBadge` |
-| Type | icon + label, monochrome (`border-border bg-muted/40 text-muted-foreground`) | `KIND_META.badgeClass`, `TypeBadge` |
+| Type | icon + label, monochrome (`border-border bg-muted/40 text-muted-foreground`) | `KIND_META.badgeClass`, `ActivityBadge` |
+| Activity state | combined `type · state` badge (`Tarefa · Sem pergunta`); monochrome normally, **outline** red/amber for anomalies — never filled | `lib/kind.ts::activityBadge`, `ActivityBadge` |
 | Subject (module) | `--subject-1..12` palette + monogram initials | `lib/subject.ts`, `lib/subject-colors.tsx`, `.subject-avatar` |
 | Professor | neutral initials avatar, never colored | `lib/prof.ts`, `ProfessorTag` |
+
+**Activity-state exception (v3.5).** `ActivityBadge` is always rendered and carries the coarse type
+*plus* the answerability state for quiz/upload (`Com pergunta` / `Sem pergunta` / `Print`); every
+other kind shows the type alone (`Fórum`, `Leitura`, `PDF`, …). An anomaly tints the chip with a
+status hue (`error` → `--late`, `warn` → `--soon`) but **only as an outline** (`rounded-md`, no
+fill), so it never reads as a second filled status pill on the same card. This is a deliberate,
+bounded exception to "type is monochrome": the fill channel still belongs to status. The anomaly
+model is a list (`anomalies: { code, severity }[]`), so new anomaly types reuse this chip without
+new UI.
 
 Subject palette (tokens in `index.css`, light + dark tuned; no raw color in TSX):
 
@@ -234,6 +244,9 @@ grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid;
 
 ## History
 
+- **v3.5 (2026-09):** always-on `ActivityBadge` (`type · state`) with a generalized anomaly model
+  (`ghost`/`print` today); anomalies tint the chip via outline red/amber (bounded §3.5 exception).
+  Replaces the standalone `TypeBadge`/`FlavorBadge`.
 - **v3.4 (2026-09):** subject palette widened to 12 clearly distinct hues (adjacent slots ~150°
   apart) and made collision-free: `SubjectColorProvider` assigns each module a unique slot for the
   visible set, so modules that used to share a color (e.g. "Projeto" and "Desenvolvimento

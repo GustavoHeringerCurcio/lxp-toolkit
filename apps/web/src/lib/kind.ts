@@ -1,14 +1,12 @@
 import {
-  Camera,
   CircleCheckBig,
-  Ghost,
   ListChecks,
   MessagesSquare,
   Upload,
   FileQuestion,
   type LucideIcon,
 } from "lucide-react";
-import type { ContentKind, ExerciseKind, UploadFlavor } from "@/types";
+import type { Anomaly, AnomalySeverity, ContentKind, ExerciseKind, UploadFlavor } from "@/types";
 import type { TranslateFn } from "./i18n";
 
 export interface KindMeta {
@@ -102,27 +100,70 @@ export function kindMeta(kind: ExerciseKind): KindMeta {
 
 // ── Task flavor (what the task actually requires) ───────────────────────────
 
-export interface FlavorMeta {
-  label: string;
-  icon: LucideIcon;
-  badgeClass: string;
-}
-
-/** Ghost/print are anomalies surfaced with a colored badge; question is neutral. */
-export const FLAVOR_META: Record<UploadFlavor, FlavorMeta> = {
-  question: { label: "Pergunta", icon: FileQuestion, badgeClass: NEUTRAL_BADGE },
-  ghost: { label: "Sem pergunta", icon: Ghost, badgeClass: "border-soon/50 bg-soon/10 text-soon" },
-  print: { label: "Print", icon: Camera, badgeClass: "border-brand/50 bg-brand/10 text-brand" },
-};
-
-export function flavorMeta(flavor: UploadFlavor): FlavorMeta {
-  return FLAVOR_META[flavor] ?? FLAVOR_META.question;
-}
-
 /** Whether the AI generate workbench applies: only real-question items. */
 export function canAiAnswer(e: { kind: ExerciseKind; flavor: UploadFlavor }): boolean {
   return (e.kind === "upload" || e.kind === "quiz" || e.kind === "forum") && e.flavor === "question";
 }
+
+// ── Combined activity badge (type · answerability state) ────────────────────
+
+export type BadgeTone = "none" | AnomalySeverity;
+
+export interface ActivityBadgeInfo {
+  /** i18n key for the type portion ("Quiz", "Tarefa", "Leitura", …). */
+  typeKey: string;
+  /** i18n key for the state portion, or null when the kind has no state. */
+  stateKey: string | null;
+  tone: BadgeTone;
+  icon: LucideIcon;
+}
+
+/**
+ * Compose the always-on activity badge: type + answerability state for
+ * quiz/upload, type only for everything else. The tone is `error`/`warn` only
+ * when the item carries an anomaly (rendered as an outline chip).
+ */
+export function activityBadge(e: {
+  kind: ExerciseKind;
+  contentKind: ContentKind;
+  isSurvey: boolean;
+  anomalies: Anomaly[];
+}): ActivityBadgeInfo {
+  const icon = kindMeta(e.kind).icon;
+  if (e.isSurvey) return { typeKey: "badge.survey", stateKey: null, tone: "none", icon };
+
+  const typeKey =
+    e.kind === "mark" || e.kind === "other" ? `content.${e.contentKind}` : `kind.${e.kind}.short`;
+  if (e.kind !== "quiz" && e.kind !== "upload") {
+    return { typeKey, stateKey: null, tone: "none", icon };
+  }
+
+  const primary = e.anomalies[0];
+  if (primary?.code === "ghost") {
+    return {
+      typeKey,
+      stateKey: e.kind === "quiz" ? "badgeState.ghostQuiz" : "badgeState.ghostTask",
+      tone: primary.severity,
+      icon,
+    };
+  }
+  if (primary?.code === "print") {
+    return { typeKey, stateKey: "badgeState.print", tone: primary.severity, icon };
+  }
+  return {
+    typeKey,
+    stateKey: e.kind === "quiz" ? "badgeState.questionQuiz" : "badgeState.questionTask",
+    tone: "none",
+    icon,
+  };
+}
+
+/** Tailwind classes per badge tone: anomalies are outline-only (never filled). */
+export const BADGE_TONE_CLS: Record<BadgeTone, string> = {
+  none: NEUTRAL_BADGE,
+  error: "border-late/50 bg-transparent text-late",
+  warn: "border-soon/50 bg-transparent text-soon",
+};
 
 /**
  * UI labels come from the dictionaries so they follow the active language.

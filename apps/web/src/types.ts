@@ -7,6 +7,15 @@ export type AnswerSource = "ai" | "manual";
 export type UploadFlavor = "question" | "ghost" | "print";
 export type FlavorSource = "auto" | "manual";
 
+/** A detected or tagged content anomaly (drives the combined activity badge). */
+export type AnomalyCode = "ghost" | "print";
+export type AnomalySeverity = "error" | "warn";
+
+export interface Anomaly {
+  code: AnomalyCode;
+  severity: AnomalySeverity;
+}
+
 export interface AiProfile {
   nome: string;
   matricula: string;
@@ -89,6 +98,8 @@ export interface Exercise {
   flavor: UploadFlavor;
   /** Where `flavor` came from: `auto` detection or a manual tag override. */
   flavorSource: FlavorSource;
+  /** Content anomalies detected or tagged for this item (drives the badge). */
+  anomalies: Anomaly[];
   /** Manual anomaly tag (ghost | print | anomalia), or null. */
   tag: string | null;
   enrollmentId: number | null;

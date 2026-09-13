@@ -23,6 +23,19 @@ export type UploadFlavor = "question" | "ghost" | "print";
 /** Where the effective flavor came from: auto-detected or manual tag override. */
 export type FlavorSource = "auto" | "manual";
 
+/**
+ * A detected (or tagged) content anomaly. Extensible: new codes plug into the
+ * same badge/override pipeline without UI changes. `severity` drives the badge
+ * tone (`error` = red outline, `warn` = amber outline).
+ */
+export type AnomalyCode = "ghost" | "print";
+export type AnomalySeverity = "error" | "warn";
+
+export interface Anomaly {
+  code: AnomalyCode;
+  severity: AnomalySeverity;
+}
+
 export type ExerciseStatus = "done" | "expired" | "open";
 export type AnswerSource = "ai" | "manual";
 
@@ -119,6 +132,8 @@ export interface Exercise {
   flavor: UploadFlavor;
   /** Where `flavor` came from: `auto` detection or a manual tag override. */
   flavorSource: FlavorSource;
+  /** Content anomalies detected or tagged for this item (drives the badge). */
+  anomalies: Anomaly[];
   /** Portal enrollment id (from the topic context); required to submit quizzes. */
   enrollmentId: number | null;
   /** A "Pesquisa": answered straight through the endpoint, no attempt/finish cycle. */

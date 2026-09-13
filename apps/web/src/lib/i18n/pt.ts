@@ -185,11 +185,11 @@ export const pt = {
   "tag.ghost": "Sem pergunta",
   "tag.print": "Print / captura",
   "tag.anomaly": "Anomalia",
-  "flavor.question": "Pergunta",
-  "flavor.ghost": "Sem pergunta",
-  "flavor.print": "Print",
-  "flavor.detected": "Detectado automaticamente",
-  "flavor.tagged": "Classificado por você",
+  "badgeState.questionQuiz": "Com perguntas",
+  "badgeState.ghostQuiz": "Sem perguntas",
+  "badgeState.questionTask": "Com pergunta",
+  "badgeState.ghostTask": "Sem pergunta",
+  "badgeState.print": "Print",
 
   // badges
   "badge.survey": "Pesquisa",

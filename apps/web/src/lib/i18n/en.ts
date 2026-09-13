@@ -181,11 +181,11 @@ export const en: Dict = {
   "tag.ghost": "No question",
   "tag.print": "Print / screenshot",
   "tag.anomaly": "Anomaly",
-  "flavor.question": "Question",
-  "flavor.ghost": "No question",
-  "flavor.print": "Print",
-  "flavor.detected": "Auto-detected",
-  "flavor.tagged": "Classified by you",
+  "badgeState.questionQuiz": "With questions",
+  "badgeState.ghostQuiz": "No questions",
+  "badgeState.questionTask": "With prompt",
+  "badgeState.ghostTask": "No question",
+  "badgeState.print": "Print",
 
   // badges
   "badge.survey": "Survey",

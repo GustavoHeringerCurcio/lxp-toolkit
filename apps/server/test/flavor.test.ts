@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectFlavor, flavorFromTag } from "../src/build.js";
+import { anomaliesFromTag, detectAnomalies, flavorFromAnomalies, flavorFromTag } from "../src/build.js";
 import { buildMessages, composeGhostAnswer } from "../src/prompt.js";
 import { makeExercise, makeQuizQ } from "./helpers.js";
 
@@ -17,36 +17,42 @@ const baseStyle = {
 
 const baseSections = { enunciado: true, arquivos: false, questoes: true, observacoes: false };
 
-describe("detectFlavor", () => {
+const codes = (anomalies: { code: string }[]): string[] => anomalies.map((a) => a.code);
+
+describe("detectAnomalies", () => {
   it("task sem caixa de upload (hasFileUpload=false) → ghost", () => {
     expect(
-      detectFlavor({
-        kind: "file_upload",
-        title: "Aula 3 - Modelos de Referência OSI e TCP IP",
-        html: '<div><grupoaattachment file="slides.pptx"/></div>',
-        content: { hasFileUpload: false, retryTypeId: 3 },
-        attachments: [{ url: "https://x/slides.pptx" }],
-        questions: [],
-      }),
-    ).toBe("ghost");
+      codes(
+        detectAnomalies({
+          kind: "file_upload",
+          title: "Aula 3 - Modelos de Referência OSI e TCP IP",
+          html: '<div><grupoaattachment file="slides.pptx"/></div>',
+          content: { hasFileUpload: false, retryTypeId: 3 },
+          attachments: [{ url: "https://x/slides.pptx" }],
+          questions: [],
+        }),
+      ),
+    ).toEqual(["ghost"]);
   });
 
   it("task com palavra print/captura → print", () => {
     expect(
-      detectFlavor({
-        kind: "file_upload",
-        title: "SRC Curso - Começando com Cisco Packet Tracert",
-        html: "<p>Fazer curso Packet tracer e printar tela de término e postar no LXP.</p>",
-        content: { hasFileUpload: true },
-        attachments: [],
-        questions: [],
-      }),
-    ).toBe("print");
+      codes(
+        detectAnomalies({
+          kind: "file_upload",
+          title: "SRC Curso - Começando com Cisco Packet Tracert",
+          html: "<p>Fazer curso Packet tracer e printar tela de término e postar no LXP.</p>",
+          content: { hasFileUpload: true },
+          attachments: [],
+          questions: [],
+        }),
+      ),
+    ).toEqual(["print"]);
   });
 
-  it("task com enunciado real → question", () => {
+  it("task com enunciado real → sem anomalia", () => {
     expect(
-      detectFlavor({
+      detectAnomalies({
         kind: "file_upload",
         title: "Casos de Uso",
         html: "<p>Responda as questões do modelo anexo.</p>",
@@ -54,25 +60,27 @@ describe("detectFlavor", () => {
         attachments: [{ url: "https://x/modelo.docx" }],
         questions: [],
       }),
-    ).toBe("question");
+    ).toEqual([]);
   });
 
   it("quiz sem questões → ghost", () => {
     expect(
-      detectFlavor({
-        kind: "quiz",
-        title: "Questionário vazio",
-        html: null,
-        content: { questions: [] },
-        attachments: [],
-        questions: [],
-      }),
-    ).toBe("ghost");
+      codes(
+        detectAnomalies({
+          kind: "quiz",
+          title: "Questionário vazio",
+          html: null,
+          content: { questions: [] },
+          attachments: [],
+          questions: [],
+        }),
+      ),
+    ).toEqual(["ghost"]);
   });
 
-  it("quiz com questões → question", () => {
+  it("quiz com questões → sem anomalia", () => {
     expect(
-      detectFlavor({
+      detectAnomalies({
         kind: "quiz",
         title: "Quiz",
         html: null,
@@ -80,25 +88,27 @@ describe("detectFlavor", () => {
         attachments: [],
         questions: [makeQuizQ(1, "2+2?")],
       }),
-    ).toBe("question");
+    ).toEqual([]);
   });
 
   it("task sem enunciado e sem anexos → ghost", () => {
     expect(
-      detectFlavor({
-        kind: "file_upload",
-        title: "Tarefa",
-        html: null,
-        content: { hasFileUpload: true },
-        attachments: [],
-        questions: [],
-      }),
-    ).toBe("ghost");
+      codes(
+        detectAnomalies({
+          kind: "file_upload",
+          title: "Tarefa",
+          html: null,
+          content: { hasFileUpload: true },
+          attachments: [],
+          questions: [],
+        }),
+      ),
+    ).toEqual(["ghost"]);
   });
 
-  it("task sem enunciado mas com anexos → question (conservador)", () => {
+  it("task sem enunciado mas com anexos → sem anomalia (conservador)", () => {
     expect(
-      detectFlavor({
+      detectAnomalies({
         kind: "file_upload",
         title: "Leia o anexo",
         html: null,
@@ -106,23 +116,59 @@ describe("detectFlavor", () => {
         attachments: [{ url: "https://x/a.pdf" }],
         questions: [],
       }),
-    ).toBe("question");
+    ).toEqual([]);
+  });
+
+  it("severidade por código: ghost=error, print=warn", () => {
+    const [ghost] = detectAnomalies({
+      kind: "file_upload",
+      title: "Tarefa",
+      html: null,
+      content: { hasFileUpload: false },
+      attachments: [],
+      questions: [],
+    });
+    const [print] = detectAnomalies({
+      kind: "file_upload",
+      title: "Print da tela",
+      html: null,
+      content: { hasFileUpload: true },
+      attachments: [],
+      questions: [],
+    });
+    expect(ghost.severity).toBe("error");
+    expect(print.severity).toBe("warn");
   });
 });
 
-describe("flavorFromTag", () => {
+describe("flavorFromAnomalies", () => {
+  it("deriva o flavor primário", () => {
+    expect(flavorFromAnomalies([])).toBe("question");
+    expect(flavorFromAnomalies([{ code: "print", severity: "warn" }])).toBe("print");
+    expect(flavorFromAnomalies([{ code: "ghost", severity: "error" }])).toBe("ghost");
+  });
+});
+
+describe("anomaliesFromTag / flavorFromTag", () => {
   it("mapeia tags conhecidas", () => {
-    expect(flavorFromTag("print")).toBe("print");
-    expect(flavorFromTag("ghost")).toBe("ghost");
-    expect(flavorFromTag("anomalia")).toBe("ghost");
-    expect(flavorFromTag("question")).toBe("question");
+    expect(codes(anomaliesFromTag("print") ?? [])).toEqual(["print"]);
+    expect(codes(anomaliesFromTag("ghost") ?? [])).toEqual(["ghost"]);
+    expect(codes(anomaliesFromTag("anomalia") ?? [])).toEqual(["ghost"]);
+    expect(anomaliesFromTag("question")).toEqual([]);
   });
 
   it("tags neutras/ausentes → null", () => {
+    expect(anomaliesFromTag(null)).toBeNull();
+    expect(anomaliesFromTag(undefined)).toBeNull();
+    expect(anomaliesFromTag("")).toBeNull();
+    expect(anomaliesFromTag("qualquer")).toBeNull();
+  });
+
+  it("flavorFromTag continua derivando o flavor", () => {
+    expect(flavorFromTag("print")).toBe("print");
+    expect(flavorFromTag("ghost")).toBe("ghost");
+    expect(flavorFromTag("question")).toBe("question");
     expect(flavorFromTag(null)).toBeNull();
-    expect(flavorFromTag(undefined)).toBeNull();
-    expect(flavorFromTag("")).toBeNull();
-    expect(flavorFromTag("qualquer")).toBeNull();
   });
 });
 

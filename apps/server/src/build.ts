@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from 
 import path from "node:path";
 import { assist, dataDir, raw } from "./paths.js";
 import { computeStatus, daysLeft, refreshLive } from "./status.js";
-import type { ContentKind, Exercise, ExerciseKind, ForumInfo, ForumPost, PdfRef, QuizQ, UploadFlavor } from "./types.js";
+import type { Anomaly, AnomalyCode, AnomalySeverity, ContentKind, Exercise, ExerciseKind, ForumInfo, ForumPost, PdfRef, QuizQ, UploadFlavor } from "./types.js";
 
 interface TreeItem {
   courseId: number;
@@ -55,50 +55,77 @@ export function actionKindFor(item: Pick<TreeItem, "kind" | "isRecordProgress">)
 const PRINT_RE =
   /\bprint\b|printar|screenshot|captura de tela|captura|captur[ae]|foto(grafia)?|imagem|recorte/i;
 
+/** Badge tone per anomaly code: error = red outline, warn = amber outline. */
+export const ANOMALY_SEVERITY: Record<AnomalyCode, AnomalySeverity> = {
+  ghost: "error",
+  print: "warn",
+};
+
+export function makeAnomaly(code: AnomalyCode): Anomaly {
+  return { code, severity: ANOMALY_SEVERITY[code] };
+}
+
 /**
- * Classify what a task actually requires, beyond its coarse `kind`:
- * - `ghost`  — no question at all: a task with no upload box, a quiz with zero
+ * Detect content anomalies for a task (before any tag override):
+ * - `ghost` — no question at all: a task with no upload box, a quiz with zero
  *   questions, or an item with empty instructions and no attachments.
- * - `print`  — the instruction asks for a screenshot/print the student attaches.
- * - `question` — a normal task with an actual question.
+ * - `print` — the instruction asks for a screenshot/print the student attaches.
  */
-export function detectFlavor(input: {
+export function detectAnomalies(input: {
   kind: ContentKind;
   title: string;
   html: string | null;
   content: Record<string, unknown> | null;
   attachments: unknown[];
   questions: QuizQ[];
-}): UploadFlavor {
+}): Anomaly[] {
   const { kind, title, html, content, attachments, questions } = input;
 
-  if (kind === "quiz" && questions.length === 0) return "ghost";
+  if (kind === "quiz") {
+    return questions.length === 0 ? [makeAnomaly("ghost")] : [];
+  }
 
   if (kind === "file_upload") {
     const hasFileUpload =
       content && typeof content === "object" && "hasFileUpload" in content
         ? content.hasFileUpload === true
         : null;
-    if (hasFileUpload === false) return "ghost";
+    if (hasFileUpload === false) return [makeAnomaly("ghost")];
 
     const text = `${title} ${stripHtml(html)}`;
-    if (PRINT_RE.test(text)) return "print";
+    if (PRINT_RE.test(text)) return [makeAnomaly("print")];
 
     const instructions = stripHtml(html);
-    if (!instructions && (!attachments || attachments.length === 0)) return "ghost";
-    return "question";
+    if (!instructions && (!attachments || attachments.length === 0)) return [makeAnomaly("ghost")];
+    return [];
   }
 
+  return [];
+}
+
+/** Primary flavor derived from the anomaly list (`question` when none). */
+export function flavorFromAnomalies(anomalies: Anomaly[]): UploadFlavor {
+  if (anomalies.some((a) => a.code === "ghost")) return "ghost";
+  if (anomalies.some((a) => a.code === "print")) return "print";
   return "question";
 }
 
-/** Map a manual annotation `tag` to a flavor, or null when the tag is neutral. */
-export function flavorFromTag(tag: string | null | undefined): UploadFlavor | null {
+/**
+ * Anomalies implied by a manual tag: `[]` forces "no anomaly" (question), a
+ * code list forces those anomalies, and `null` means neutral (use auto).
+ */
+export function anomaliesFromTag(tag: string | null | undefined): Anomaly[] | null {
   if (!tag) return null;
-  if (tag === "question") return "question";
-  if (tag === "print") return "print";
-  if (tag === "ghost" || tag === "anomalia") return "ghost";
+  if (tag === "question") return [];
+  if (tag === "print") return [makeAnomaly("print")];
+  if (tag === "ghost" || tag === "anomalia") return [makeAnomaly("ghost")];
   return null;
+}
+
+/** Back-compat: effective flavor from a tag, or null when the tag is neutral. */
+export function flavorFromTag(tag: string | null | undefined): UploadFlavor | null {
+  const anomalies = anomaliesFromTag(tag);
+  return anomalies ? flavorFromAnomalies(anomalies) : null;
 }
 
 /** Parse the `content.posts[]` array fetched at dump time. */
@@ -238,7 +265,7 @@ export function buildExercises(): Exercise[] {
       const status = computeStatus(it.done, it.hasDeadline, deadlineAt);
       const { moduleName, professor } = splitModule(it.moduleTitle);
       const questions = kind === "quiz" ? parseQuestions(it.content) : [];
-      const flavor = detectFlavor({
+      const anomalies = detectAnomalies({
         kind: it.kind,
         title: it.itemTitle,
         html: it.html,
@@ -250,8 +277,9 @@ export function buildExercises(): Exercise[] {
         id: it.itemId,
         title: it.itemTitle,
         kind,
-        flavor,
+        flavor: flavorFromAnomalies(anomalies),
         flavorSource: "auto",
+        anomalies,
         enrollmentId: it.context?.enrollmentId != null ? Number(it.context.enrollmentId) : null,
         isSurvey:
           kind === "quiz" &&
@@ -302,11 +330,12 @@ export function loadExercises(): Exercise[] {
   if (!existsSync(file)) throw new Error(`Missing ${file}. Run 'npm run index' first.`);
   const data = JSON.parse(readFileSync(file, "utf-8")) as { exercises: Exercise[] };
   for (const e of data.exercises) {
-    // Defensive: a cache written before the flavor field existed.
+    // Defensive: a cache written before the flavor/anomaly fields existed.
     if (!e.flavor) {
       e.flavor = "question";
       e.flavorSource = "auto";
     }
+    if (!Array.isArray(e.anomalies)) e.anomalies = [];
     const { status, daysLeft: liveDays } = refreshLive(e);
     e.status = status;
     e.daysLeft = liveDays;

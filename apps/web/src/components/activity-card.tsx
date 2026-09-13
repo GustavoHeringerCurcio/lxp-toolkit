@@ -22,7 +22,7 @@ import { useAppData } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
 import { ProfessorTag, SubjectAvatar, SubjectLabel } from "./identity";
 import { ProfessorPhotoDialog } from "./professor-photo-dialog";
-import { StatusBadge, DoneBadge, FlavorBadge } from "./status-badges";
+import { StatusBadge, DoneBadge, ActivityBadge } from "./status-badges";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,6 +89,7 @@ export function ActivityCard({ e }: { e: Exercise }) {
         tag: res.tag,
         flavor: res.flavor as UploadFlavor,
         flavorSource: res.flavorSource as FlavorSource,
+        anomalies: res.anomalies,
       });
       toast.success(t("toast.tagSaved"));
       refresh();
@@ -125,7 +126,7 @@ export function ActivityCard({ e }: { e: Exercise }) {
         <span className="flex min-w-0 flex-1 flex-col gap-1.5">
           <span className="flex min-w-0 items-center gap-2">
             <span className={cn("truncate text-sm font-medium", e.done && "text-muted-foreground line-through")}>{e.title}</span>
-            <FlavorBadge flavor={e.flavor} source={e.flavorSource} className="shrink-0" />
+            <ActivityBadge e={e} className="shrink-0" />
             {e.done && <DoneBadge className="shrink-0" />}
           </span>
           <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
