@@ -7,15 +7,26 @@
 //   apps/web     → vite                   http://localhost:5174  (HMR)
 //
 // Open http://localhost:5174 — editing apps/web/src/** reloads instantly.
-// `predev` already refreshed the data (see scripts/sync.mjs); set SKIP_SYNC=1
-// to boot without refreshing.
+//
+// `npm run dev` is FAST: it does not scrape the portal. The API's bootstrap
+// still applies migrations and rebuilds the projection from the data you
+// already have, so it is correct with zero wait.
+//
+// Want fresh portal content? Use `npm run dev:fresh` (or pass `--sync`): it
+// runs scripts/sync.mjs (Postgres → migrations → dump → index) before starting.
 //
 // No extra dependency: both children are spawned with Node built-ins, logs go
 // straight to this terminal, and Ctrl+C tears down the whole process tree.
 import { spawn } from "node:child_process";
-import { ROOT, c, log, warn } from "../setup/shared.mjs";
+import { ROOT, c, log, warn, step, run } from "../setup/shared.mjs";
 
 const isWin = process.platform === "win32";
+
+if (process.argv.includes("--sync")) {
+  step("Atualizando conteúdo (sync)");
+  const synced = await run("node", ["scripts/sync.mjs"], { tee: true });
+  if (synced.code !== 0) process.exit(synced.code ?? 1);
+}
 
 function quoteWin(arg) {
   return /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg;

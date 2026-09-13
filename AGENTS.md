@@ -35,8 +35,9 @@ Per-user scraped output lives in the gitignored `scraped/` folder (never commit 
   `npm run db:up`, `npm run db:migrate`, `npm run dump`, `npm run dump-surfaces`,
   `npm run crawl-routes`, `npm run capture-api`, `npm run agent`, `npm run homework`,
   `npm run exercises`, `npm run index`, `npm run index:web`, `npm run sync`, `npm run dev`,
-  `npm run web`. `npm run dev` (Vite HMR) and `npm run web` (built) both run `sync` first via
-  `predev`/`preweb`; skip with `SKIP_SYNC=1` (or `SKIP_DUMP=1`). Run
+  `npm run dev:fresh`, `npm run web`. `npm run dev` (Vite HMR) is fast (no scrape);
+  `npm run dev:fresh` runs `sync` first; `npm run web` (built) refreshes via `preweb`. Skip with
+  `SKIP_SYNC=1` (or `SKIP_DUMP=1`). Run
   `npm run typecheck` after code changes.
 - `scraped/raw/homework-index.json` (built by `npm run index`) links each open assignment to its
   section + sibling content + local files — prefer it over re-scraping. The web UI is

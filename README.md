@@ -276,14 +276,16 @@ npm run web
 
 ### The app (`apps/server` + `apps/web`)
 
-Both `npm run dev` and `npm run web` refresh your data first (`predev` / `preweb` → `npm run sync`),
-so you always start with fresh portal content. Skip it with `SKIP_SYNC=1`, or skip just the portal
-scrape with `SKIP_DUMP=1`.
+`npm run dev` is **fast** — it starts the API + Vite without scraping. Use `npm run dev:fresh` to look
+for new portal content first (`sync`: Postgres → migrations → `dump` → `index:web`). `npm run web`
+refreshes first via `preweb`. Skip the refresh with `SKIP_SYNC=1`, or just the scrape with
+`SKIP_DUMP=1`.
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | **Development**: refresh → API + Vite together → <http://localhost:5174> (hot reload). |
-| `npm run web` | **Production-style**: refresh → build the UI → serve it → <http://localhost:4174>. |
+| `npm run dev` | **Fast development**: API + Vite together → <http://localhost:5174> (hot reload). No scrape. |
+| `npm run dev:fresh` | Runs `sync` first (fresh portal content), then starts the dev servers. |
+| `npm run web` | **Production-style**: refresh (`preweb`) → build the UI → serve → <http://localhost:4174>. |
 | `npm run sync` | The refresh pipeline alone: Postgres → migrations → `dump` → `index:web`. |
 | `npm run db:up` | Starts the local Postgres 16 container (Docker). |
 | `npm run db:down` | Stops the container (data stays in the volume). |

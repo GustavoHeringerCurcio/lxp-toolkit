@@ -42,12 +42,14 @@ Everything editable by hand lives in `apps/server/config/`:
 ## Web
 
 ```bash
-npm run dev        # API + Vite with hot reload → http://localhost:5174
+npm run dev        # fast: API + Vite with hot reload → http://localhost:5174
+npm run dev:fresh  # sync first (fresh portal content), then the dev servers
 npm run web        # refresh + build + serve → http://localhost:4174
 ```
 
-Both commands refresh your data first (`predev` / `preweb` → `npm run sync`: Postgres → migrations →
-portal scrape → index). Skip it with `SKIP_SYNC=1`, or skip just the scrape with `SKIP_DUMP=1`.
+`npm run dev` does not scrape, so it starts instantly. `npm run dev:fresh` runs `sync` first
+(Postgres → migrations → portal scrape → index); `npm run web` refreshes via `preweb`. Skip the
+refresh with `SKIP_SYNC=1`, or just the scrape with `SKIP_DUMP=1`.
 
 - **List** ordered by deadline with badges (green done / red expired / amber due soon). Each card
   has a quick-action menu (Gerar com IA, abrir no portal, copiar link, baixar resposta).
