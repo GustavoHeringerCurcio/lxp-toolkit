@@ -242,6 +242,13 @@
     background: color-mix(in oklab, var(--subj) 16%, var(--card));
     border: 1px solid color-mix(in oklab, var(--subj) 34%, transparent);
 }
+/* Professor photo: subject color frames the image and glows behind the tile. */
+.subject-avatar--photo {
+    background: color-mix(in oklab, var(--subj) 42%, var(--card));
+    border-width: 2px;
+    border-color: color-mix(in oklab, var(--subj) 68%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--subj) 18%, transparent);
+}
 .subject-text {
     color: var(--subj);
 }

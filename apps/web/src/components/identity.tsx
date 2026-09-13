@@ -44,11 +44,12 @@ export function SubjectAvatar({
       style={subjectStyle(moduleName)}
       className={cn(
         "subject-avatar relative grid size-9 shrink-0 place-items-center rounded-lg font-heading text-[13px] font-semibold",
+        showImage && "subject-avatar--photo",
         className,
       )}
     >
       {showImage ? (
-        <span className="absolute inset-0 overflow-hidden rounded-[inherit]">
+        <span className="absolute inset-[1.5px] overflow-hidden rounded-[inherit]">
           <img
             src={imageUrl ?? undefined}
             alt={imageAlt ?? ""}
