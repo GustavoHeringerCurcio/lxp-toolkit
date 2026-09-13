@@ -53,6 +53,39 @@ export async function uploadBaseName(view: { title: string }): Promise<string> {
     .join("_");
 }
 
+// ── Manual image uploads (print/screenshot tasks) ────────────────────────────
+
+const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".webp"];
+
+/** Accepted image MIME → extension (whitelist for manual "print" uploads). */
+export const IMAGE_MIME_TO_EXT: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+};
+
+function uploadsDir(): string {
+  const dir = assist("data", "send", "uploads");
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/** Persist a user-provided screenshot for a given exercise (overwrites). */
+export function saveUploadedImage(id: number, ext: string, buf: Buffer): string {
+  const file = path.join(uploadsDir(), `${id}${ext}`);
+  writeFileSync(file, buf);
+  return file;
+}
+
+/** Locate a previously uploaded screenshot for an exercise, or null. */
+export function findUploadedImage(id: number): string | null {
+  for (const ext of IMAGE_EXTS) {
+    const file = path.join(uploadsDir(), `${id}${ext}`);
+    if (existsSync(file)) return file;
+  }
+  return null;
+}
+
 /**
  * Writes the request file and spawns the root runner for an upload task.
  * `mode` selects how the answer is delivered (see `SendMode`); `filePath` is the
@@ -86,7 +119,7 @@ export async function launchUploadSubmit(
     filename,
   };
   if (mode === "txt") payload.ext = "txt";
-  if (mode === "pdf" && filePath) payload.filePath = filePath;
+  if ((mode === "pdf" || mode === "image") && filePath) payload.filePath = filePath;
   writeFileSync(reqFile, JSON.stringify(payload, null, 2), "utf-8");
 
   const entry: SubmissionEntry = {

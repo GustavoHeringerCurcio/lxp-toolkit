@@ -102,6 +102,35 @@ export async function saveAiRequest(id: number, raw: string | null): Promise<AiR
   return (await post("/api/ai-request", { id, raw })) as AiRequestSaveResult;
 }
 
+export interface TagSaveResult {
+  ok: boolean;
+  tag: string | null;
+  flavor: string;
+  flavorSource: string;
+}
+
+/** Set/clear a manual anomaly tag (ghost | print | anomalia). */
+export async function saveTag(id: number, tag: string | null): Promise<TagSaveResult> {
+  return (await post("/api/tag", { id, tag })) as TagSaveResult;
+}
+
+/** Upload a manual screenshot for a print task. Returns the stored file name. */
+export async function uploadSendFile(id: number, file: File): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+  const res = (await post("/api/send/upload", { id, mime: file.type, data: dataUrl })) as {
+    ok?: boolean;
+    name?: string;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(res.error ?? "upload failed");
+  return res.name ?? "";
+}
+
 export interface AiConfigSavePatch {
   model?: string;
   temperature?: number;
@@ -238,7 +267,7 @@ export async function fetchSendPreview(id: number): Promise<SendPreviewDto> {
 export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
 
 /** How an upload answer reaches the portal. */
-export type SendMode = "text" | "txt" | "pdf";
+export type SendMode = "text" | "txt" | "pdf" | "image";
 
 export interface SubmissionDto {
   status: SubmissionStatus;

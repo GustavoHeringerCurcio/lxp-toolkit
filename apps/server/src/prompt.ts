@@ -8,6 +8,18 @@ export function isPlaceholder(value: string): boolean {
 }
 
 /**
+ * Minimal acknowledgment submitted for "ghost" tasks (a task with no real
+ * question). Reuses the student's own name/matrícula — no AI involved.
+ */
+export function composeGhostAnswer(profile: AiProfile): string {
+  const line = (label: string, value: string): string => {
+    const v = (value ?? "").trim();
+    return v ? `${label}: ${v}` : `${label}:`;
+  };
+  return [line("Nome", profile.nome), line("Matrícula", profile.matricula)].join("\n");
+}
+
+/**
  * Every value that can be injected into the compiled messages. These are the
  * only things the user does not type by hand; everything else is structured
  * config or fixed code.
@@ -270,6 +282,9 @@ export async function buildMessages(
   extraInstructions = "",
   notes = "",
 ): Promise<ChatMessage[]> {
+  // Ghost/print tasks have no question: never send them to the model.
+  if (e.flavor !== "question") return [];
+
   const vars = await buildPromptVars(e, profile, notes, sections);
   const messages: ChatMessage[] = [];
 

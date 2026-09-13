@@ -1,5 +1,14 @@
-import { CircleCheckBig, ListChecks, MessagesSquare, Upload, FileQuestion, type LucideIcon } from "lucide-react";
-import type { ContentKind, ExerciseKind } from "@/types";
+import {
+  Camera,
+  CircleCheckBig,
+  Ghost,
+  ListChecks,
+  MessagesSquare,
+  Upload,
+  FileQuestion,
+  type LucideIcon,
+} from "lucide-react";
+import type { ContentKind, ExerciseKind, UploadFlavor } from "@/types";
 import type { TranslateFn } from "./i18n";
 
 export interface KindMeta {
@@ -89,6 +98,30 @@ export const CONTENT_LABEL: Record<ContentKind, string> = {
 
 export function kindMeta(kind: ExerciseKind): KindMeta {
   return KIND_META[kind];
+}
+
+// ── Task flavor (what the task actually requires) ───────────────────────────
+
+export interface FlavorMeta {
+  label: string;
+  icon: LucideIcon;
+  badgeClass: string;
+}
+
+/** Ghost/print are anomalies surfaced with a colored badge; question is neutral. */
+export const FLAVOR_META: Record<UploadFlavor, FlavorMeta> = {
+  question: { label: "Pergunta", icon: FileQuestion, badgeClass: NEUTRAL_BADGE },
+  ghost: { label: "Sem pergunta", icon: Ghost, badgeClass: "border-soon/50 bg-soon/10 text-soon" },
+  print: { label: "Print", icon: Camera, badgeClass: "border-brand/50 bg-brand/10 text-brand" },
+};
+
+export function flavorMeta(flavor: UploadFlavor): FlavorMeta {
+  return FLAVOR_META[flavor] ?? FLAVOR_META.question;
+}
+
+/** Whether the AI generate workbench applies: only real-question items. */
+export function canAiAnswer(e: { kind: ExerciseKind; flavor: UploadFlavor }): boolean {
+  return (e.kind === "upload" || e.kind === "quiz" || e.kind === "forum") && e.flavor === "question";
 }
 
 /**

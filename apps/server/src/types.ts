@@ -11,6 +11,18 @@ export type ExerciseKind = "quiz" | "upload" | "mark" | "forum" | "other";
 /** Raw portal content classification (`src/content.ts::classify`). */
 export type ContentKind = "pdf" | "reading" | "quiz" | "file_upload" | "link" | "forum" | "other";
 
+/**
+ * What a task actually requires, beyond its coarse `kind`:
+ * - `question` — a real question to answer (AI text generation applies).
+ * - `ghost`    — no question at all (slides/empty task): skip AI, submit a
+ *                minimal "Nome / Matrícula" acknowledgment.
+ * - `print`    — requires a screenshot/print the student must attach manually.
+ */
+export type UploadFlavor = "question" | "ghost" | "print";
+
+/** Where the effective flavor came from: auto-detected or manual tag override. */
+export type FlavorSource = "auto" | "manual";
+
 export type ExerciseStatus = "done" | "expired" | "open";
 export type AnswerSource = "ai" | "manual";
 
@@ -103,6 +115,10 @@ export interface Exercise {
   id: number;
   title: string;
   kind: ExerciseKind;
+  /** What the task actually requires (auto-detected or overridden by tag). */
+  flavor: UploadFlavor;
+  /** Where `flavor` came from: `auto` detection or a manual tag override. */
+  flavorSource: FlavorSource;
   /** Portal enrollment id (from the topic context); required to submit quizzes. */
   enrollmentId: number | null;
   /** A "Pesquisa": answered straight through the endpoint, no attempt/finish cycle. */
@@ -304,7 +320,7 @@ export interface ProfessorLink {
 
 export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
 
-export type SendMode = "text" | "txt" | "pdf";
+export type SendMode = "text" | "txt" | "pdf" | "image";
 
 export interface SubmissionEntry {
   exerciseId: number;

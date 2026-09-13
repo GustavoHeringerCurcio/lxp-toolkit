@@ -31,6 +31,7 @@ import {
   sendAnswerToPortal,
   snippet,
   streamGenerate,
+  uploadSendFile,
   type SendConfigDto,
   type SendMode,
   type SubmissionDto,
@@ -50,7 +51,7 @@ import { MarkPanel, PortalOnlyPanel } from "@/components/mark-panel";
 import { SendDialog } from "@/components/send-dialog";
 import { SendIcon } from "@/components/icons/send-icons";
 import { StatusBadge, TypeBadge, DoneBadge } from "@/components/status-badges";
-import { kindMeta } from "@/lib/kind";
+import { kindMeta, canAiAnswer, flavorMeta } from "@/lib/kind";
 import { sendModeLabel } from "@/lib/send";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
@@ -104,11 +105,13 @@ function AnswerPanel({
   const [sendErr, setSendErr] = useState<string | null>(null);
   const [sub, setSub] = useState<SubmissionDto | null>(null);
   const [subs, setSubs] = useState<SubmissionDto[]>([]);
+  const [printFile, setPrintFile] = useState<File | null>(null);
+  const [printPreview, setPrintPreview] = useState<string | null>(null);
   const cancelRef = useRef(false);
   const busyRef = useRef(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const { patchExercise } = useAppData();
+  const { patchExercise, cfg } = useAppData();
   const { t, locale } = useT();
 
   const loadSubs = useCallback(async () => {
@@ -121,7 +124,15 @@ function AnswerPanel({
     setSendOpen(false);
     setSub(null);
     setSendErr(null);
+    setPrintFile(null);
+    setPrintPreview(null);
     cancelRef.current = false;
+    if (e.flavor === "ghost" && !e.answer) {
+      const name = cfg?.profile?.nome?.trim() ?? "";
+      const mat = cfg?.profile?.matricula?.trim() ?? "";
+      const ghost = `Nome:${name ? ` ${name}` : ""}\nMatrícula:${mat ? ` ${mat}` : ""}`;
+      setDraft(ghost);
+    }
     fetchSendConfig().then(setSendCfg);
     fetchAnswerState(e.id)
       .then((st) => {
@@ -157,6 +168,12 @@ function AnswerPanel({
       cancelRef.current = true;
     };
   }, [e.id]);
+
+  useEffect(() => {
+    return () => {
+      if (printPreview) URL.revokeObjectURL(printPreview);
+    };
+  }, [printPreview]);
 
   const setBusySync = (v: boolean) => {
     busyRef.current = v;
@@ -245,7 +262,11 @@ function AnswerPanel({
   const confirmSend = async (mode: SendMode) => {
     const answer = draft.trim();
     const isQuiz = e.kind === "quiz";
-    if (!answer && !(isQuiz && e.selections.length > 0)) return;
+    if (mode === "image") {
+      if (!printFile) return;
+    } else if (!answer && !(isQuiz && e.selections.length > 0)) {
+      return;
+    }
     setSending(true);
     setSendErr(null);
     cancelRef.current = false;
@@ -254,7 +275,13 @@ function AnswerPanel({
       description: t("toast.sendLoadingDesc"),
     });
     try {
-      const started = await sendAnswerToPortal(e.id, answer, mode, isQuiz ? e.selections : undefined);
+      if (mode === "image" && printFile) await uploadSendFile(e.id, printFile);
+      const started = await sendAnswerToPortal(
+        e.id,
+        answer,
+        mode,
+        isQuiz ? e.selections : undefined,
+      );
       setSub(started);
       let final = started;
       const deadline = Date.now() + 150_000;
@@ -305,10 +332,18 @@ function AnswerPanel({
 
   const isUpload = e.kind === "upload";
   const isForum = e.kind === "forum";
-  const wantsText = isUpload || isForum;
+  const isGhost = e.flavor === "ghost";
+  const isPrint = e.flavor === "print";
+  const fmeta = flavorMeta(e.flavor);
+  const FlavorIcon = fmeta.icon;
+  const wantsText = (isUpload && !isPrint) || isForum;
+  const canAi = canAiAnswer(e);
   const isDone = e.done || e.status === "done";
   const canSend =
-    !isDone && Boolean(sendCfg?.enabled) && !sending && (wantsText ? Boolean(draft.trim()) : e.selections.length > 0);
+    !isDone &&
+    Boolean(sendCfg?.enabled) &&
+    !sending &&
+    (isPrint ? Boolean(printFile) : wantsText ? Boolean(draft.trim()) : e.selections.length > 0);
 
   return (
     <CollapsibleCard
@@ -325,6 +360,18 @@ function AnswerPanel({
                 date: fmtVersionDate(current.updatedAt, locale),
                 source: current.source === "ai" ? t("draft.sourceAi") : t("draft.sourceManual"),
               })}
+            </span>
+          )}
+          {e.flavor && e.flavor !== "question" && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                fmeta.badgeClass,
+              )}
+              title={e.flavorSource === "manual" ? t("flavor.tagged") : t("flavor.detected")}
+            >
+              <FlavorIcon className="size-3" aria-hidden />
+              {t(`flavor.${e.flavor}`)}
             </span>
           )}
           {e.status === "done" && (
@@ -379,18 +426,24 @@ function AnswerPanel({
       }
       footer={
         <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-border/60 bg-card px-4 py-3">
-          <Button size="sm" onClick={generate} disabled={busy}>
-            {busy ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
-            {busy ? t("draft.generating") : current ? t("draft.new") : t("draft.generate")}
-          </Button>
-          <Button variant="outline" size="sm" onClick={save} disabled={busy || !draft.trim()}>
-            {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
-            {t("draft.save")}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={copy} disabled={!draft.trim()}>
-            <Copy aria-hidden />
-            {t("draft.copy")}
-          </Button>
+          {canAi && (
+            <Button size="sm" onClick={generate} disabled={busy}>
+              {busy ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+              {busy ? t("draft.generating") : current ? t("draft.new") : t("draft.generate")}
+            </Button>
+          )}
+          {!isPrint && (
+            <Button variant="outline" size="sm" onClick={save} disabled={busy || !draft.trim()}>
+              {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
+              {t("draft.save")}
+            </Button>
+          )}
+          {!isPrint && (
+            <Button variant="ghost" size="sm" onClick={copy} disabled={!draft.trim()}>
+              <Copy aria-hidden />
+              {t("draft.copy")}
+            </Button>
+          )}
           {current?.answer && (
             <a className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/api/export/${e.id}`}>
               <Download aria-hidden />
@@ -403,6 +456,16 @@ function AnswerPanel({
               <Button size="sm" disabled className="bg-ok text-white disabled:opacity-100">
                 <CheckCircle2 aria-hidden />
                 {t("badge.done")}
+              </Button>
+            ) : isPrint || isGhost ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => void confirmSend(isPrint ? "image" : "text")}
+                disabled={!canSend}
+              >
+                {sending ? <Loader2 className="animate-spin" aria-hidden /> : <SendIcon className="size-3.5" aria-hidden />}
+                {sending ? t("send.sending") : isPrint ? t("send.printButton") : t("send.ghostButton")}
               </Button>
             ) : (
               <Button
@@ -422,16 +485,59 @@ function AnswerPanel({
         </div>
       }
     >
-        {wantsText ? (
-          <Textarea
-            value={draft}
-            onChange={(ev) => setDraft(ev.target.value)}
-            placeholder={
-              isForum ? t("draft.forumPlaceholder") : t("draft.uploadPlaceholder")
-            }
-            rows={6}
-            className="min-h-36 field-sizing-fixed leading-relaxed"
-          />
+        {isPrint ? (
+          <>
+            <p className="text-xs text-muted-foreground">{t("draft.printIntro")}</p>
+            <label
+              className={cn(
+                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground transition-colors",
+                !isDone && !sending && "hover:border-primary/40 hover:text-foreground",
+              )}
+            >
+              <Paperclip className="size-5" aria-hidden />
+              <span className="max-w-full min-w-0 truncate">
+                {printFile ? printFile.name : t("draft.printPick")}
+              </span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                disabled={sending || isDone}
+                onChange={(ev) => {
+                  const f = ev.target.files?.[0] ?? null;
+                  setPrintFile(f);
+                  setPrintPreview(f ? URL.createObjectURL(f) : null);
+                }}
+              />
+            </label>
+            {printPreview && (
+              <img
+                src={printPreview}
+                alt={t("draft.printPreviewAlt")}
+                className="max-h-64 w-full rounded-md border border-border bg-white object-contain"
+              />
+            )}
+            <Textarea
+              value={draft}
+              onChange={(ev) => setDraft(ev.target.value)}
+              placeholder={t("draft.printCaptionPlaceholder")}
+              rows={2}
+              className="min-h-14 field-sizing-fixed leading-relaxed"
+            />
+          </>
+        ) : wantsText ? (
+          <>
+            {isGhost && <p className="text-xs text-muted-foreground">{t("draft.ghostIntro")}</p>}
+            <Textarea
+              value={draft}
+              onChange={(ev) => setDraft(ev.target.value)}
+              placeholder={
+                isForum ? t("draft.forumPlaceholder") : t("draft.uploadPlaceholder")
+              }
+              rows={6}
+              className="min-h-36 field-sizing-fixed leading-relaxed"
+            />
+          </>
         ) : e.selections.length === 0 ? (
           <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
             {t("draft.quizHint")}
@@ -851,7 +957,7 @@ export function ExercisePage() {
             </CollapsibleCard>
           )}
 
-          {meta.canAnswer && <AiRequestPanel e={e} onSaved={() => setRegenToken((t) => t + 1)} />}
+          {canAiAnswer(e) && <AiRequestPanel e={e} onSaved={() => setRegenToken((t) => t + 1)} />}
         </div>
 
         {/* right column: answer workbench / completion panel */}
@@ -869,7 +975,7 @@ export function ExercisePage() {
             </div>
           )}
           {meta.canAnswer ? (
-            <AnswerPanel key={e.id} e={e} onRefresh={onRefresh} autoGenerate={wantsAuto} regenToken={regenToken} />
+            <AnswerPanel key={e.id} e={e} onRefresh={onRefresh} autoGenerate={wantsAuto && canAiAnswer(e)} regenToken={regenToken} />
           ) : meta.canMark ? (
             <MarkPanel key={e.id} e={e} onRefresh={onRefresh} />
           ) : (

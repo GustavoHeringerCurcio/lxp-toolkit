@@ -27,6 +27,7 @@ import {
   saveNote,
   saveProfessorLink,
   saveProfile,
+  saveTag,
 } from "../src/store.js";
 import {
   buildSubjectContext,
@@ -43,7 +44,7 @@ import {
 } from "../src/training-store.js";
 import { enrich, type ExerciseView } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
-import { humanizeQuizAnswer, parseQuizSelections } from "../src/prompt.js";
+import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
 import type { AiActivitySections, AiStyle, AnswerRecord, QuizQ, QuizSelection } from "../src/types.js";
 import {
   launchUploadSubmit,
@@ -54,6 +55,9 @@ import {
   sendEnv,
   submissionsFor,
   uploadBaseName,
+  saveUploadedImage,
+  findUploadedImage,
+  IMAGE_MIME_TO_EXT,
   type SendMode,
 } from "../src/send.js";
 import { officeToPdf, previewCacheDir } from "../src/office.js";
@@ -334,9 +338,12 @@ async function generateAndSave(
   return { shown, rec };
 }
 
-/** Tasks, quizzes and forums have AI-answerable content. */
-function isAnswerable(view: { kind: string }): boolean {
-  return view.kind === "upload" || view.kind === "quiz" || view.kind === "forum";
+/** Tasks, quizzes and forums with a real question have AI-answerable content. */
+function isAnswerable(view: { kind: string; flavor: string }): boolean {
+  return (
+    view.flavor === "question" &&
+    (view.kind === "upload" || view.kind === "quiz" || view.kind === "forum")
+  );
 }
 
 /**
@@ -651,7 +658,7 @@ const server = createServer(async (req, res) => {
       });
       return res.end(answer);
     }
-    if (url.startsWith("/api/send/")) {
+    if (url.startsWith("/api/send/") && method === "GET") {
       const id = Number(url.split("/")[3]);
       const [last, all] = await Promise.all([lastSubmission(id), submissionsFor(id)]);
       return json(res, 200, { submission: last ?? null, submissions: all });
@@ -673,6 +680,16 @@ const server = createServer(async (req, res) => {
         await saveAiRequest(id, b.raw == null ? null : String(b.raw));
         const view = await findView(id);
         return json(res, 200, { ok: true, aiRequestJson: view.aiRequestJson, hasAiOverride: view.hasAiOverride });
+      }
+      if (url === "/api/tag") {
+        // set/clear a manual anomaly tag (ghost | print | anomalia | null)
+        const b = await readBody(req);
+        const id = Number(b.id);
+        if (!id) return json(res, 400, { error: "id required" });
+        const tag = b.tag == null ? null : String(b.tag).trim() || null;
+        await saveTag(id, tag);
+        const view = await findView(id);
+        return json(res, 200, { ok: true, tag: view.tag, flavor: view.flavor, flavorSource: view.flavorSource });
       }
       if (url === "/api/profile") {
         const b = await readBody(req);
@@ -778,12 +795,31 @@ const server = createServer(async (req, res) => {
         }
         return;
       }
+      if (url === "/api/send/upload") {
+        // Receive a manual screenshot (print task) as base64 and persist it.
+        const b = await readBody(req);
+        const id = Number(b.id);
+        if (!id) return json(res, 400, { error: "id obrigatório" });
+        const mime = String(b.mime ?? "");
+        const ext = IMAGE_MIME_TO_EXT[mime];
+        if (!ext) return json(res, 400, { error: "Tipo de imagem não suportado (use PNG, JPG ou WebP)." });
+        const raw = String(b.data ?? "");
+        const comma = raw.indexOf(",");
+        const buf = Buffer.from(comma >= 0 ? raw.slice(comma + 1) : raw, "base64");
+        if (buf.length === 0) return json(res, 400, { error: "Arquivo vazio." });
+        if (buf.length > 10 * 1024 * 1024) return json(res, 413, { error: "Imagem grande demais (máx. 10 MB)." });
+        const filePath = saveUploadedImage(id, ext, buf);
+        return json(res, 200, { ok: true, name: path.basename(filePath) });
+      }
       if (url === "/api/send") {
         const b = await readBody(req);
         const id = Number(b.id);
-        const answer = String(b.answer ?? "");
+        let answer = String(b.answer ?? "");
         const rawMode = String(b.mode ?? "");
-        const mode: SendMode = rawMode === "text" || rawMode === "pdf" || rawMode === "txt" ? rawMode : "txt";
+        const mode: SendMode =
+          rawMode === "text" || rawMode === "pdf" || rawMode === "txt" || rawMode === "image"
+            ? rawMode
+            : "txt";
         const view = await findView(id);
         if (view.status === "done") return json(res, 400, { error: "Esta atividade já está concluída." });
         const env = sendEnv();
@@ -799,7 +835,13 @@ const server = createServer(async (req, res) => {
             answer.trim() || selections.map((s) => `Q${s.questionId}: ${s.letter}`).join(", ");
           await saveAnswerVersion(id, shown, "manual", undefined, selections);
         } else {
-          if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de enviar." });
+          // Ghost tasks submit the student's name/matrícula when nothing typed.
+          if (view.flavor === "ghost" && !answer.trim()) {
+            answer = composeGhostAnswer(await getProfile());
+          }
+          if (mode !== "image" && !answer.trim()) {
+            return json(res, 400, { error: "Escreva a resposta antes de enviar." });
+          }
           await saveAnswerVersion(id, answer, "manual", undefined, []);
         }
         try {
@@ -817,6 +859,10 @@ const server = createServer(async (req, res) => {
                   error: "Não foi possível gerar o PDF da resposta (LibreOffice indisponível?).",
                 });
               filePath = pdf;
+            } else if (mode === "image") {
+              const found = findUploadedImage(id);
+              if (!found) return json(res, 400, { error: "Anexe a imagem antes de enviar." });
+              filePath = found;
             }
             submission = await launchUploadSubmit(view, answer, mode, filePath);
           }

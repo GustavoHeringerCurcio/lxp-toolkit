@@ -19,6 +19,7 @@ export const SEND_MODES: {
 ];
 
 export function sendModeLabel(mode: SendMode, t: TranslateFn): string {
+  if (mode === "image") return t("send.mode.image.label");
   const match = SEND_MODES.find((m) => m.value === mode);
   return match ? t(match.labelKey) : mode;
 }

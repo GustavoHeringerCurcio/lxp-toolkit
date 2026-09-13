@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from 
 import path from "node:path";
 import { assist, dataDir, raw } from "./paths.js";
 import { computeStatus, daysLeft, refreshLive } from "./status.js";
-import type { ContentKind, Exercise, ExerciseKind, ForumInfo, ForumPost, PdfRef, QuizQ } from "./types.js";
+import type { ContentKind, Exercise, ExerciseKind, ForumInfo, ForumPost, PdfRef, QuizQ, UploadFlavor } from "./types.js";
 
 interface TreeItem {
   courseId: number;
@@ -48,6 +48,56 @@ export function actionKindFor(item: Pick<TreeItem, "kind" | "isRecordProgress">)
   if (item.kind === "quiz") return "quiz";
   if (item.kind === "forum") return "forum";
   if (item.isRecordProgress && MARKABLE_CONTENT.includes(item.kind)) return "mark";
+  return null;
+}
+
+/** Keywords that mark a task as "attach a screenshot/print of your work". */
+const PRINT_RE =
+  /\bprint\b|printar|screenshot|captura de tela|captura|captur[ae]|foto(grafia)?|imagem|recorte/i;
+
+/**
+ * Classify what a task actually requires, beyond its coarse `kind`:
+ * - `ghost`  — no question at all: a task with no upload box, a quiz with zero
+ *   questions, or an item with empty instructions and no attachments.
+ * - `print`  — the instruction asks for a screenshot/print the student attaches.
+ * - `question` — a normal task with an actual question.
+ */
+export function detectFlavor(input: {
+  kind: ContentKind;
+  title: string;
+  html: string | null;
+  content: Record<string, unknown> | null;
+  attachments: unknown[];
+  questions: QuizQ[];
+}): UploadFlavor {
+  const { kind, title, html, content, attachments, questions } = input;
+
+  if (kind === "quiz" && questions.length === 0) return "ghost";
+
+  if (kind === "file_upload") {
+    const hasFileUpload =
+      content && typeof content === "object" && "hasFileUpload" in content
+        ? content.hasFileUpload === true
+        : null;
+    if (hasFileUpload === false) return "ghost";
+
+    const text = `${title} ${stripHtml(html)}`;
+    if (PRINT_RE.test(text)) return "print";
+
+    const instructions = stripHtml(html);
+    if (!instructions && (!attachments || attachments.length === 0)) return "ghost";
+    return "question";
+  }
+
+  return "question";
+}
+
+/** Map a manual annotation `tag` to a flavor, or null when the tag is neutral. */
+export function flavorFromTag(tag: string | null | undefined): UploadFlavor | null {
+  if (!tag) return null;
+  if (tag === "question") return "question";
+  if (tag === "print") return "print";
+  if (tag === "ghost" || tag === "anomalia") return "ghost";
   return null;
 }
 
@@ -187,10 +237,21 @@ export function buildExercises(): Exercise[] {
       const deadlineAt = it.deadlineAt ?? null;
       const status = computeStatus(it.done, it.hasDeadline, deadlineAt);
       const { moduleName, professor } = splitModule(it.moduleTitle);
+      const questions = kind === "quiz" ? parseQuestions(it.content) : [];
+      const flavor = detectFlavor({
+        kind: it.kind,
+        title: it.itemTitle,
+        html: it.html,
+        content: it.content,
+        attachments: it.attachments ?? [],
+        questions,
+      });
       out.push({
         id: it.itemId,
         title: it.itemTitle,
         kind,
+        flavor,
+        flavorSource: "auto",
         enrollmentId: it.context?.enrollmentId != null ? Number(it.context.enrollmentId) : null,
         isSurvey:
           kind === "quiz" &&
@@ -215,7 +276,7 @@ export function buildExercises(): Exercise[] {
         files: localFilesFor(course.courseId, it.itemId),
         remoteFiles: it.attachments.map((a) => ({ filename: a.filename, url: a.url })),
         instructionsText: stripHtml(it.html),
-        questions: kind === "quiz" ? parseQuestions(it.content) : [],
+        questions,
         forum: kind === "forum" ? parseForumInfo(it.content) : null,
         ai: { status: "none", answer: null, updatedAt: null },
       });
@@ -241,6 +302,11 @@ export function loadExercises(): Exercise[] {
   if (!existsSync(file)) throw new Error(`Missing ${file}. Run 'npm run index' first.`);
   const data = JSON.parse(readFileSync(file, "utf-8")) as { exercises: Exercise[] };
   for (const e of data.exercises) {
+    // Defensive: a cache written before the flavor field existed.
+    if (!e.flavor) {
+      e.flavor = "question";
+      e.flavorSource = "auto";
+    }
     const { status, daysLeft: liveDays } = refreshLive(e);
     e.status = status;
     e.daysLeft = liveDays;

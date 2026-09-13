@@ -25,7 +25,8 @@ import { config, logger } from "../src/config.js";
  *     - "text" (default when set): typed straight into the reply editor, no file.
  *     - "txt": written to a temp `.txt` file and attached.
  *     - "pdf": attaches the pre-generated PDF at `filePath` (the assistant server
- *       renders it from the answer and passes the absolute path).
+  *       renders it from the answer and passes the absolute path).
+ *     - "image": attaches a user-provided screenshot at `filePath` (print tasks).
  *   When omitted, "txt" is assumed for backward compatibility.
  *   `filename` is an optional attachment base name (no extension), e.g.
  *   "Aluno Exemplo_BDI - Atividade 01". When omitted the runner falls
@@ -65,7 +66,7 @@ interface QuizItem {
   optionText: string;
 }
 
-type UploadMode = "text" | "txt" | "pdf";
+type UploadMode = "text" | "txt" | "pdf" | "image";
 
 type SubmitRequest =
   | {
@@ -857,7 +858,11 @@ async function main(): Promise<void> {
   } catch (err) {
     return fail(`cannot read request file: ${err instanceof Error ? err.message : String(err)}`);
   }
-  if (req.action === "upload" && (!req.answer || !req.answer.trim())) return fail("request has no answer text");
+  if (req.action === "upload") {
+    const mode: UploadMode = req.mode ?? "txt";
+    if (mode === "text" && (!req.answer || !req.answer.trim()))
+      return fail("request has no answer text");
+  }
   if (req.action === "quiz" && (!req.selections || req.selections.length === 0)) return fail("request has no selections");
   if (req.action === "forum" && (!req.answer || !req.answer.trim())) return fail("request has no answer text");
 
@@ -1035,6 +1040,10 @@ async function main(): Promise<void> {
     let attachedPath: string | null = null;
     if (mode === "pdf") {
       if (!req.filePath) return fail("pdf mode requires a filePath");
+      if (!existsSync(req.filePath)) return fail(`attachment not found: ${req.filePath}`);
+      attachedPath = req.filePath;
+    } else if (mode === "image") {
+      if (!req.filePath) return fail("image mode requires a filePath");
       if (!existsSync(req.filePath)) return fail(`attachment not found: ${req.filePath}`);
       attachedPath = req.filePath;
     } else if (mode === "txt") {

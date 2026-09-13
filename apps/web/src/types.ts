@@ -3,6 +3,10 @@ export type ContentKind = "pdf" | "reading" | "quiz" | "file_upload" | "link" | 
 export type ExerciseStatus = "done" | "expired" | "open";
 export type AnswerSource = "ai" | "manual";
 
+/** What a task actually requires: a real question, a ghost (no question), or a print/screenshot. */
+export type UploadFlavor = "question" | "ghost" | "print";
+export type FlavorSource = "auto" | "manual";
+
 export interface AiProfile {
   nome: string;
   matricula: string;
@@ -81,6 +85,12 @@ export interface Exercise {
   id: number;
   title: string;
   kind: ExerciseKind;
+  /** What the task actually requires (auto-detected or overridden by tag). */
+  flavor: UploadFlavor;
+  /** Where `flavor` came from: `auto` detection or a manual tag override. */
+  flavorSource: FlavorSource;
+  /** Manual anomaly tag (ghost | print | anomalia), or null. */
+  tag: string | null;
   enrollmentId: number | null;
   isSurvey: boolean;
   contentKind: ContentKind;

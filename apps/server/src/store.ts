@@ -400,6 +400,18 @@ export async function saveAiRequest(itemId: number, raw: string | null): Promise
   );
 }
 
+/** Preset anomaly tags the UI can assign (cleared when `tag` is null/empty). */
+export async function saveTag(itemId: number, tag: string | null): Promise<void> {
+  const studentId = await getStudentId();
+  const value = tag?.trim() ? tag.trim() : null;
+  await query(
+    `INSERT INTO item_annotation(content_item_id, student_id, tag, updated_at)
+     VALUES ($1,$2,$3, now())
+     ON CONFLICT (content_item_id, student_id) DO UPDATE SET tag = EXCLUDED.tag, updated_at = now()`,
+    [itemId, studentId, value],
+  );
+}
+
 export async function setManualStatus(itemId: number, status: ExerciseStatus): Promise<void> {
   const studentId = await getStudentId();
   await query(

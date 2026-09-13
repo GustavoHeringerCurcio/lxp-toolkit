@@ -1,8 +1,8 @@
 import { CalendarClock, CheckCircle2, CircleAlert, Clock3, Minus, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Exercise } from "@/types";
+import type { Exercise, UploadFlavor } from "@/types";
 import { deadlineInfo, TONE_CLS, type Tone } from "@/lib/status";
-import { contentLabel, kindLabel, kindMeta, kindShort } from "@/lib/kind";
+import { contentLabel, flavorMeta, kindLabel, kindMeta, kindShort } from "@/lib/kind";
 import { useT } from "@/lib/i18n";
 
 export function TypeBadge({
@@ -78,6 +78,38 @@ export function DoneBadge({ className }: { className?: string }) {
     >
       <CheckCircle2 className="size-3" aria-hidden />
       {t("badge.done")}
+    </span>
+  );
+}
+
+/**
+ * Badge for the anomaly flavors (ghost/print). Renders nothing for the normal
+ * `question` flavor, so ordinary tasks stay uncluttered.
+ */
+export function FlavorBadge({
+  flavor,
+  source,
+  className,
+}: {
+  flavor: UploadFlavor;
+  source?: Exercise["flavorSource"];
+  className?: string;
+}) {
+  const { t } = useT();
+  if (!flavor || flavor === "question") return null;
+  const meta = flavorMeta(flavor);
+  const Icon = meta.icon;
+  return (
+    <span
+      title={source === "manual" ? t("flavor.tagged") : t("flavor.detected")}
+      className={cn(
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold",
+        meta.badgeClass,
+        className,
+      )}
+    >
+      <Icon className="size-3" aria-hidden />
+      {t(`flavor.${flavor}`)}
     </span>
   );
 }

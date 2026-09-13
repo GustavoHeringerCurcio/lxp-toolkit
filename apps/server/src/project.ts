@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { query } from "./db.js";
 import { ASSISTANT_EXERCISES_FILE } from "./build.js";
-import { actionKindFor, isSurveyItem, localFilesFor, parseForumInfo, stripHtml } from "./build.js";
+import { actionKindFor, detectFlavor, isSurveyItem, localFilesFor, parseForumInfo, stripHtml } from "./build.js";
 import { computeStatus, daysLeft } from "./status.js";
 import type { ContentKind, Exercise, ExerciseKind, ForumInfo, QuizQ, QuizOption } from "./types.js";
 
@@ -130,11 +130,22 @@ export async function buildProjection(): Promise<Exercise[]> {
     const hasDeadline = row.has_deadline;
     const status = computeStatus(done, hasDeadline, deadlineAt);
     const contentKind = raw.kind;
+    const itemQuestions = kind === "quiz" ? questions.get(itemId) ?? [] : [];
+    const flavor = detectFlavor({
+      kind: raw.kind,
+      title: row.title,
+      html: raw.html,
+      content: raw.content,
+      attachments: raw.attachments ?? [],
+      questions: itemQuestions,
+    });
 
     out.push({
       id: itemId,
       title: row.title,
       kind,
+      flavor,
+      flavorSource: "auto",
       enrollmentId: row.enrollment_id != null ? Number(row.enrollment_id) : null,
       isSurvey:
         kind === "quiz" &&
@@ -159,7 +170,7 @@ export async function buildProjection(): Promise<Exercise[]> {
       files: localFilesFor(courseId, itemId),
       remoteFiles: attachments.get(itemId) ?? [],
       instructionsText: stripHtml(raw.html),
-      questions: kind === "quiz" ? questions.get(itemId) ?? [] : [],
+      questions: itemQuestions,
       forum: kind === "forum" ? parseForumInfo(raw.content) : null,
       ai: { status: "none", answer: null, updatedAt: null },
     });
@@ -167,15 +178,24 @@ export async function buildProjection(): Promise<Exercise[]> {
   return out;
 }
 
+/**
+ * Bump whenever the projection *shape* changes (new/renamed fields), so a code
+ * update invalidates the cached `exercises.json` on the next server boot even
+ * when the underlying catalog rows are unchanged.
+ */
+const PROJECTION_VERSION = "2";
+
 /** Stable hash of the catalog + state snapshots the projection depends on. */
 export async function getCatalogVersion(): Promise<string> {
   const rows = await query<{ version: string }>(
     `SELECT md5(
+       $1 || ':' ||
        (SELECT count(*)::text FROM content_item) || ':' ||
        COALESCE((SELECT max(updated_at)::text FROM content_item), '') || ':' ||
        (SELECT count(*)::text FROM item_state) || ':' ||
        COALESCE((SELECT max(captured_at)::text FROM item_state), '')
      ) AS version`,
+    [PROJECTION_VERSION],
   );
   return rows[0]?.version ?? "";
 }

@@ -171,8 +171,21 @@ export const en: Dict = {
   "menu.open": "Open activity",
   "menu.openPortal": "Open in portal",
   "menu.copyLink": "Copy link",
+  "menu.classify": "Classify",
   "menu.professorPhoto": "Professor photo",
   "menu.downloadMd": "Download .md answer",
+
+  // anomaly tags
+  "tag.auto": "Automatic (detect)",
+  "tag.question": "Question",
+  "tag.ghost": "No question",
+  "tag.print": "Print / screenshot",
+  "tag.anomaly": "Anomaly",
+  "flavor.question": "Question",
+  "flavor.ghost": "No question",
+  "flavor.print": "Print",
+  "flavor.detected": "Auto-detected",
+  "flavor.tagged": "Classified by you",
 
   // badges
   "badge.survey": "Survey",
@@ -193,6 +206,7 @@ export const en: Dict = {
   "toast.sendUnknown": "Submission unconfirmed",
   "toast.sendUnknownDesc": "{{detail}} Check the portal.",
   "toast.sendFail": "Could not submit",
+  "toast.tagSaved": "Classification updated",
 
   // mark panel
   "mark.title": "Complete",
@@ -226,6 +240,7 @@ export const en: Dict = {
   "send.mode.text.label": "Text",
   "send.mode.txt.label": ".txt",
   "send.mode.pdf.label": ".pdf",
+  "send.mode.image.label": "Image",
   "send.action.text": "Typed straight into the portal's answer field.",
   "send.action.txt": "Attached as a .txt file.",
   "send.action.pdf": "Converted to PDF and attached.",
@@ -239,6 +254,8 @@ export const en: Dict = {
   "send.download": "Download",
   "send.previewTitle": "File preview",
   "send.button": "Submit to portal",
+  "send.ghostButton": "Send name and ID",
+  "send.printButton": "Send screenshot",
   "send.answerSurvey": "Answer to be submitted",
   "send.answerQuiz": "Selection to be submitted",
   "send.blockedDone": "This activity is already completed — submission blocked.",
@@ -260,6 +277,13 @@ export const en: Dict = {
     "Write your forum post — or generate it with AI and review before posting.",
   "draft.quizHint":
     "Click “Generate draft” — the selected option appears highlighted in green in the questions.",
+  "draft.ghostIntro":
+    "This activity has no question. We'll submit your name and ID as the answer and complete it on the portal.",
+  "draft.printIntro":
+    "This activity asks for a screenshot. Attach the capture (PNG, JPG or WebP) and submit.",
+  "draft.printPick": "Choose screenshot image",
+  "draft.printPreviewAlt": "Screenshot preview",
+  "draft.printCaptionPlaceholder": "Optional caption to accompany the screenshot.",
 
   // version history
   "history.aria": "version history",

@@ -175,8 +175,21 @@ export const pt = {
   "menu.open": "Abrir atividade",
   "menu.openPortal": "Abrir no portal",
   "menu.copyLink": "Copiar link",
+  "menu.classify": "Classificar",
   "menu.professorPhoto": "Foto do professor",
   "menu.downloadMd": "Baixar resposta .md",
+
+  // anomaly tags
+  "tag.auto": "Automático (detectar)",
+  "tag.question": "Pergunta",
+  "tag.ghost": "Sem pergunta",
+  "tag.print": "Print / captura",
+  "tag.anomaly": "Anomalia",
+  "flavor.question": "Pergunta",
+  "flavor.ghost": "Sem pergunta",
+  "flavor.print": "Print",
+  "flavor.detected": "Detectado automaticamente",
+  "flavor.tagged": "Classificado por você",
 
   // badges
   "badge.survey": "Pesquisa",
@@ -197,6 +210,7 @@ export const pt = {
   "toast.sendUnknown": "Envio sem confirmação",
   "toast.sendUnknownDesc": "{{detail}} Confira no portal.",
   "toast.sendFail": "Não foi possível enviar",
+  "toast.tagSaved": "Classificação atualizada",
 
   // mark panel
   "mark.title": "Concluir",
@@ -230,6 +244,7 @@ export const pt = {
   "send.mode.text.label": "Texto",
   "send.mode.txt.label": ".txt",
   "send.mode.pdf.label": ".pdf",
+  "send.mode.image.label": "Imagem",
   "send.action.text": "Digitado direto no campo de resposta do portal.",
   "send.action.txt": "Anexado como arquivo .txt.",
   "send.action.pdf": "Convertido em PDF e anexado.",
@@ -243,6 +258,8 @@ export const pt = {
   "send.download": "Baixar",
   "send.previewTitle": "Pré-visualização do arquivo",
   "send.button": "Enviar no portal",
+  "send.ghostButton": "Enviar nome e matrícula",
+  "send.printButton": "Enviar print",
   "send.answerSurvey": "Resposta que será enviada",
   "send.answerQuiz": "Seleção que será enviada",
   "send.blockedDone": "Esta atividade já foi concluída — envio bloqueado.",
@@ -264,6 +281,13 @@ export const pt = {
     "Escreva sua publicação no fórum — ou gere com a IA e revise antes de publicar.",
   "draft.quizHint":
     "Clique em “Gerar rascunho” — a alternativa escolhida aparece destacada em verde nas questões.",
+  "draft.ghostIntro":
+    "Esta atividade não tem pergunta. Enviaremos seu nome e matrícula como resposta e concluiremos no portal.",
+  "draft.printIntro":
+    "Esta atividade pede um print. Anexe a captura de tela (PNG, JPG ou WebP) e envie.",
+  "draft.printPick": "Escolher imagem do print",
+  "draft.printPreviewAlt": "Pré-visualização do print",
+  "draft.printCaptionPlaceholder": "Legenda (opcional) para acompanhar o print.",
 
   // version history
   "history.aria": "histórico de versões",

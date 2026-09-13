@@ -9,23 +9,28 @@ import {
   MoreHorizontal,
   Paperclip,
   Sparkles,
+  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { Exercise } from "@/types";
+import { saveTag } from "@/api";
+import type { Exercise, FlavorSource, UploadFlavor } from "@/types";
 import { fmtDeadline } from "@/lib/status";
-import { contentLabel, kindMeta } from "@/lib/kind";
+import { contentLabel, kindMeta, canAiAnswer } from "@/lib/kind";
 import { runMark } from "@/lib/mark";
 import { useAppData } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
 import { ProfessorTag, SubjectAvatar, SubjectLabel } from "./identity";
 import { ProfessorPhotoDialog } from "./professor-photo-dialog";
-import { StatusBadge, DoneBadge } from "./status-badges";
+import { StatusBadge, DoneBadge, FlavorBadge } from "./status-badges";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -77,6 +82,21 @@ export function ActivityCard({ e }: { e: Exercise }) {
     }
   };
 
+  const setTag = async (tag: string | null) => {
+    try {
+      const res = await saveTag(e.id, tag);
+      patchExercise(e.id, {
+        tag: res.tag,
+        flavor: res.flavor as UploadFlavor,
+        flavorSource: res.flavorSource as FlavorSource,
+      });
+      toast.success(t("toast.tagSaved"));
+      refresh();
+    } catch (x) {
+      toast.error(x instanceof Error ? x.message : String(x));
+    }
+  };
+
   return (
     <>
       <div
@@ -105,6 +125,7 @@ export function ActivityCard({ e }: { e: Exercise }) {
         <span className="flex min-w-0 flex-1 flex-col gap-1.5">
           <span className="flex min-w-0 items-center gap-2">
             <span className={cn("truncate text-sm font-medium", e.done && "text-muted-foreground line-through")}>{e.title}</span>
+            <FlavorBadge flavor={e.flavor} source={e.flavorSource} className="shrink-0" />
             {e.done && <DoneBadge className="shrink-0" />}
           </span>
           <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -141,7 +162,7 @@ export function ActivityCard({ e }: { e: Exercise }) {
               <MoreHorizontal />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-44">
-              {meta.canAnswer && (
+              {canAiAnswer(e) && (
                 <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); generate(); }}>
                   <Sparkles />
                   {t("menu.generate")}
@@ -175,6 +196,30 @@ export function ActivityCard({ e }: { e: Exercise }) {
                 <Copy />
                 {t("menu.copyLink")}
               </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Tag />
+                  {t("menu.classify")}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); void setTag(null); }}>
+                    {t("tag.auto")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); void setTag("question"); }}>
+                    {t("tag.question")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); void setTag("ghost"); }}>
+                    {t("tag.ghost")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); void setTag("print"); }}>
+                    {t("tag.print")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); void setTag("anomalia"); }}>
+                    {t("tag.anomaly")}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
               {e.professorId != null && (
                 <DropdownMenuItem
                   onClick={(ev) => {
