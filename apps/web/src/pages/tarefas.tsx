@@ -87,7 +87,7 @@ export function TarefasPage() {
 
       {/* module chips */}
       {modules.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 pb-0.5">
+        <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5">
           <span className="mr-1 shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             {t("tasks.modules")}
           </span>
@@ -111,7 +111,7 @@ export function TarefasPage() {
       )}
 
       {/* type chips */}
-      <div className="flex flex-wrap items-center gap-1.5 pb-0.5">
+      <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-0.5">
         <span className="mr-1 shrink-0 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           {t("tasks.type")}
         </span>
