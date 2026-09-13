@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { useAppData, useScopePrefs } from "@/lib/app-state";
@@ -42,6 +42,7 @@ export function AgoraPage() {
   const { setModuleFilter } = useScopePrefs();
   const { t, locale } = useT();
   const navigate = useNavigate();
+  const [visible, setVisible] = useState(6);
 
   const counts = useMemo(() => countInfo(items), [items]);
   const next = useMemo(() => items.filter((e) => e.status === "open").sort((a, b) => cmpOpen(a, b, locale))[0] ?? null, [items, locale]);
@@ -53,7 +54,7 @@ export function AgoraPage() {
         .sort((a, b) => cmpOpen(a, b, locale)),
     [items, next, locale],
   );
-  const queue = useMemo(() => queueAll.slice(0, 6), [queueAll]);
+  const queue = useMemo(() => queueAll.slice(0, visible), [queueAll, visible]);
   const overdue = useMemo(() => queue.filter((e) => e.status === "expired"), [queue]);
   const upcoming = useMemo(() => queue.filter((e) => e.status !== "expired"), [queue]);
   const hidden = Math.max(0, counts.open - (next ? 1 : 0) - upcoming.length);
@@ -141,7 +142,7 @@ export function AgoraPage() {
                   </div>
                 )}
                 {hidden > 0 && (
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => navigate("/tarefas")}>
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => setVisible((v) => v + 2)}>
                     {t("now.queueMore", { n: hidden })}
                   </Button>
                 )}
