@@ -57,6 +57,7 @@ import {
   buildProjectInstructionBlock,
   composeEffectiveInstructions,
   projectFormatHint,
+  resolveProjectContext,
 } from "../src/project-context.js";
 import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
 import { findTemplateDocx } from "../src/template.js";
@@ -79,13 +80,12 @@ import { officeToPdf, previewCacheDir } from "../src/office.js";
 import { answerToPdf } from "../src/pdf.js";
 import { renderFilledDocx } from "../src/docx.js";
 import { generateDiagramSpec, renderDiagramPng } from "../src/diagram.js";
-import { parseUseCases, type UseCase } from "../src/usecase.js";
+import { applyTemplateDefaults, parseUseCases, type UseCase } from "../src/usecase.js";
 import { parseLinkedinUrl } from "../src/linkedin.js";
 import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/organizations.js";
 import {
   PROJECT_FILE_MAX_BYTES,
   addProjectFile,
-  buildExternalProjectBlock,
   fetchGithubReadme,
   removeProjectFile,
 } from "../src/project-source.js";
@@ -161,21 +161,47 @@ async function buildFilledDocx(
   const template = await findTemplateDocx(view.files);
   if (!template) return { error: "Esta atividade não tem um modelo .docx para preencher." };
   const labels = template.fields.map((f) => f.label);
-  const cases = parseUseCases(answer, labels);
+  const profile = await getProfile().catch(() => null);
+  const cases = applyTemplateDefaults(parseUseCases(answer, labels), profile ?? {});
   if (!cases.length) {
     return {
       error: "Não foi possível identificar os casos de uso na resposta. Gere a resposta novamente.",
     };
   }
-  const diagramPng = await buildDiagramPng(view, cases).catch(() => null);
+  const systemName = await resolveSystemName(view);
+  const diagramPng = await buildDiagramPng(view, cases, systemName).catch(() => null);
   const buffer = await renderFilledDocx(template.path, labels, cases, diagramPng);
   return { buffer, filename: safeFilename(await uploadBaseName(view), "docx") };
 }
 
+/**
+ * The UML system boundary label: the student's declared project ("Meu projeto")
+ * wins, then the course main profile, then the course name as a last resort.
+ */
+async function resolveSystemName(view: ExerciseView): Promise<string> {
+  try {
+    const source = await getProjectSource();
+    if (source.title.trim()) return source.title.trim();
+  } catch {
+    /* best-effort */
+  }
+  try {
+    const main = await getProjectProfile(view.courseId);
+    if (main?.theme.trim()) return main.theme.trim();
+  } catch {
+    /* best-effort */
+  }
+  return view.courseName;
+}
+
 /** Infer the UML diagram model and rasterize it to PNG (null when unavailable). */
-async function buildDiagramPng(view: ExerciseView, cases: UseCase[]): Promise<Buffer | null> {
+async function buildDiagramPng(
+  view: ExerciseView,
+  cases: UseCase[],
+  systemName: string,
+): Promise<Buffer | null> {
   const cfg = await getAiConfig();
-  const spec = await generateDiagramSpec(cfg, cases, view.courseName);
+  const spec = await generateDiagramSpec(cfg, cases, systemName);
   return renderDiagramPng(spec);
 }
 
@@ -286,13 +312,14 @@ async function generateAndSave(
   const startedAt = Date.now();
 
   // Ground the generation in the activity's project context (when enabled).
+  // The student's declared project ("Meu projeto") wins over the course profile.
   let projectBlock = "";
   let externalBlock = "";
   if (cfg.projectAutoDetect !== false && isAnswerable(view)) {
     try {
-      const analysis = await analyzeActivity(cfg, view, { notes: view.notes ?? "" });
-      if (analysis.effective) projectBlock = buildProjectInstructionBlock(analysis.effective);
-      if (analysis.needsProject) externalBlock = await buildExternalProjectBlock();
+      const resolved = await resolveProjectContext(cfg, view, { notes: view.notes ?? "" });
+      if (resolved.effective) projectBlock = buildProjectInstructionBlock(resolved.effective);
+      externalBlock = resolved.external;
     } catch {
       /* project context is best-effort */
     }

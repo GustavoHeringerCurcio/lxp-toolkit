@@ -122,6 +122,8 @@ export async function cheapJsonCompletion(
   system: string,
   user: string,
   maxTokens = 700,
+  /** When false, use the configured model first (better for structured inference). */
+  preferCheap = true,
 ): Promise<{ text: string; model: string }> {
   const attempt = async (model: string): Promise<string> => {
     const resp = await client().chat.completions.create({
@@ -136,10 +138,12 @@ export async function cheapJsonCompletion(
     });
     return resp.choices[0]?.message?.content ?? "";
   };
+  const first = preferCheap ? DETECT_MODEL : cfg.model;
+  const second = preferCheap ? cfg.model : DETECT_MODEL;
   try {
-    return { text: await attempt(DETECT_MODEL), model: DETECT_MODEL };
+    return { text: await attempt(first), model: first };
   } catch {
-    return { text: await attempt(cfg.model), model: cfg.model };
+    return { text: await attempt(second), model: second };
   }
 }
 

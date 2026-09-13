@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderUseCaseSvg, specFromUseCases, type DiagramSpec } from "../src/diagram.js";
+import { deriveRelations, renderUseCaseSvg, specFromUseCases, type DiagramSpec } from "../src/diagram.js";
 import type { UseCase } from "../src/usecase.js";
 
 const cases: UseCase[] = [
@@ -51,5 +51,39 @@ describe("renderUseCaseSvg", () => {
   it("não quebra com um spec vazio", () => {
     const svg = renderUseCaseSvg({ system: "", actors: [], useCases: [] });
     expect(svg.startsWith("<svg")).toBe(true);
+  });
+});
+
+describe("deriveRelations", () => {
+  it("gera <<include>> a partir de validações obrigatórias do fluxo", () => {
+    const cases: UseCase[] = [
+      {
+        id: "UC-01",
+        name: "Autenticar Usuário",
+        fields: { "fluxo principal": "1. O usuário informa os dados\n2. O sistema valida as credenciais" },
+      },
+    ];
+    expect(deriveRelations(cases)).toContainEqual({
+      from: "Autenticar Usuário",
+      to: "Validar Credenciais",
+      type: "include",
+    });
+  });
+
+  it("gera <<extend>> a partir dos fluxos alternativos/exceções", () => {
+    const cases: UseCase[] = [
+      {
+        id: "UC-02",
+        name: "Cadastrar Usuário",
+        fields: {
+          "fluxos alternativos excecoes": "2a. Se algum campo estiver vazio, o sistema exibe uma mensagem de erro",
+        },
+      },
+    ];
+    expect(deriveRelations(cases)).toContainEqual({
+      from: "Cadastrar Usuário",
+      to: "Exibir Mensagem de erro",
+      type: "extend",
+    });
   });
 });

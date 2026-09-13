@@ -204,24 +204,28 @@ export async function extractAllContentText(): Promise<ExtractSummary> {
   return summary;
 }
 
+export interface CourseContextRow {
+  id: number;
+  title: string;
+  text: string;
+}
+
 /**
- * Concatenate a course's extracted material (project/requirements/user-story
- * items first) for grounding a detection or generation prompt. Capped so the
- * cheap detection call stays small.
+ * Pure selection used by `courseContextText`: prioritize project/requirements
+ * material, drop excluded items (e.g. the current activity's own example
+ * attachments), and cap the total size.
  */
-export async function courseContextText(courseId: number, maxChars = 8000): Promise<string> {
-  const rows = await query<{ title: string; text: string }>(
-    `SELECT ci.title AS title, ct.text AS text
-       FROM content_text ct
-       JOIN content_item ci ON ci.id = ct.content_item_id
-      WHERE ci.course_id = $1 AND ct.status = 'ok' AND ct.text <> ''
-      ORDER BY ci.id`,
-    [courseId],
-  );
+export function selectCourseContext(
+  rows: CourseContextRow[],
+  maxChars: number,
+  excludeItemIds: number[] = [],
+): string {
+  const excluded = new Set(excludeItemIds);
+  const available = rows.filter((r) => !excluded.has(r.id));
   const priority = /projeto|requisit|tema|hist[oó]ria|escopo|documento|proposta/i;
   const ordered = [
-    ...rows.filter((r) => priority.test(r.title)),
-    ...rows.filter((r) => !priority.test(r.title)),
+    ...available.filter((r) => priority.test(r.title)),
+    ...available.filter((r) => !priority.test(r.title)),
   ];
   const chunks: string[] = [];
   let total = 0;
@@ -232,6 +236,28 @@ export async function courseContextText(courseId: number, maxChars = 8000): Prom
     total += block.length;
   }
   return chunks.join("\n\n");
+}
+
+/**
+ * Concatenate a course's extracted material (project/requirements/user-story
+ * items first) for grounding a detection or generation prompt. Capped so the
+ * cheap detection call stays small. `excludeItemIds` drops items whose content
+ * must never be mistaken for the project (typically the activity itself).
+ */
+export async function courseContextText(
+  courseId: number,
+  maxChars = 8000,
+  excludeItemIds: number[] = [],
+): Promise<string> {
+  const rows = await query<CourseContextRow>(
+    `SELECT ci.id::int AS id, ci.title AS title, ct.text AS text
+       FROM content_text ct
+       JOIN content_item ci ON ci.id = ct.content_item_id
+      WHERE ci.course_id = $1 AND ct.status = 'ok' AND ct.text <> ''
+      ORDER BY ci.id`,
+    [courseId],
+  );
+  return selectCourseContext(rows, maxChars, excludeItemIds);
 }
 
 /** Populate `content_text` once when empty and scraped files exist (bootstrap). */

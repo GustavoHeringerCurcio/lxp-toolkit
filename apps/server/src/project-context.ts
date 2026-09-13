@@ -13,9 +13,11 @@ import { createHash } from "node:crypto";
 import { detectActivityRelevance, detectCourseProject } from "./ai.js";
 import { courseContextText } from "./extract.js";
 import { resolveExtraInstructions } from "./prompt.js";
+import { buildExternalProjectBlock } from "./project-source.js";
 import {
   getActivityProject,
   getProjectProfile,
+  getProjectSource,
   saveActivityProject,
   saveProjectProfile,
 } from "./store.js";
@@ -135,6 +137,12 @@ export async function analyzeActivity(
   const cacheValid =
     activity != null && activity.source === "auto" && activity.contentHash === hash;
 
+  // A strong textual signal ("casos de uso", "preencha a tabela do projeto", …)
+  // means the activity always needs the student's project — even when the
+  // per-activity profile mode is "none" (which only opts out of the *course*
+  // profile, not of the student's own declared project).
+  const strongSignal = projectSignal(`${e.title}\n${e.instructionsText}`) === "strong";
+
   if (!cacheValid) {
     const isManual = activity?.source === "manual";
     let needsProject = activity?.needsProject ?? false;
@@ -166,6 +174,8 @@ export async function analyzeActivity(
       }
     }
 
+    if (strongSignal) needsProject = true;
+
     activity = await saveActivityProject(e.id, {
       needsProject,
       profileMode: activity?.profileMode ?? "main",
@@ -193,7 +203,9 @@ export async function analyzeActivity(
     (activity.needsProject && (!main || main.source === "auto")) || (opts.forceProfile === true && main?.source !== "manual");
   if (shouldDetectProfile) {
     try {
-      const ctx = await courseContextText(e.courseId).catch(() => "");
+      // Never let the activity's own example material (e.g. the professor's
+      // "Modelo/Resumo" with the clinic example) become the detected project.
+      const ctx = await courseContextText(e.courseId, 8000, [e.id]).catch(() => "");
       const det = await detectCourseProject(cfg, e.courseName, ctx, activity.intent ? [activity.intent] : []);
       if (det.theme || det.atores.length || det.requisitos.length || det.suggestedThemes.length) {
         main = await saveProjectProfile(e.courseId, {
@@ -224,4 +236,53 @@ export async function analyzeActivity(
     proposed,
     effective: effectiveProfileFor(main, activity),
   };
+}
+
+export interface ResolvedProjectContext {
+  needsProject: boolean;
+  /** Course/activity profile to inject (null when the external project wins). */
+  effective: EffectiveProfile | null;
+  /** Free-text external project block ("Meu projeto"); "" when none. */
+  external: string;
+  /** The student's project title, for the diagram/system boundary. */
+  externalTitle: string;
+}
+
+/**
+ * Resolve the project context actually injected into a generation. The
+ * student's declared project ("Meu projeto") takes precedence over the
+ * course-detected profile, while an explicit per-activity quick project wins
+ * over both. Never throws — blocks come back empty when nothing is configured.
+ */
+export async function resolveProjectContext(
+  cfg: AiConfig,
+  e: Exercise,
+  opts: { notes?: string; forceProfile?: boolean } = {},
+): Promise<ResolvedProjectContext> {
+  const analysis = await analyzeActivity(cfg, e, opts);
+  if (!analysis.needsProject) {
+    return { needsProject: false, effective: null, external: "", externalTitle: "" };
+  }
+
+  const source = await getProjectSource().catch(() => null);
+  const externalTitle = source?.title.trim() ?? "";
+  const hasExternal = Boolean(
+    externalTitle ||
+      source?.githubUrl.trim() ||
+      source?.notes.trim() ||
+      source?.readmeText.trim(),
+  );
+  const external = hasExternal ? await buildExternalProjectBlock().catch(() => "") : "";
+
+  // Explicit quick project for this activity always wins.
+  if (analysis.effective?.origin === "activity") {
+    return { needsProject: true, effective: analysis.effective, external, externalTitle };
+  }
+
+  // Otherwise the student's own declared project wins over the course profile.
+  if (hasExternal) {
+    return { needsProject: true, effective: null, external, externalTitle };
+  }
+
+  return { needsProject: true, effective: analysis.effective, external: "", externalTitle };
 }

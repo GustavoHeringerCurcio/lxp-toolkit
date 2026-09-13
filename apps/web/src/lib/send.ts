@@ -27,3 +27,20 @@ export function sendModeLabel(mode: SendMode, t: TranslateFn): string {
   const match = SEND_MODES.find((m) => m.value === mode);
   return match ? t(match.labelKey) : mode;
 }
+
+/** True when the activity carries a professor-provided `.docx` model. */
+export function hasDocxTemplate(files: { filename: string | null }[]): boolean {
+  return files.some((f) => /\.docx$/i.test(f.filename ?? ""));
+}
+
+/**
+ * Best default delivery format for an upload activity: `.docx` when the task
+ * ships a model to fill, plain text otherwise.
+ */
+export function defaultSendMode(exercise: {
+  kind: string;
+  remoteFiles: { filename: string | null }[];
+}): SendMode {
+  if (exercise.kind !== "upload") return "text";
+  return hasDocxTemplate(exercise.remoteFiles) ? "docx" : "text";
+}

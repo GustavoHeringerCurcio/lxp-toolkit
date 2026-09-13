@@ -26,6 +26,17 @@ export interface DiagramSpec {
   useCases: DiagramUseCase[];
 }
 
+/**
+ * Look up a field by its normalized label, tolerating longer template variants
+ * (e.g. "Fluxo Principal (Cenário de Sucesso)" for "fluxo principal").
+ */
+function fieldByPrefix(fields: Record<string, string>, prefix: string): string {
+  const exact = fields[prefix];
+  if (exact != null) return exact;
+  const key = Object.keys(fields).find((k) => k.startsWith(prefix));
+  return key ? fields[key] : "";
+}
+
 function splitList(value: string): string[] {
   return value
     .split(/[,;\n]/)
@@ -53,7 +64,7 @@ function unique(values: string[]): string[] {
 export function specFromUseCases(cases: UseCase[], system: string): DiagramSpec {
   const useCases: DiagramUseCase[] = cases.map((c) => ({
     name: useCaseName(c),
-    actors: splitList(c.fields["atores"] ?? ""),
+    actors: splitList(fieldByPrefix(c.fields, "atores")),
     includes: [],
     extends: [],
   }));
@@ -108,6 +119,115 @@ function mergeSpec(primary: DiagramSpec, fallback: DiagramSpec): DiagramSpec {
   };
 }
 
+// ── Deterministic include/extend derivation ─────────────────────────────────
+
+/** Verb conjugations that mark a mandatory, reusable system action (include). */
+const INCLUDE_VERBS: [RegExp, string][] = [
+  [/valid\w*/i, "Validar"],
+  [/verific\w*/i, "Verificar"],
+  [/confirm\w*/i, "Confirmar"],
+  [/autentic\w*/i, "Autenticar"],
+  [/calcul\w*/i, "Calcular"],
+  [/consult\w*/i, "Consultar"],
+  [/chec\w*/i, "Checar"],
+  [/registr\w*/i, "Registrar"],
+  [/selecion\w*/i, "Selecionar"],
+  [/busc\w*/i, "Buscar"],
+];
+
+/** Verb conjugations that mark an optional/conditional action (extend). */
+const EXTEND_VERBS: [RegExp, string][] = [
+  [/exib\w*/i, "Exibir"],
+  [/envi\w*/i, "Enviar"],
+  [/notific\w*/i, "Notificar"],
+  [/avis\w*/i, "Avisar"],
+  [/mostr\w*/i, "Mostrar"],
+  [/redirecion\w*/i, "Redirecionar"],
+];
+
+const LEADING_ARTICLE = /^(o|a|os|as|um|uma|uns|umas)\s+/i;
+
+/** "O sistema valida as credenciais" + "Validar" → "Validar Credenciais". */
+function relationName(prefix: string, rest: string): string {
+  let obj = rest
+    .replace(/^[\s,;:.\-]+/, "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(LEADING_ARTICLE, "")
+    .replace(/[.;:].*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!obj) return "";
+  obj = obj.split(" ").slice(0, 4).join(" ");
+  return `${prefix} ${obj.charAt(0).toUpperCase()}${obj.slice(1)}`;
+}
+
+export interface DerivedRelation {
+  from: string;
+  to: string;
+  type: "include" | "extend";
+}
+
+/**
+ * Derive include/extend relations from the flows themselves: mandatory
+ * validation/consultation steps become `<<include>>`, conditional/optional
+ * steps (usually in the exception flows) become `<<extend>>`. Grounded in the
+ * text — never invents actors, only names use cases from the described actions.
+ */
+export function deriveRelations(cases: UseCase[]): DerivedRelation[] {
+  const known = new Set(cases.map((c) => useCaseName(c).toLowerCase()));
+  const relations: DerivedRelation[] = [];
+  const add = (from: string, to: string, type: DerivedRelation["type"]): void => {
+    if (!to || from.toLowerCase() === to.toLowerCase()) return;
+    const key = `${from.toLowerCase()}|${to.toLowerCase()}|${type}`;
+    if (relations.some((r) => `${r.from.toLowerCase()}|${r.to.toLowerCase()}|${r.type}` === key)) return;
+    known.add(to.toLowerCase());
+    relations.push({ from, to, type });
+  };
+
+  for (const c of cases) {
+    const from = useCaseName(c);
+    for (const step of fieldByPrefix(c.fields, "fluxo principal").split("\n")) {
+      const body = step.replace(/^\s*\d+[.)]\s*/, "").trim();
+      if (!body) continue;
+      const hit = INCLUDE_VERBS.find(([re]) => re.test(body));
+      if (!hit) continue;
+      const m = body.match(hit[0]);
+      if (!m || m.index == null) continue;
+      const name = relationName(hit[1], body.slice(m.index + m[0].length));
+      if (name) add(from, name, "include");
+    }
+    for (const step of fieldByPrefix(c.fields, "fluxos alternativos").split("\n")) {
+      const body = step.replace(/^\s*\d+[a-z]?[.)]\s*/i, "").trim();
+      if (!body) continue;
+      const hit = EXTEND_VERBS.find(([re]) => re.test(body));
+      if (!hit) continue;
+      const m = body.match(hit[0]);
+      if (!m || m.index == null) continue;
+      const name = relationName(hit[1], body.slice(m.index + m[0].length));
+      if (name) add(from, name, "extend");
+    }
+  }
+  return relations;
+}
+
+/** Merge derived relations into the spec, creating the target use cases. */
+function applyRelations(spec: DiagramSpec, relations: DerivedRelation[]): DiagramSpec {
+  if (!relations.length) return spec;
+  const byName = new Map(spec.useCases.map((u) => [u.name.toLowerCase(), u]));
+  for (const rel of relations) {
+    const source = byName.get(rel.from.toLowerCase());
+    if (!source) continue;
+    let target = byName.get(rel.to.toLowerCase());
+    if (!target) {
+      target = { name: rel.to, actors: [], includes: [], extends: [] };
+      byName.set(rel.to.toLowerCase(), target);
+    }
+    const list = rel.type === "include" ? source.includes : source.extends;
+    if (!list.some((n) => n.toLowerCase() === rel.to.toLowerCase())) list.push(rel.to);
+  }
+  return { ...spec, useCases: [...byName.values()] };
+}
+
 /** Infer a diagram spec from the filled cases (cheap model + fallback). */
 export async function generateDiagramSpec(
   cfg: AiConfig,
@@ -121,13 +241,18 @@ export async function generateDiagramSpec(
     '{"system": string, "actors": string[], "useCases": [{"name": string, "actors": string[], "includes": string[], "extends": string[]}]}. ' +
     "`actors` são os atores (pessoas ou sistemas externos); `useCases[].actors` são os atores ligados àquele caso; " +
     "`includes`/`extends` são NOMES de outros casos de uso ligados por <<include>>/<<extend>>. " +
-    "Use os nomes exatamente como aparecem nas descrições e nunca invente atores que não apareçam nelas.";
+    "Use os nomes exatamente como aparecem nas descrições e nunca invente atores que não apareçam nelas. " +
+    "RELAÇÕES: quando um passo do fluxo for uma ação OBRIGATÓRIA e reutilizável (validar credenciais/dados, " +
+    "verificar disponibilidade, calcular total, confirmar), crie um caso de uso separado e ligue com <<include>>. " +
+    "Quando um passo for OPCIONAL ou CONDICIONAL (enviar notificação/lembrete, exibir aviso, ação extra), " +
+    "crie um caso de uso separado e ligue com <<extend>>. " +
+    "Se houver ao menos uma relação plausível, NÃO deixe includes/extends vazios.";
   const user = cases
     .map((c) => {
       const parts = [`Caso de uso: ${useCaseName(c)}`];
-      const atores = c.fields["atores"] ?? "";
-      const fluxo = c.fields["fluxo principal"] ?? "";
-      const alt = c.fields["fluxos alternativos excecoes"] ?? "";
+      const atores = fieldByPrefix(c.fields, "atores");
+      const fluxo = fieldByPrefix(c.fields, "fluxo principal");
+      const alt = fieldByPrefix(c.fields, "fluxos alternativos");
       if (atores) parts.push(`Atores: ${atores}`);
       if (fluxo) parts.push(`Fluxo principal:\n${fluxo}`);
       if (alt) parts.push(`Fluxos alternativos/exceções:\n${alt}`);
@@ -135,15 +260,22 @@ export async function generateDiagramSpec(
     })
     .join("\n\n");
 
+  const withRelations = (s: DiagramSpec): DiagramSpec => applyRelations(s, deriveRelations(cases));
   try {
-    const { text } = await cheapJsonCompletion(cfg, sys, user, 900);
+    const { text } = await cheapJsonCompletion(cfg, sys, user, 900, false);
     const parsed = JSON.parse(text) as unknown;
     const spec = coerceSpec(parsed);
-    if (spec) return mergeSpec(spec, fallback);
+    if (spec) {
+      const merged = mergeSpec(spec, fallback);
+      // The caller-provided system name (the student's real project) always
+      // wins over whatever the model guessed.
+      const named = system.trim() ? { ...merged, system: system.trim() } : merged;
+      return withRelations(named);
+    }
   } catch {
     /* fall through to the deterministic spec */
   }
-  return fallback;
+  return withRelations(fallback);
 }
 
 // ── SVG rendering ───────────────────────────────────────────────────────────

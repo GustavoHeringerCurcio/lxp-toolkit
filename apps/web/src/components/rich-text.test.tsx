@@ -29,4 +29,20 @@ describe("RichText", () => {
     render(<RichText html={null} fallback={"linha 1\nlinha 2"} />);
     expect(screen.getByText(/linha 1/).textContent).toContain("linha 2");
   });
+
+  it("descarta parágrafos vazios e preserva o alinhamento", () => {
+    const { container } = render(
+      <RichText html={`<div data-align="justify"><p>Texto</p><p></p></div>`} />,
+    );
+    expect(container.querySelectorAll("p")).toHaveLength(1);
+    expect(container.querySelector("div.text-justify")).not.toBeNull();
+  });
+
+  it("renderiza imagens seguras e ignora fontes inseguras", () => {
+    const { container } = render(
+      <RichText html={`<img src="https://x.test/a.jpg" alt="capa"><img src="javascript:alert(1)">`} />,
+    );
+    expect(container.querySelectorAll("img")).toHaveLength(1);
+    expect(container.querySelector("img")?.getAttribute("alt")).toBe("capa");
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeLabel, parseUseCases, useCaseName } from "../src/usecase.js";
+import { applyTemplateDefaults, normalizeLabel, parseUseCases, useCaseName } from "../src/usecase.js";
 
 const LABELS = [
   "Identificador",
@@ -88,5 +88,25 @@ describe("useCaseName", () => {
   it("cai no campo Nome quando o cabeçalho não traz nome", () => {
     const cases = parseUseCases("## UC-01\nNome do Caso de Uso: Fazer Login", LABELS);
     expect(useCaseName(cases[0])).toBe("Fazer Login");
+  });
+});
+
+describe("applyTemplateDefaults", () => {
+  it("preenche Autor, Data e Versão quando vazios ou placeholder", () => {
+    const cases = parseUseCases(
+      ["## UC-01 — X", "Autor: (Nome do analista ou aluno)", "Data: (dd/mm/aaaa)"].join("\n"),
+      LABELS,
+    );
+    const out = applyTemplateDefaults(cases, { nome: "Maria" }, new Date(2026, 8, 13));
+    expect(out[0].fields["autor"]).toBe("Maria");
+    expect(out[0].fields["data"]).toBe("13/09/2026");
+    expect(out[0].fields["versao"]).toBe("1.0");
+  });
+
+  it("não sobrescreve valores reais", () => {
+    const cases = parseUseCases(["## UC-01 — X", "Autor: João", "Versao: 2.0"].join("\n"), LABELS);
+    const out = applyTemplateDefaults(cases, { nome: "Maria" });
+    expect(out[0].fields["autor"]).toBe("João");
+    expect(out[0].fields["versao"]).toBe("2.0");
   });
 });

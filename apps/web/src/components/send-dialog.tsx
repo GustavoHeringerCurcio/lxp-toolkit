@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchSendArtifact, type SendMode } from "@/api";
 import type { Exercise } from "@/types";
 import { useT } from "@/lib/i18n";
-import { SEND_MODES } from "@/lib/send";
+import { SEND_MODES, defaultSendMode } from "@/lib/send";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,7 +40,7 @@ export function SendDialog({
   onConfirm: (mode: SendMode) => void;
 }) {
   const { t } = useT();
-  const [mode, setMode] = useState<SendMode>("text");
+  const [mode, setMode] = useState<SendMode>(() => defaultSendMode(exercise));
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewText, setPreviewText] = useState<string | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);

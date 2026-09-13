@@ -9,12 +9,36 @@ describe("sanitizeHtml", () => {
 
   it("mantém a estrutura de parágrafos e listas", () => {
     const html = `<div style="text-align: justify;"><p>Um</p><ul><li><p>Dois</p></li><li>Três</li></ul></div>`;
-    expect(sanitizeHtml(html)).toBe("<div><p>Um</p><ul><li><p>Dois</p></li><li>Três</li></ul></div>");
+    expect(sanitizeHtml(html)).toBe(
+      `<div data-align="justify"><p>Um</p><ul><li><p>Dois</p></li><li>Três</li></ul></div>`,
+    );
   });
 
   it("desembrulha elementos customizados preservando o texto", () => {
     const html = `<p>Veja <grupoaattachment file="x.pdf">o anexo</grupoaattachment> agora.</p>`;
     expect(sanitizeHtml(html)).toBe("<p>Veja o anexo agora.</p>");
+  });
+
+  it("converte anexos e links do portal em âncoras seguras", () => {
+    const attachment = `<grupoaattachment file="https://x.test/a.pdf" filename="A.pdf"></grupoaattachment>`;
+    expect(sanitizeHtml(attachment)).toBe(
+      `<a href="https://x.test/a.pdf" target="_blank" rel="noreferrer">A.pdf</a>`,
+    );
+    const link = `<grupoalink href="https://x.test/doc" text="Ver doc"></grupoalink>`;
+    expect(sanitizeHtml(link)).toBe(
+      `<a href="https://x.test/doc" target="_blank" rel="noreferrer">Ver doc</a>`,
+    );
+    const video = `<grupoavideo type="youtube" url="https://www.youtube.com/embed/abc"></grupoavideo>`;
+    expect(sanitizeHtml(video)).toBe(
+      `<a href="https://www.youtube.com/embed/abc" target="_blank" rel="noreferrer">https://www.youtube.com/embed/abc</a>`,
+    );
+  });
+
+  it("converte o banner do layout em imagem e descarta fontes inseguras", () => {
+    expect(sanitizeHtml(`<grupoalayout banner="https://x.test/b.jpg" bannername="capa"></grupoalayout>`)).toBe(
+      `<img src="https://x.test/b.jpg" alt="capa">`,
+    );
+    expect(sanitizeHtml(`<grupoaattachment file="javascript:alert(1)" filename="x"></grupoaattachment>`)).toBe("");
   });
 
   it("remove atributos e mantém só href seguro em links", () => {

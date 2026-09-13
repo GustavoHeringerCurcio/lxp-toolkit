@@ -96,3 +96,35 @@ export function parseUseCases(text: string, templateLabels: string[] = []): UseC
 export function useCaseName(useCase: UseCase, nameLabel = "Nome do Caso de Uso"): string {
   return useCase.name || useCase.fields[normalizeLabel(nameLabel)] || useCase.id;
 }
+
+/** A field value that is empty or still a template placeholder, e.g. "(dd/mm/aaaa)". */
+function isBlankOrPlaceholder(value: string | undefined): boolean {
+  const v = (value ?? "").trim();
+  return v === "" || v === "." || /^\(.*\)$/.test(v);
+}
+
+/**
+ * Fill the template's fixed metadata (Autor/Data/Versão) when the model left it
+ * blank or as a placeholder, so the generated document is ready to submit.
+ */
+export function applyTemplateDefaults(
+  cases: UseCase[],
+  profile: { nome?: string } = {},
+  now: Date = new Date(),
+): UseCase[] {
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  const date = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+  const defaults: Record<string, string> = {
+    autor: profile.nome?.trim() ?? "",
+    versao: "1.0",
+  };
+  return cases.map((c) => {
+    const fields = { ...c.fields };
+    for (const [key, value] of Object.entries(defaults)) {
+      if (value && isBlankOrPlaceholder(fields[key])) fields[key] = value;
+    }
+    // The document date is always today, never a date the model guessed.
+    fields["data"] = date;
+    return { ...c, fields };
+  });
+}

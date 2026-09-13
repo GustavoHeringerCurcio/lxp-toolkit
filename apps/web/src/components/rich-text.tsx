@@ -24,6 +24,19 @@ const SKIP_TAGS = new Set([
   "math",
 ]);
 
+const BLOCK_TAGS = new Set([
+  "p",
+  "div",
+  "li",
+  "blockquote",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+]);
+
 const SAFE_HREF = /^(https?:|mailto:|\/|#)/i;
 
 const HEADING_CLASS: Record<string, string> = {
@@ -34,6 +47,15 @@ const HEADING_CLASS: Record<string, string> = {
   h5: "font-heading text-sm font-semibold",
   h6: "font-heading text-sm font-semibold",
 };
+
+/** Portal inline `text-align` is preserved by the sanitizer as `data-align`. */
+function alignClass(el: Element): string {
+  const align = el.getAttribute("data-align");
+  if (align === "justify") return "text-justify";
+  if (align === "center") return "text-center";
+  if (align === "right") return "text-right";
+  return "";
+}
 
 function renderNode(node: Node, key: string): ReactNode {
   if (node.nodeType === 3) {
@@ -51,11 +73,18 @@ function renderNode(node: Node, key: string): ReactNode {
     .filter((child) => child !== null && child !== false);
 
   if (tag === "br") return <br key={key} />;
+  if (tag === "hr") return <hr key={key} className="border-border" />;
+
+  // Drop empty block wrappers (the portal emits a trailing `<p></p>` per widget).
+  if (BLOCK_TAGS.has(tag)) {
+    const hasVisible = children.some((child) => typeof child !== "string" || child.trim() !== "");
+    if (!hasVisible) return null;
+  }
 
   const headingClass = HEADING_CLASS[tag];
   if (headingClass) {
     return (
-      <p key={key} className={headingClass}>
+      <p key={key} className={cn(headingClass, alignClass(el))}>
         {children}
       </p>
     );
@@ -63,7 +92,17 @@ function renderNode(node: Node, key: string): ReactNode {
 
   switch (tag) {
     case "p":
-      return <p key={key}>{children}</p>;
+      return (
+        <p key={key} className={cn(alignClass(el))}>
+          {children}
+        </p>
+      );
+    case "div":
+      return (
+        <div key={key} className={cn(alignClass(el))}>
+          {children}
+        </div>
+      );
     case "strong":
     case "b":
       return (
@@ -94,7 +133,7 @@ function renderNode(node: Node, key: string): ReactNode {
       return <li key={key}>{children}</li>;
     case "blockquote":
       return (
-        <blockquote key={key} className="border-l-2 border-border pl-3 text-muted-foreground">
+        <blockquote key={key} className={cn("border-l-2 border-border pl-3 text-muted-foreground", alignClass(el))}>
           {children}
         </blockquote>
       );
@@ -110,6 +149,19 @@ function renderNode(node: Node, key: string): ReactNode {
           {children}
         </pre>
       );
+    case "img": {
+      const src = el.getAttribute("src") ?? "";
+      if (!SAFE_HREF.test(src)) return null;
+      return (
+        <img
+          key={key}
+          src={src}
+          alt={el.getAttribute("alt") ?? ""}
+          loading="lazy"
+          className="max-w-full rounded-lg border border-border"
+        />
+      );
+    }
     case "a": {
       const href = el.getAttribute("href") ?? "";
       if (!SAFE_HREF.test(href)) return <span key={key}>{children}</span>;
@@ -180,16 +232,15 @@ export function RichText({
   }, [html]);
 
   if (!nodes || nodes.length === 0) {
+    if (!fallback || !fallback.trim()) return null;
     return (
       <p className={cn("whitespace-pre-wrap text-sm leading-relaxed text-foreground/90", className)}>
-        {fallback ?? ""}
+        {fallback}
       </p>
     );
   }
 
   return (
-    <div className={cn("space-y-3 text-sm leading-relaxed text-foreground/90", className)}>
-      {nodes}
-    </div>
+    <div className={cn("space-y-3 text-sm leading-relaxed text-foreground/90", className)}>{nodes}</div>
   );
 }
