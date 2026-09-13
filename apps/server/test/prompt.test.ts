@@ -25,6 +25,7 @@ const baseVars: PromptVars = {
   questoes: "Q1: qual…",
   observacoes: "Notas do aluno",
   forum: "",
+  modelo: "",
 };
 
 describe("renderTemplate", () => {

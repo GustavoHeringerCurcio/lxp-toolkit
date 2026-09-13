@@ -2,6 +2,7 @@ import type { AiActivitySections, AiProfile, AiStyle, Exercise, ForumPost, QuizQ
 import { DEFAULT_ACTIVITY_SECTIONS } from "./config.js";
 import { kindLabel } from "./kind.js";
 import { extractFileText } from "./pdf.js";
+import { findTemplateDocx, type TemplateField } from "./template.js";
 
 export function isPlaceholder(value: string): boolean {
   return value.includes("{");
@@ -37,6 +38,8 @@ export interface PromptVars {
   observacoes: string;
   /** Forum thread (question + existing posts); empty for non-forum items. */
   forum: string;
+  /** Professor's model fields (one label per line); empty when none. */
+  modelo: string;
 }
 
 /** Replace every supported {placeholder} in the given text. */
@@ -53,6 +56,7 @@ export function renderTemplate(text: string, vars: PromptVars): string {
     .replaceAll("{questoes}", vars.questoes)
     .replaceAll("{observacoes}", vars.observacoes)
     .replaceAll("{forum}", vars.forum)
+    .replaceAll("{modelo}", vars.modelo)
     .trim();
 }
 
@@ -109,7 +113,11 @@ export function resolveExtraInstructions(raw: string): string {
  * the model *how* to answer; the activity content comes separately as the
  * `user` message, so the model never has a reason to echo the scaffolding.
  */
-export function buildStylePrompt(style: AiStyle, extraInstructions = ""): string {
+export function buildStylePrompt(
+  style: AiStyle,
+  extraInstructions = "",
+  opts: { allowMarkdown?: boolean } = {},
+): string {
   const parts: string[] = [];
   if (style.persona.trim()) parts.push(style.persona.trim());
   if (style.voice.trim()) parts.push(style.voice.trim());
@@ -137,7 +145,11 @@ export function buildStylePrompt(style: AiStyle, extraInstructions = ""): string
       "- Não repita os rótulos de contexto da atividade (Atividade, Tipo, Módulo, Enunciado, Arquivos, Questões, Observações).",
     );
   if (style.noIntroOutro) rules.push("- Sem introdução, sem despedida e sem oferecer ajuda extra.");
-  rules.push("- Escreva em texto simples, sem símbolos, emojis ou negrito.");
+  rules.push(
+    opts.allowMarkdown
+      ? "- Use Markdown básico (títulos com ##, listas com -) apenas quando o formato pedido exigir; nunca use emojis."
+      : "- Escreva em texto simples, sem símbolos, emojis ou negrito.",
+  );
   rules.push(
     "- Entregue exatamente o conteúdo final que a atividade pede (por exemplo, uma tabela preenchida, lacunas completadas ou respostas). " +
       "Nunca diga que não pode criar ou enviar arquivos, nunca peça para o usuário completar algo e nunca ofereça ajuda.",
@@ -169,6 +181,8 @@ export function buildActivityPrompt(vars: PromptVars, sections: AiActivitySectio
   if (vars.forum.trim()) blocks.push(`Publicações no fórum:\n${vars.forum.trim()}`);
   if (sections.arquivos && vars.arquivos.trim())
     blocks.push(`Arquivos anexados:\n${vars.arquivos.trim()}`);
+  if (vars.modelo.trim())
+    blocks.push(`Modelo do professor (preencha exatamente estes campos, na ordem):\n${vars.modelo.trim()}`);
   if (sections.questoes && vars.questoes.trim()) blocks.push(`Questões:\n${vars.questoes.trim()}`);
   if (sections.observacoes && vars.observacoes.trim())
     blocks.push(`Observações do aluno:\n${vars.observacoes.trim()}`);
@@ -252,6 +266,14 @@ export async function buildPromptVars(
     forum = (header ? header + "\n" : "") + lines.join("\n");
   }
 
+  // Professor-provided model (e.g. the "Modelo de Caso de Uso" table). When the
+  // task carries a .docx with a table, its field labels drive a structured fill.
+  let modelo = "";
+  if (e.kind === "upload") {
+    const template = await findTemplateDocx(e.files).catch(() => null);
+    if (template) modelo = template.fields.map((f: TemplateField) => f.label).join("\n");
+  }
+
   return {
     nome: profile.nome ?? "",
     matricula: profile.matricula ?? "",
@@ -264,6 +286,7 @@ export async function buildPromptVars(
     questoes,
     forum,
     observacoes: notes,
+    modelo,
   };
 }
 
@@ -291,14 +314,26 @@ export async function buildMessages(
 
   const vars = await buildPromptVars(e, profile, notes, sections);
   const messages: ChatMessage[] = [];
+  const hasTemplate = Boolean(vars.modelo.trim());
 
   // Quiz answers are pure option selections: never prefix them with the
   // student's name/matrícula.
   const effectiveStyle = e.kind === "quiz" ? { ...style, includeIdentity: false } : style;
-  const system = renderTemplate(buildStylePrompt(effectiveStyle, extraInstructions), vars).trim();
+  const system = renderTemplate(
+    buildStylePrompt(effectiveStyle, extraInstructions, { allowMarkdown: hasTemplate }),
+    vars,
+  ).trim();
   if (system) messages.push({ role: "system", content: system });
 
   let user = buildActivityPrompt(vars, sections).trim();
+  if (hasTemplate) {
+    user +=
+      `\n\nPreencha o modelo acima para CADA caso de uso identificado no projeto. Formato da resposta:` +
+      `\n- Um bloco por caso de uso, começando por uma linha "## UC-01 — <nome do caso de uso>" (numere UC-01, UC-02, ...).` +
+      `\n- Em seguida, uma linha por campo no formato "<Campo>: <valor>", usando exatamente os nomes de campo do modelo.` +
+      `\n- Em campos com vários passos (ex.: Fluxo Principal), liste cada passo em uma linha seguinte, numerado.` +
+      `\n- Preencha todos os campos e não invente campos novos.`;
+  }
   if (e.kind === "quiz" && e.questions.length) {
     user +=
       `\n\nFormato da resposta: uma linha por questão, no formato "Q<id>: <letra>", sem texto extra.` +

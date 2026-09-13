@@ -55,6 +55,7 @@ import {
   projectFormatHint,
 } from "../src/project-context.js";
 import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
+import { findTemplateDocx } from "../src/template.js";
 import type { AiActivitySections, AiStyle, AnswerRecord, QuizQ, QuizSelection } from "../src/types.js";
 import {
   launchUploadSubmit,
@@ -250,7 +251,14 @@ async function generateAndSave(
       /* project context is best-effort */
     }
   }
-  const extra = composeEffectiveInstructions(view.aiRequestJson, projectBlock, projectFormatHint(view));
+  // A professor-provided model (docx table) supersedes the generic "fill a
+  // Markdown table" hint — the structured contract takes over.
+  const template = view.kind === "upload" ? await findTemplateDocx(view.files).catch(() => null) : null;
+  const extra = composeEffectiveInstructions(
+    view.aiRequestJson,
+    projectBlock,
+    template ? "" : projectFormatHint(view),
+  );
 
   const gen = await generateAnswer(cfg, view, extra, profile, { onDelta: opts.onDelta }, view.notes);
   const selections = view.kind === "quiz" ? parseQuizSelections(gen.text, view.questions) : [];
