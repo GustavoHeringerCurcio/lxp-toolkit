@@ -2,7 +2,8 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ExerciseKind } from "@/types";
 import { kindMeta } from "@/lib/kind";
-import { subjectInitials, subjectStyle } from "@/lib/subject";
+import { subjectInitials } from "@/lib/subject";
+import { useSubjectStyle } from "@/lib/subject-colors";
 import { subjectIcon } from "@/lib/subject-icon";
 import { professorInitials, professorLabel } from "@/lib/prof";
 
@@ -37,11 +38,12 @@ export function SubjectAvatar({
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const Icon = kind ? kindMeta(kind).icon : null;
   const DomainIcon = subjectIcon(moduleName);
+  const style = useSubjectStyle(moduleName);
   const showImage = Boolean(imageUrl) && failedUrl !== imageUrl;
   return (
     <span
       aria-hidden
-      style={subjectStyle(moduleName)}
+      style={style}
       className={cn(
         "subject-avatar relative grid size-12 shrink-0 place-items-center rounded-xl font-heading text-[15px] font-semibold",
         showImage && "subject-avatar--photo",
@@ -73,9 +75,10 @@ export function SubjectAvatar({
 }
 
 export function SubjectLabel({ moduleName, className }: { moduleName: string; className?: string }) {
+  const style = useSubjectStyle(moduleName);
   return (
     <span
-      style={subjectStyle(moduleName)}
+      style={style}
       className={cn("subject-text truncate text-[11px] font-semibold", className)}
     >
       {moduleName}

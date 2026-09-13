@@ -57,6 +57,10 @@
     --color-subject-6: var(--subject-6);
     --color-subject-7: var(--subject-7);
     --color-subject-8: var(--subject-8);
+    --color-subject-9: var(--subject-9);
+    --color-subject-10: var(--subject-10);
+    --color-subject-11: var(--subject-11);
+    --color-subject-12: var(--subject-12);
     --color-ok: var(--ok);
     --color-late: var(--late);
     --color-soon: var(--soon);
@@ -109,15 +113,20 @@
     --info: oklch(0.5 0.095 245);
 
     /* Subject identity palette — stable per module, the only per-card color.
-       Chosen to sit on warm paper and stay distinguishable from status tones. */
-    --subject-1: oklch(0.56 0.135 35);  /* terracotta */
-    --subject-2: oklch(0.55 0.105 130); /* olive */
-    --subject-3: oklch(0.54 0.09 200);  /* teal */
-    --subject-4: oklch(0.53 0.13 310);  /* plum */
-    --subject-5: oklch(0.58 0.14 5);    /* rose */
-    --subject-6: oklch(0.62 0.115 72);  /* ochre */
-    --subject-7: oklch(0.52 0.10 258);  /* slate blue */
-    --subject-8: oklch(0.5 0.095 165);  /* forest */
+       Twelve hues spaced ~150° between adjacent slots (so collision-probed
+       neighbors never look alike), tuned to read as text on warm paper. */
+    --subject-1: oklch(0.53 0.17 27);   /* red */
+    --subject-2: oklch(0.53 0.12 177);  /* emerald */
+    --subject-3: oklch(0.54 0.18 327);  /* magenta */
+    --subject-4: oklch(0.54 0.13 117);  /* lime */
+    --subject-5: oklch(0.49 0.16 267);  /* indigo */
+    --subject-6: oklch(0.58 0.15 57);   /* orange */
+    --subject-7: oklch(0.52 0.11 207);  /* cyan */
+    --subject-8: oklch(0.56 0.17 357);  /* rose */
+    --subject-9: oklch(0.52 0.14 147);  /* green */
+    --subject-10: oklch(0.51 0.17 297); /* violet */
+    --subject-11: oklch(0.56 0.13 87);  /* amber */
+    --subject-12: oklch(0.50 0.15 237); /* blue */
 
     --ok: oklch(0.51 0.12 150);
     --late: oklch(0.51 0.17 25);
@@ -175,14 +184,18 @@
     --info: oklch(0.725 0.11 245);
 
     /* Subject identity palette — brighter + higher chroma for the espresso dark. */
-    --subject-1: oklch(0.72 0.15 40);
-    --subject-2: oklch(0.75 0.13 130);
-    --subject-3: oklch(0.74 0.11 200);
-    --subject-4: oklch(0.74 0.14 312);
-    --subject-5: oklch(0.75 0.15 8);
-    --subject-6: oklch(0.79 0.13 75);
-    --subject-7: oklch(0.72 0.12 258);
-    --subject-8: oklch(0.74 0.12 165);
+    --subject-1: oklch(0.72 0.17 30);
+    --subject-2: oklch(0.75 0.13 177);
+    --subject-3: oklch(0.74 0.18 327);
+    --subject-4: oklch(0.78 0.14 117);
+    --subject-5: oklch(0.72 0.16 267);
+    --subject-6: oklch(0.78 0.15 57);
+    --subject-7: oklch(0.75 0.12 207);
+    --subject-8: oklch(0.75 0.17 357);
+    --subject-9: oklch(0.76 0.15 147);
+    --subject-10: oklch(0.73 0.17 297);
+    --subject-11: oklch(0.79 0.14 87);
+    --subject-12: oklch(0.73 0.16 237);
 
     --ok: oklch(0.72 0.155 150);
     --late: oklch(0.67 0.175 25);
@@ -236,7 +249,7 @@
     scrollbar-color: color-mix(in oklab, var(--border) 90%, transparent) transparent;
 }
 
-/* subject identity (components set --subj inline from --subject-1..8) */
+/* subject identity (components set --subj inline from --subject-1..12) */
 .subject-avatar {
     color: var(--subj);
     background: color-mix(in oklab, var(--subj) 16%, var(--card));

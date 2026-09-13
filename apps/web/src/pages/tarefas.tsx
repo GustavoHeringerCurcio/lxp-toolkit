@@ -5,7 +5,8 @@ import { useAppData, useScopePrefs, type Scope } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
 import { ActivityCard } from "@/components/activity-card";
 import { KIND_ORDER, kindMeta, kindShort } from "@/lib/kind";
-import { subjectStyle } from "@/lib/subject";
+import { subjectIndex, subjectStyleForIndex } from "@/lib/subject";
+import { useSubjectColorMap } from "@/lib/subject-colors";
 import type { ExerciseKind } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
@@ -30,6 +31,7 @@ export function TarefasPage() {
   const { items, loading } = useAppData();
   const { scope, setScope, moduleFilter, setModuleFilter, typeFilter, setTypeFilter } = useScopePrefs();
   const { t, locale } = useT();
+  const subjectSlots = useSubjectColorMap();
 
   const counts = useMemo(() => countInfo(items), [items]);
   const modules = useMemo(
@@ -96,7 +98,7 @@ export function TarefasPage() {
               key={m}
               onClick={() => setModuleFilter(moduleFilter === m ? null : m)}
               aria-pressed={moduleFilter === m}
-              style={moduleFilter === m ? subjectStyle(m) : undefined}
+              style={moduleFilter === m ? subjectStyleForIndex(subjectSlots.get(m) ?? subjectIndex(m)) : undefined}
               className={cn(
                 "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 moduleFilter === m

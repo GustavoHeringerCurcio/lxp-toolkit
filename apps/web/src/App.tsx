@@ -4,6 +4,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Separator } from "@/components/ui/separator";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { AppProviders, useAppData } from "@/lib/app-state";
+import { SubjectColorProvider } from "@/lib/subject-colors";
 import { ThemeProvider } from "@/lib/theme";
 import { LangProvider, useT } from "@/lib/i18n";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -156,7 +157,9 @@ export default function App() {
     <LangProvider>
       <ThemeProvider>
         <AppProviders>
-          <ShellWithRefresh />
+          <SubjectColorProvider>
+            <ShellWithRefresh />
+          </SubjectColorProvider>
         </AppProviders>
       </ThemeProvider>
     </LangProvider>

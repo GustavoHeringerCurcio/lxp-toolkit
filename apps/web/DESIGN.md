@@ -86,16 +86,16 @@ This rule prevents the overload that made type badges collide with status (blue 
 |---|---|---|
 | Status | semantic tone + icon + label | `TONE_CLS` / `StatusBadge` |
 | Type | icon + label, monochrome (`border-border bg-muted/40 text-muted-foreground`) | `KIND_META.badgeClass`, `TypeBadge` |
-| Subject (module) | `--subject-1..8` palette + monogram initials | `lib/subject.ts`, `.subject-avatar` |
+| Subject (module) | `--subject-1..12` palette + monogram initials | `lib/subject.ts`, `lib/subject-colors.tsx`, `.subject-avatar` |
 | Professor | neutral initials avatar, never colored | `lib/prof.ts`, `ProfessorTag` |
 
 Subject palette (tokens in `index.css`, light + dark tuned; no raw color in TSX):
 
 | Token | Hue |
 |---|---|
-| `--subject-1..8` | terracotta · olive · teal · plum · rose · ochre · slate-blue · forest |
+| `--subject-1..12` | red · emerald · magenta · lime · indigo · orange · cyan · rose · green · violet · amber · blue (adjacent slots ~150° apart) |
 
-A module maps to a slot deterministically (`subjectIndex(moduleName)`, FNV-1a, with an optional pin map), so a subject keeps the same color across pages and themes. The monogram is the leading anchor of every activity card; the module name repeats the color as text (`SubjectLabel`).
+A module maps to a slot deterministically (FNV-1a `subjectIndex`, with an optional pin map). Because a bare hash can collide — "Projeto" and "Desenvolvimento Back-end" both landed on slot 1 — `SubjectColorProvider` (`lib/subject-colors.tsx`) resolves the whole visible module set through `assignSubjectIndices`, which keeps the hash as a starting point and probes forward so every module gets a distinct color. Components read it via `useSubjectStyle` / `useSubjectColorMap`, falling back to the hash outside a provider. The monogram is the leading anchor of every activity card; the module name repeats the color as text (`SubjectLabel`).
 
 ## 4. Typography
 
@@ -146,8 +146,9 @@ caps/joins, `currentColor` + `fillOpacity .12` on body shapes): submit, warning,
 
 ## 7. Subject identity & neutral professors
 
-`SubjectAvatar` + `lib/subject.ts` + `lib/subject-icon.ts`: deterministic identity per **module**
-(the only per-card color, see §3.5). Color comes from the `--subject-1..8` theme tokens, so there is
+`SubjectAvatar` + `lib/subject.ts` + `lib/subject-colors.tsx` + `lib/subject-icon.ts`:
+deterministic identity per **module** (the only per-card color, see §3.5). Color comes from the
+`--subject-1..12` theme tokens, resolved collision-free per module set, so there is
 no raw color in TSX and the old "no raw hex" exception is retired. The tile shows a domain pictogram
 derived automatically from the module name (`subjectIcon`, accent-insensitive whole-phrase keywords;
 e.g. "Banco de Dados" → `Database`, "Arquitetura de Software" → `Network`), falling back to the
@@ -233,6 +234,10 @@ grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid;
 
 ## History
 
+- **v3.4 (2026-09):** subject palette widened to 12 clearly distinct hues (adjacent slots ~150°
+  apart) and made collision-free: `SubjectColorProvider` assigns each module a unique slot for the
+  visible set, so modules that used to share a color (e.g. "Projeto" and "Desenvolvimento
+  Back-end") no longer do.
 - **v3.3 (2026-09):** subject tiles show an automatic domain pictogram (`lib/subject-icon.ts`,
   monogram fallback); professor photos come from a hardcoded organization directory
   (`apps/server/config/organizations.json`) or a per-professor LinkedIn override, loaded by the
@@ -245,7 +250,7 @@ grows (`ease-soft`, 500ms) and the module list reveals via a `0fr → 1fr` grid;
   (Base UI `Dialog`); checkbox dropped for a single explicit CTA; custom submission-format icon
   family added.
 - **v3 (2026-09):** rebrand **Pauta → LXP Toolkit** ("Stacked X" mark); identity color economy
-  (status = semantic, type = monochrome icon, subject = `--subject-1..8` identity, professor =
+  (status = semantic, type = monochrome icon, subject = `--subject-1..12` identity, professor =
   neutral); activity cards reworked around the subject monogram; raw-hex exception retired.
 - **v2.1 (2026-09):** contrast pass — dark surfaces dropped to near-black (L .165), foreground
   raised to .95, all accent/status chroma lifted (+20–40%) so nothing reads grey; light-mode ink
