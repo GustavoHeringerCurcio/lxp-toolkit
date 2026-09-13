@@ -282,7 +282,7 @@ export const pt = {
   "draft.quizHint":
     "Clique em “Gerar rascunho” — a alternativa escolhida aparece destacada em verde nas questões.",
   "draft.ghostIntro":
-    "Esta atividade não tem pergunta. Enviaremos seu nome e matrícula como resposta e concluiremos no portal.",
+    "Esta atividade não tem pergunta. Clique em “Enviar nome e matrícula” — enviaremos seu nome e matrícula e concluiremos no portal.",
   "draft.printIntro":
     "Esta atividade pede um print. Anexe a captura de tela (PNG, JPG ou WebP) e envie.",
   "draft.printPick": "Escolher imagem do print",

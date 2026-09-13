@@ -278,7 +278,7 @@ export const en: Dict = {
   "draft.quizHint":
     "Click “Generate draft” — the selected option appears highlighted in green in the questions.",
   "draft.ghostIntro":
-    "This activity has no question. We'll submit your name and ID as the answer and complete it on the portal.",
+    "This activity has no question. Click “Send name and ID” — we'll submit your name and ID and complete it on the portal.",
   "draft.printIntro":
     "This activity asks for a screenshot. Attach the capture (PNG, JPG or WebP) and submit.",
   "draft.printPick": "Choose screenshot image",

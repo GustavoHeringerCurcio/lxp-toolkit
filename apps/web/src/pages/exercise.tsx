@@ -111,7 +111,7 @@ function AnswerPanel({
   const busyRef = useRef(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const { patchExercise, cfg } = useAppData();
+  const { patchExercise } = useAppData();
   const { t, locale } = useT();
 
   const loadSubs = useCallback(async () => {
@@ -119,7 +119,7 @@ function AnswerPanel({
   }, [e.id]);
 
   useEffect(() => {
-    setDraft(e.answer ?? "");
+    setDraft(e.flavor === "ghost" ? "" : e.answer ?? "");
     setErr(null);
     setSendOpen(false);
     setSub(null);
@@ -127,19 +127,17 @@ function AnswerPanel({
     setPrintFile(null);
     setPrintPreview(null);
     cancelRef.current = false;
-    if (e.flavor === "ghost" && !e.answer) {
-      const name = cfg?.profile?.nome?.trim() ?? "";
-      const mat = cfg?.profile?.matricula?.trim() ?? "";
-      const ghost = `Nome:${name ? ` ${name}` : ""}\nMatrícula:${mat ? ` ${mat}` : ""}`;
-      setDraft(ghost);
-    }
     fetchSendConfig().then(setSendCfg);
-    fetchAnswerState(e.id)
-      .then((st) => {
-        setState(st);
-        if (st.current?.answer && !busyRef.current) setDraft(st.current.answer);
-      })
-      .catch(() => undefined);
+    // Ghost tasks have no answer to edit or show: skip the stored (legacy)
+    // answer entirely — the server composes Nome/Matrícula on send.
+    if (e.flavor !== "ghost") {
+      fetchAnswerState(e.id)
+        .then((st) => {
+          setState(st);
+          if (st.current?.answer && !busyRef.current) setDraft(st.current.answer);
+        })
+        .catch(() => undefined);
+    }
     void loadSubs();
     // Reset only when the activity changes: a refresh after generating/sending
     // must not wipe the draft or the submission status.
@@ -260,11 +258,13 @@ function AnswerPanel({
   const current = state?.current;
 
   const confirmSend = async (mode: SendMode) => {
-    const answer = draft.trim();
+    const isGhost = e.flavor === "ghost";
+    // Ghost tasks submit an empty answer: the server composes Nome/Matrícula.
+    const answer = isGhost ? "" : draft.trim();
     const isQuiz = e.kind === "quiz";
     if (mode === "image") {
       if (!printFile) return;
-    } else if (!answer && !(isQuiz && e.selections.length > 0)) {
+    } else if (!isGhost && !answer && !(isQuiz && e.selections.length > 0)) {
       return;
     }
     setSending(true);
@@ -334,14 +334,20 @@ function AnswerPanel({
   const isForum = e.kind === "forum";
   const isGhost = e.flavor === "ghost";
   const isPrint = e.flavor === "print";
-  const wantsText = (isUpload && !isPrint) || isForum;
+  const wantsText = !isGhost && ((isUpload && !isPrint) || isForum);
   const canAi = canAiAnswer(e);
   const isDone = e.done || e.status === "done";
   const canSend =
     !isDone &&
     Boolean(sendCfg?.enabled) &&
     !sending &&
-    (isPrint ? Boolean(printFile) : wantsText ? Boolean(draft.trim()) : e.selections.length > 0);
+    (isPrint
+      ? Boolean(printFile)
+      : isGhost
+        ? true
+        : wantsText
+          ? Boolean(draft.trim())
+          : e.selections.length > 0);
 
   return (
     <CollapsibleCard
@@ -352,7 +358,7 @@ function AnswerPanel({
       bodyClassName="flex-1 min-h-0 space-y-3 overflow-y-auto p-4"
       badge={
         <>
-          {current && (
+          {current && !isGhost && (
             <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
               {t("draft.saved", {
                 date: fmtVersionDate(current.updatedAt, locale),
@@ -366,6 +372,7 @@ function AnswerPanel({
         </>
       }
       actions={
+        !isGhost &&
         (current || sortedHistory.length > 0) && (
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -418,19 +425,19 @@ function AnswerPanel({
               {busy ? t("draft.generating") : current ? t("draft.new") : t("draft.generate")}
             </Button>
           )}
-          {!isPrint && (
+          {!isPrint && !isGhost && (
             <Button variant="outline" size="sm" onClick={save} disabled={busy || !draft.trim()}>
               {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Save aria-hidden />}
               {t("draft.save")}
             </Button>
           )}
-          {!isPrint && (
+          {!isPrint && !isGhost && (
             <Button variant="ghost" size="sm" onClick={copy} disabled={!draft.trim()}>
               <Copy aria-hidden />
               {t("draft.copy")}
             </Button>
           )}
-          {current?.answer && (
+          {current?.answer && !isGhost && (
             <a className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/api/export/${e.id}`}>
               <Download aria-hidden />
               .md
@@ -511,19 +518,18 @@ function AnswerPanel({
               className="min-h-14 field-sizing-fixed leading-relaxed"
             />
           </>
+        ) : isGhost ? (
+          <p className="text-xs text-muted-foreground">{t("draft.ghostIntro")}</p>
         ) : wantsText ? (
-          <>
-            {isGhost && <p className="text-xs text-muted-foreground">{t("draft.ghostIntro")}</p>}
-            <Textarea
-              value={draft}
-              onChange={(ev) => setDraft(ev.target.value)}
-              placeholder={
-                isForum ? t("draft.forumPlaceholder") : t("draft.uploadPlaceholder")
-              }
-              rows={6}
-              className="min-h-36 field-sizing-fixed leading-relaxed"
-            />
-          </>
+          <Textarea
+            value={draft}
+            onChange={(ev) => setDraft(ev.target.value)}
+            placeholder={
+              isForum ? t("draft.forumPlaceholder") : t("draft.uploadPlaceholder")
+            }
+            rows={6}
+            className="min-h-36 field-sizing-fixed leading-relaxed"
+          />
         ) : e.selections.length === 0 ? (
           <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
             {t("draft.quizHint")}

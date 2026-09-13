@@ -232,7 +232,7 @@ export function ActivityCard({ e }: { e: Exercise }) {
                   {t("menu.professorPhoto")}
                 </DropdownMenuItem>
               )}
-              {e.answer ? (
+              {e.answer && e.flavor !== "ghost" ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={(ev) => { ev.stopPropagation(); window.location.href = `/api/export/${e.id}`; }}>
