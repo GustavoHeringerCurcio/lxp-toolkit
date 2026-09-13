@@ -187,7 +187,7 @@ function DirectoryRow({
       <SubjectAvatar
         moduleName={modules[0] ?? entry.displayName ?? entry.professorName}
         imageUrl={entry.photoUrl}
-        className="size-10"
+        className="size-12"
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground/90">

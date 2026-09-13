@@ -43,7 +43,7 @@ export function SubjectAvatar({
       aria-hidden
       style={subjectStyle(moduleName)}
       className={cn(
-        "subject-avatar relative grid size-9 shrink-0 place-items-center rounded-lg font-heading text-[13px] font-semibold",
+        "subject-avatar relative grid size-12 shrink-0 place-items-center rounded-xl font-heading text-[15px] font-semibold",
         showImage && "subject-avatar--photo",
         className,
       )}
@@ -59,13 +59,13 @@ export function SubjectAvatar({
           />
         </span>
       ) : DomainIcon ? (
-        <DomainIcon className={cn(iconClassName ?? "size-4")} aria-hidden />
+        <DomainIcon className={cn(iconClassName ?? "size-5")} aria-hidden />
       ) : (
         subjectInitials(moduleName)
       )}
       {Icon && (
-        <span className="absolute -bottom-1 -right-1 grid size-4 place-items-center rounded-md border border-border bg-card text-muted-foreground">
-          <Icon className="size-2.5" />
+        <span className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-md border border-border bg-card text-muted-foreground">
+          <Icon className="size-3" />
         </span>
       )}
     </span>

@@ -51,8 +51,8 @@ export function NextHero({ next, onClick }: { next: Exercise; onClick: () => voi
         moduleName={next.moduleName}
         kind={next.kind}
         imageUrl={next.professorPhotoUrl}
-        iconClassName="size-5"
-        className="size-12 rounded-xl text-base"
+        iconClassName="size-6"
+        className="size-14 rounded-2xl text-lg"
       />
 
       <span className="min-w-0 flex-1">
