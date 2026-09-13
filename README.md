@@ -59,7 +59,7 @@ Honestly? Two things that go together:
 | **The app** | `apps/web` + `apps/server` — **LXP Toolkit**: task board, deadlines, AI answer drafts, and (careful) submission. |
 | **The data** | `scraped/` (your stuff, gitignored) → **Postgres** (source of truth) → `apps/server/data/*.json` (UI cache). |
 | **Runs on** | Node ≥ 22 · Docker (Postgres 16) · TypeScript ESM · npm workspaces · one `npm install`, one lockfile. |
-| **Open it at** | `npm run web` → <http://localhost:4174> |
+| **Open it at** | `npm run dev` → <http://localhost:5174> (hot reload) · `npm run web` → <http://localhost:4174> |
 
 ---
 
@@ -228,7 +228,9 @@ npm run db:migrate      # apply the schema migrations
 npm run dump            # courses, quizzes, uploads + attachments → scraped/
 npm run dump-surfaces   # grades, calendar, notices, messages
 npm run index:web       # migrate + import into Postgres → data/exercises.json
-npm run web             # build + serve → http://localhost:4174
+npm run dev             # API + Vite (hot reload) → http://localhost:5174
+# or
+npm run web             # refresh + build + serve → http://localhost:4174
 ```
 
 ### On a new machine
@@ -274,15 +276,21 @@ npm run web
 
 ### The app (`apps/server` + `apps/web`)
 
+Both `npm run dev` and `npm run web` refresh your data first (`predev` / `preweb` → `npm run sync`),
+so you always start with fresh portal content. Skip it with `SKIP_SYNC=1`, or skip just the portal
+scrape with `SKIP_DUMP=1`.
+
 | Command | What it does |
 |---|---|
+| `npm run dev` | **Development**: refresh → API + Vite together → <http://localhost:5174> (hot reload). |
+| `npm run web` | **Production-style**: refresh → build the UI → serve it → <http://localhost:4174>. |
+| `npm run sync` | The refresh pipeline alone: Postgres → migrations → `dump` → `index:web`. |
 | `npm run db:up` | Starts the local Postgres 16 container (Docker). |
 | `npm run db:down` | Stops the container (data stays in the volume). |
 | `npm run db:migrate` | Applies the versioned SQL migrations. |
 | `npm run db:import` | Imports `scraped/` + legacy JSON into Postgres (idempotent). |
 | `npm run index:web` | `migrate → import → project`: `scraped/` → Postgres → `data/exercises.json`. |
-| `npm run web` | Builds the UI and serves it → <http://localhost:4174>. |
-| `npm run web:dev` | Vite dev server with hot reload. |
+| `npm run web:dev` | Vite dev server only (no API) — prefer `npm run dev`. |
 
 ### Handy ones
 

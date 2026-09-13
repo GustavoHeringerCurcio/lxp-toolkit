@@ -3,7 +3,7 @@ import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from
 import { createServer } from "node:http";
 import path from "node:path";
 import { ASSISTANT_DIR, dataDir, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
-import { spawnCommand } from "../src/exec.js";
+import { createRefreshController } from "../src/refresh.js";
 import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import { healthCheck, query, runMigrations } from "../src/db.js";
 import { importAll } from "../src/import.js";
@@ -67,99 +67,12 @@ import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/
 
 const DIST = path.join(ASSISTANT_DIR, "..", "web", "dist");
 const PORT = Number(process.env.PORT || 4174);
-const REPO_ROOT = path.resolve(ASSISTANT_DIR, "..", "..");
 
-interface RefreshState {
-  running: boolean;
-  step: string;
-  error: string | null;
-  startedAt: string | null;
-  finishedAt: string | null;
-  log: string;
-}
-
-const refresh: RefreshState = {
-  running: false,
-  step: "",
-  error: null,
-  startedAt: null,
-  finishedAt: null,
-  log: "",
-};
-
-const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
-
-function appendRefreshLog(chunk: string): void {
-  refresh.log = (refresh.log + chunk).slice(-8000);
-}
-
-/** Run one pipeline step, capturing its output into the shared refresh state. */
-function runStep(args: string[], cwd: string, label: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<void> {
-  return new Promise((resolve, reject) => {
-    refresh.step = label;
-    appendRefreshLog(`\n$ npm ${args.join(" ")}\n`);
-    const child = spawnCommand(NPM, args, { cwd, env: { ...process.env, ...extraEnv } });
-    child.stdout?.on("data", (d: Buffer) => appendRefreshLog(d.toString()));
-    child.stderr?.on("data", (d: Buffer) => appendRefreshLog(d.toString()));
-    child.on("error", (err) => reject(err));
-    child.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`${label}: o comando saiu com código ${code}`));
-    });
-  });
-}
-
-/** Turn a raw refresh failure into an actionable pt-BR message. */
-function friendlyRefreshError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (/reCAPTCHA/i.test(refresh.log) || /reCAPTCHA/i.test(msg)) {
-    return "O portal pediu reCAPTCHA. Rode `HEADFUL=true npm run dump` no terminal e resolva no navegador.";
-  }
-  if (/no credentials|LXP_USERNAME|LXP_PASSWORD/i.test(msg) || /no credentials/i.test(refresh.log)) {
-    return "Credenciais do portal ausentes. Rode `npm run setup` (ou preencha packages/portal/.env).";
-  }
-  return msg;
-}
-
-/** Scrape fresh content from the portal, then rebuild the assistant's list. */
-async function runContentRefresh(): Promise<void> {
-  if (refresh.running) return;
-  refresh.running = true;
-  refresh.step = "Iniciando…";
-  refresh.error = null;
-  refresh.log = "";
-  refresh.startedAt = new Date().toISOString();
-  refresh.finishedAt = null;
-  let headfulRetryUsed = false;
-  try {
-    await runStep(["run", "dump"], REPO_ROOT, "Buscando conteúdo novo no portal");
-    await runStep(["run", "index"], ASSISTANT_DIR, "Montando a lista de atividades");
-    refresh.step = "Concluído";
-  } catch (err) {
-    // If the portal demanded a reCAPTCHA, retry the scrape once headful so the
-    // user can solve it in the browser window (the run auto-continues).
-    if (!headfulRetryUsed && /reCAPTCHA/i.test(refresh.log)) {
-      headfulRetryUsed = true;
-      appendRefreshLog("\nreCAPTCHA detectado — abrindo o navegador para você resolver…\n");
-      try {
-        await runStep(["run", "dump"], REPO_ROOT, "Aguardando você resolver o reCAPTCHA", {
-          HEADFUL: "true",
-        });
-        await runStep(["run", "index"], ASSISTANT_DIR, "Montando a lista de atividades");
-        refresh.step = "Concluído";
-      } catch (err2) {
-        refresh.error = friendlyRefreshError(err2);
-        refresh.step = "Falhou";
-      }
-    } else {
-      refresh.error = friendlyRefreshError(err);
-      refresh.step = "Falhou";
-    }
-  } finally {
-    refresh.running = false;
-    refresh.finishedAt = new Date().toISOString();
-  }
-}
+/** Scrape fresh portal content, then rebuild the assistant's list. */
+const refresh = createRefreshController({
+  repoRoot: path.resolve(ASSISTANT_DIR, "..", ".."),
+  assistantDir: ASSISTANT_DIR,
+});
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -403,14 +316,7 @@ const server = createServer(async (req, res) => {
       });
     }
     if (url === "/api/refresh/status") {
-      return json(res, 200, {
-        running: refresh.running,
-        step: refresh.step,
-        error: refresh.error,
-        startedAt: refresh.startedAt,
-        finishedAt: refresh.finishedAt,
-        log: refresh.log,
-      });
+      return json(res, 200, refresh.status());
     }
     if (url === "/api/profile" && method === "GET") {
       return json(res, 200, await getProfile());
@@ -700,8 +606,7 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { ok: true });
       }
       if (url === "/api/refresh") {
-        if (refresh.running) return json(res, 200, { running: true });
-        void runContentRefresh();
+        if (!refresh.start()) return json(res, 200, { running: true });
         return json(res, 200, { started: true });
       }
       if (url === "/api/ai-config") {

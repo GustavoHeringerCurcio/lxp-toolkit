@@ -1,0 +1,87 @@
+// Local development server: `npm run dev`
+//
+// Runs the backend API and the Vite dev server together, so the UI has hot
+// module replacement (HMR) while `/api` is proxied to the backend:
+//
+//   apps/server  → tsx server/server.ts   http://localhost:4174  (API)
+//   apps/web     → vite                   http://localhost:5174  (HMR)
+//
+// Open http://localhost:5174 — editing apps/web/src/** reloads instantly.
+// `predev` already refreshed the data (see scripts/sync.mjs); set SKIP_SYNC=1
+// to boot without refreshing.
+//
+// No extra dependency: both children are spawned with Node built-ins, logs go
+// straight to this terminal, and Ctrl+C tears down the whole process tree.
+import { spawn } from "node:child_process";
+import { ROOT, c, log, warn } from "../setup/shared.mjs";
+
+const isWin = process.platform === "win32";
+
+function quoteWin(arg) {
+  return /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg;
+}
+
+function start(name, command, args, color) {
+  const opts = {
+    cwd: ROOT,
+    env: process.env,
+    stdio: "inherit",
+    windowsHide: false,
+  };
+  // `.cmd` shims (npm) need a shell on Windows; pass one quoted command string
+  // so Node does not emit DEP0190 (args + shell together).
+  const child = isWin
+    ? spawn([command, ...args].map(quoteWin).join(" "), { ...opts, shell: true })
+    : spawn(command, args, opts);
+  child.__name = name;
+  child.__color = color;
+  return child;
+}
+
+function killTree(child) {
+  if (!child || child.killed || child.exitCode !== null) return;
+  if (isWin) {
+    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {
+      child.kill("SIGTERM");
+    }
+  }
+}
+
+const children = [
+  start("api", "npm", ["run", "start", "-w", "@lxp-toolkit/server"], c.cyan),
+  start("web", "npm", ["run", "dev", "-w", "@lxp-toolkit/web"], c.green),
+];
+
+log(`
+  ${c.bold("lxp-toolkit · dev")}
+  ${c.cyan("api")}  → http://localhost:4174
+  ${c.green("web")}  → ${c.bold("http://localhost:5174")}  ${c.dim("(abra esta; HMR ativo)")}
+`);
+
+let shuttingDown = false;
+function shutdown(code = 0) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  for (const child of children) killTree(child);
+  // Give taskkill a moment before exiting on Windows.
+  setTimeout(() => process.exit(code), isWin ? 400 : 0);
+}
+
+for (const child of children) {
+  child.on("error", (err) => {
+    warn(`${child.__name}: ${err.message}`);
+    shutdown(1);
+  });
+  child.on("exit", (code, signal) => {
+    if (shuttingDown) return;
+    if (signal) warn(`${child.__name} encerrado (${signal}).`);
+    shutdown(code ?? 1);
+  });
+}
+
+process.on("SIGINT", () => shutdown(0));
+process.on("SIGTERM", () => shutdown(0));

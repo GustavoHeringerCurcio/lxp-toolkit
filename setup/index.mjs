@@ -175,6 +175,7 @@ else warn("could not enable git hooks (not a git repository?) — skipping.");
 
 // 8. First scrape
 step("First scrape");
+let synced = false;
 const doScrape = await confirm("  Scrape your portal content now?", true);
 if (doScrape) {
   let res = await run("npm", ["run", "dump"], { tee: true });
@@ -188,6 +189,7 @@ if (doScrape) {
     if (dbReady) {
       const idx = await run("npm", ["run", "index:web"], { tee: true });
       if (idx.code !== 0) warn("Index failed — retry with `npm run index:web`.");
+      else synced = true;
     } else {
       warn(
         "Skipping the index: the database isn't ready. Run `npm run db:up && npm run db:migrate && npm run index:web`.",
@@ -208,7 +210,8 @@ if (start) {
     warn("The database isn't ready — `npm run web` will fail until `npm run db:up` and `npm run db:migrate` succeed.");
   }
   log(c.dim("\n  Starting… press Ctrl+C to stop.\n"));
-  await run("npm", ["run", "web"]);
+  // We just synced above, so skip `preweb`'s automatic refresh (avoids a second scrape).
+  await run("npm", ["run", "web"], { env: synced ? { SKIP_SYNC: "1" } : {} });
 } else {
   log(`  Start it later with: ${c.bold("npm run web")}`);
 }
