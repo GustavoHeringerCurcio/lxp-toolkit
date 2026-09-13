@@ -3,7 +3,7 @@ import { DEFAULT_ACTIVITY_SECTIONS } from "./config.js";
 import { kindLabel } from "./kind.js";
 import { extractFileText } from "./pdf.js";
 import { findTemplateDocx, type TemplateField } from "./template.js";
-import { buildTemplateFillContract } from "./usecase.js";
+import { buildTemplateFillContract, formatDateBr } from "./usecase.js";
 
 export function isPlaceholder(value: string): boolean {
   return value.includes("{");
@@ -341,7 +341,7 @@ export async function buildMessages(
     if (opts.projectBlock?.trim()) {
       user += `\n\nContexto do projeto (projeto principal do curso):\n${opts.projectBlock.trim()}`;
     }
-    user += `\n\n${buildTemplateFillContract(templateFields)}`;
+    user += `\n\n${buildTemplateFillContract(templateFields, formatDateBr())}`;
   }
   if (e.kind === "quiz" && e.questions.length) {
     user +=

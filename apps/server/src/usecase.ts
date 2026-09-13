@@ -97,6 +97,12 @@ export function useCaseName(useCase: UseCase, nameLabel = "Nome do Caso de Uso")
   return useCase.name || useCase.fields[normalizeLabel(nameLabel)] || useCase.id;
 }
 
+/** Today's date as `dd/mm/aaaa` (local time). */
+export function formatDateBr(now: Date = new Date()): string {
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+}
+
 /**
  * Prompt contract for a generic "fill the professor's template" activity. The
  * field labels are the ones the cheap detection model extracted from the
@@ -104,7 +110,7 @@ export function useCaseName(useCase: UseCase, nameLabel = "Nome do Caso de Uso")
  * in the enunciado. Output stays plain text (no Markdown table) so the draft
  * reads like a normal answer while still being parseable for the .docx fill.
  */
-export function buildTemplateFillContract(fields: string[] = []): string {
+export function buildTemplateFillContract(fields: string[] = [], today?: string): string {
   const list = fields.map((f) => f.trim()).filter(Boolean);
   return (
     "O professor pede para preencher um modelo/tabela. Preencha o modelo para CADA item identificado " +
@@ -113,9 +119,20 @@ export function buildTemplateFillContract(fields: string[] = []): string {
     (list.length
       ? ` Use exatamente estes campos, nesta ordem: ${list.join("; ")}.`
       : " Use os campos do modelo apresentado no enunciado, na ordem em que aparecem.") +
+    (today ? ` No campo "Data", use a data de hoje: ${today}.` : "") +
     " Em campos com vários passos (ex.: fluxos), liste cada passo em uma linha numerada." +
     " Preencha todos os campos e não invente campos novos. Responda em texto simples, sem tabela Markdown."
   );
+}
+
+/**
+ * Force the "Data" field of a generated template answer to today's date, so a
+ * model guess can never leak a wrong year into the draft. Matches lines like
+ * `Data: 05/10/2023`, `Data (dd/mm/aaaa): …` or `- Data: …`.
+ */
+export function forceTodayDate(text: string, now: Date = new Date()): string {
+  const today = formatDateBr(now);
+  return text.replace(/^([ \t>*-]*Data(?:\s*\([^)]*\))?\s*:\s*).*$/gim, `$1${today}`);
 }
 
 /** A field value that is empty or still a template placeholder, e.g. "(dd/mm/aaaa)". */
@@ -133,8 +150,7 @@ export function applyTemplateDefaults(
   profile: { nome?: string } = {},
   now: Date = new Date(),
 ): UseCase[] {
-  const pad = (n: number): string => String(n).padStart(2, "0");
-  const date = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+  const date = formatDateBr(now);
   const defaults: Record<string, string> = {
     autor: profile.nome?.trim() ?? "",
     versao: "1.0",

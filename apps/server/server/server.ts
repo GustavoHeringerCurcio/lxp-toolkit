@@ -82,7 +82,7 @@ import { officeToPdf, previewCacheDir } from "../src/office.js";
 import { answerToPdf } from "../src/pdf.js";
 import { renderFilledDocx } from "../src/docx.js";
 import { generateDiagramSpec, renderDiagramPng } from "../src/diagram.js";
-import { applyTemplateDefaults, parseUseCases, type UseCase } from "../src/usecase.js";
+import { applyTemplateDefaults, forceTodayDate, parseUseCases, type UseCase } from "../src/usecase.js";
 import { parseLinkedinUrl } from "../src/linkedin.js";
 import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/organizations.js";
 import {
@@ -369,7 +369,9 @@ async function generateAndSave(
     view.notes,
   );
   const selections = view.kind === "quiz" ? parseQuizSelections(gen.text, view.questions) : [];
-  const shown = view.kind === "quiz" ? humanizeQuizAnswer(gen.text, view.questions) : gen.text;
+  // Never let the model's guessed date leak into a filled template draft.
+  const finalText = wantsTemplate ? forceTodayDate(gen.text) : gen.text;
+  const shown = view.kind === "quiz" ? humanizeQuizAnswer(finalText, view.questions) : finalText;
   const rec = await saveAnswerVersion(id, shown, "ai", undefined, selections, {
     model: gen.model,
     promptHash: gen.promptHash,

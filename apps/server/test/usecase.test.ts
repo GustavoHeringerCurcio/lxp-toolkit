@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   applyTemplateDefaults,
   buildTemplateFillContract,
+  forceTodayDate,
+  formatDateBr,
   normalizeLabel,
   parseUseCases,
   useCaseName,
@@ -108,6 +110,40 @@ describe("buildTemplateFillContract", () => {
   it("pede para seguir o modelo do enunciado quando não há campos", () => {
     const contract = buildTemplateFillContract();
     expect(contract).toContain("enunciado");
+  });
+
+  it("inclui a data de hoje quando fornecida", () => {
+    const contract = buildTemplateFillContract(["Data"], "13/09/2026");
+    expect(contract).toContain("13/09/2026");
+  });
+});
+
+describe("formatDateBr", () => {
+  it("formata como dd/mm/aaaa", () => {
+    expect(formatDateBr(new Date(2026, 8, 13))).toBe("13/09/2026");
+    expect(formatDateBr(new Date(2026, 0, 5))).toBe("05/01/2026");
+  });
+});
+
+describe("forceTodayDate", () => {
+  it("substitui o campo Data por hoje, mesmo com ano errado do modelo", () => {
+    const text = ["UC-01 — Login", "Data: 05/10/2023", "Autor: Maria"].join("\n");
+    const out = forceTodayDate(text, new Date(2026, 8, 13));
+    expect(out).toContain("Data: 13/09/2026");
+    expect(out).not.toContain("2023");
+    expect(out).toContain("Autor: Maria");
+  });
+
+  it("lida com placeholder e marcadores", () => {
+    const text = ["Data (dd/mm/aaaa): 01/01/2000", "- Data: 31/12/1999"].join("\n");
+    const out = forceTodayDate(text, new Date(2026, 8, 13));
+    expect(out).toBe(["Data (dd/mm/aaaa): 13/09/2026", "- Data: 13/09/2026"].join("\n"));
+  });
+
+  it("não toca em outras linhas", () => {
+    expect(forceTodayDate("Data de nascimento: 01/01/1990", new Date(2026, 8, 13))).toBe(
+      "Data de nascimento: 01/01/1990",
+    );
   });
 });
 
