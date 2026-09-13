@@ -87,6 +87,8 @@
 /* ------------------------------------------------------------------ */
 
 :root {
+    /* Native form controls (select popups, scrollbars) follow the theme. */
+    color-scheme: light;
     --background: oklch(0.977 0.007 85);
     --foreground: oklch(0.23 0.02 55);
     --card: oklch(0.995 0.003 85);
@@ -159,6 +161,7 @@
 
 /* Near-black espresso — dark Folio, contrast-first pass. Not blue-ink on purpose. */
 .dark {
+    color-scheme: dark;
     --background: oklch(0.165 0.012 60);
     --foreground: oklch(0.95 0.01 85);
     --card: oklch(0.205 0.013 60);
