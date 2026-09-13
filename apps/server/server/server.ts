@@ -74,6 +74,7 @@ import {
 import { officeToPdf, previewCacheDir } from "../src/office.js";
 import { answerToPdf } from "../src/pdf.js";
 import { renderFilledDocx } from "../src/docx.js";
+import { generateDiagramSpec, renderDiagramPng } from "../src/diagram.js";
 import { parseUseCases, type UseCase } from "../src/usecase.js";
 import { parseLinkedinUrl } from "../src/linkedin.js";
 import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/organizations.js";
@@ -160,9 +161,11 @@ async function buildFilledDocx(
   return { buffer, filename: safeFilename(await uploadBaseName(view), "docx") };
 }
 
-/** UML diagram PNG for the parsed use cases (rendered in a later phase). */
-async function buildDiagramPng(_view: ExerciseView, _cases: UseCase[]): Promise<Buffer | null> {
-  return null;
+/** Infer the UML diagram model and rasterize it to PNG (null when unavailable). */
+async function buildDiagramPng(view: ExerciseView, cases: UseCase[]): Promise<Buffer | null> {
+  const cfg = await getAiConfig();
+  const spec = await generateDiagramSpec(cfg, cases, view.courseName);
+  return renderDiagramPng(spec);
 }
 
 function readBody(req: import("node:http").IncomingMessage): Promise<Record<string, unknown>> {
