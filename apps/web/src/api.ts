@@ -1,14 +1,18 @@
 import type {
+  ActivityProjectDto,
   AiActivitySections,
   AiConfigDto,
   AiProfile,
   AiStyle,
+  AnalyzeResultDto,
   Anomaly,
   AnswerEntry,
   AnswerState,
   ExercisesPayload,
   OrganizationDto,
   ProfessorLink,
+  ProjectProfileDto,
+  ProjectProfileMode,
   QuizSelection,
   TrainingQuiz,
   TrainingQuizMode,
@@ -103,21 +107,42 @@ export async function saveAiRequest(id: number, raw: string | null): Promise<AiR
   return (await post("/api/ai-request", { id, raw })) as AiRequestSaveResult;
 }
 
-export interface DetectedContextDto {
-  ok: boolean;
-  theme: string;
-  atores: string[];
-  requisitos: string[];
-  instructions: string;
-  model: string;
+/**
+ * Lazily resolve the project context for an activity: whether it needs a
+ * project, the course main project, and any quick project proposed by the
+ * activity. Cached server-side.
+ */
+export async function analyzeActivityContext(id: number, forceProfile = false): Promise<AnalyzeResultDto> {
+  return (await post("/api/context/analyze", { id, forceProfile })) as AnalyzeResultDto;
 }
 
-/**
- * Cheap-model detection of the project context an activity belongs to. Returns
- * the inferred theme/actors/requirements and a ready-to-save instruction block.
- */
-export async function detectActivityContext(id: number): Promise<DetectedContextDto> {
-  return (await post("/api/context/detect", { id })) as DetectedContextDto;
+export interface SaveProjectProfileInput {
+  courseId: number;
+  theme?: string;
+  atores?: string[];
+  requisitos?: string[];
+  suggestedThemes?: string[];
+}
+
+/** Manually edit the course MAIN project. */
+export async function saveProjectProfile(input: SaveProjectProfileInput): Promise<ProjectProfileDto> {
+  const res = (await post("/api/project-profile", input)) as { profile: ProjectProfileDto };
+  return res.profile;
+}
+
+export interface SaveActivityProjectInput {
+  id: number;
+  needsProject?: boolean;
+  profileMode?: ProjectProfileMode;
+  theme?: string | null;
+  atores?: string[];
+  requisitos?: string[];
+}
+
+/** Choose the main project, a quick project, or none for one activity. */
+export async function saveActivityProject(input: SaveActivityProjectInput): Promise<ActivityProjectDto> {
+  const res = (await post("/api/activity-project", input)) as { activity: ActivityProjectDto };
+  return res.activity;
 }
 
 export interface TagSaveResult {
@@ -156,6 +181,7 @@ export interface AiConfigSavePatch {
   max_output_tokens?: number;
   style?: Partial<AiStyle>;
   activitySections?: Partial<AiActivitySections>;
+  projectAutoDetect?: boolean;
 }
 
 export async function saveAiConfig(patch: AiConfigSavePatch): Promise<void> {

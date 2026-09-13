@@ -9,6 +9,7 @@ import { query, withTransaction } from "./db.js";
 import { linkedinAvatarUrl } from "./linkedin.js";
 import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_STYLE, loadAiConfig, loadProfile } from "./config.js";
 import type {
+  ActivityProject,
   AiConfig,
   AiProfile,
   AnswerRecord,
@@ -18,6 +19,9 @@ import type {
   Overrides,
   OverridesEntry,
   ProfessorLink,
+  ProjectProfile,
+  ProjectProfileMode,
+  ProjectSource,
   QuizSelection,
   SubmissionEntry,
   Submissions,
@@ -518,12 +522,13 @@ interface AiConfigRow {
   max_output_tokens: number | null;
   style_json: unknown;
   sections_json: unknown;
+  project_auto_detect: boolean | null;
 }
 
 export async function getAiConfig(): Promise<AiConfig> {
   const studentId = await getStudentId();
   const rows = await query<AiConfigRow>(
-    "SELECT provider, model, temperature, max_output_tokens, style_json, sections_json FROM ai_config WHERE student_id = $1",
+    "SELECT provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect FROM ai_config WHERE student_id = $1",
     [studentId],
   );
   const row = rows[0];
@@ -538,6 +543,7 @@ export async function getAiConfig(): Promise<AiConfig> {
     model: row.model,
     temperature: row.temperature ?? 0.7,
     max_output_tokens: row.max_output_tokens ?? undefined,
+    projectAutoDetect: row.project_auto_detect ?? true,
     style: { ...DEFAULT_STYLE, ...((row.style_json as Partial<AiConfig["style"]>) ?? {}) },
     activitySections: {
       ...DEFAULT_ACTIVITY_SECTIONS,
@@ -549,8 +555,8 @@ export async function getAiConfig(): Promise<AiConfig> {
 export async function saveAiConfig(cfg: AiConfig): Promise<void> {
   const studentId = await getStudentId();
   await query(
-    `INSERT INTO ai_config(student_id, provider, model, temperature, max_output_tokens, style_json, sections_json, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7, now())
+    `INSERT INTO ai_config(student_id, provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
      ON CONFLICT (student_id) DO UPDATE SET
        provider = EXCLUDED.provider,
        model = EXCLUDED.model,
@@ -558,6 +564,7 @@ export async function saveAiConfig(cfg: AiConfig): Promise<void> {
        max_output_tokens = EXCLUDED.max_output_tokens,
        style_json = EXCLUDED.style_json,
        sections_json = EXCLUDED.sections_json,
+       project_auto_detect = EXCLUDED.project_auto_detect,
        updated_at = now()`,
     [
       studentId,
@@ -567,6 +574,7 @@ export async function saveAiConfig(cfg: AiConfig): Promise<void> {
       cfg.max_output_tokens ?? null,
       JSON.stringify(cfg.style),
       JSON.stringify(cfg.activitySections),
+      cfg.projectAutoDetect ?? true,
     ],
   );
 }
@@ -601,4 +609,227 @@ export async function recordAiRun(run: AiRunRecord): Promise<void> {
       run.answerAttemptId,
     ],
   );
+}
+
+// ── Project context ─────────────────────────────────────────────────────────
+
+function toStrArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.map((i) => String(i)).filter(Boolean) : [];
+}
+
+interface ProjectProfileRow {
+  course_id: string;
+  theme: string | null;
+  atores: unknown;
+  requisitos: unknown;
+  suggested_themes: unknown;
+  source: string;
+  confidence: number | null;
+  model: string | null;
+  content_hash: string | null;
+  updated_at: Date;
+}
+
+function toProjectProfile(r: ProjectProfileRow): ProjectProfile {
+  return {
+    courseId: Number(r.course_id),
+    theme: r.theme ?? "",
+    atores: toStrArray(r.atores),
+    requisitos: toStrArray(r.requisitos),
+    suggestedThemes: toStrArray(r.suggested_themes),
+    source: r.source === "manual" ? "manual" : "auto",
+    confidence: r.confidence,
+    model: r.model,
+    contentHash: r.content_hash,
+    updatedAt: iso(r.updated_at),
+  };
+}
+
+const PROJECT_PROFILE_COLS =
+  "course_id, theme, atores, requisitos, suggested_themes, source, confidence, model, content_hash, updated_at";
+
+export async function getProjectProfile(courseId: number): Promise<ProjectProfile | null> {
+  const studentId = await getStudentId();
+  const rows = await query<ProjectProfileRow>(
+    `SELECT ${PROJECT_PROFILE_COLS} FROM project_profile WHERE student_id = $1 AND course_id = $2`,
+    [studentId, courseId],
+  );
+  return rows[0] ? toProjectProfile(rows[0]) : null;
+}
+
+export interface ProjectProfileInput {
+  theme?: string;
+  atores?: string[];
+  requisitos?: string[];
+  suggestedThemes?: string[];
+  source?: ProjectSource;
+  confidence?: number | null;
+  model?: string | null;
+  contentHash?: string | null;
+  raw?: unknown;
+}
+
+export async function saveProjectProfile(
+  courseId: number,
+  input: ProjectProfileInput,
+): Promise<ProjectProfile> {
+  const studentId = await getStudentId();
+  const existing = await getProjectProfile(courseId);
+  const theme = input.theme ?? existing?.theme ?? "";
+  const atores = input.atores ?? existing?.atores ?? [];
+  const requisitos = input.requisitos ?? existing?.requisitos ?? [];
+  const suggestedThemes = input.suggestedThemes ?? existing?.suggestedThemes ?? [];
+  const source = input.source ?? existing?.source ?? "auto";
+  const confidence = input.confidence !== undefined ? input.confidence : (existing?.confidence ?? null);
+  const model = input.model !== undefined ? input.model : (existing?.model ?? null);
+  const contentHash = input.contentHash !== undefined ? input.contentHash : (existing?.contentHash ?? null);
+  await query(
+    `INSERT INTO project_profile(student_id, course_id, theme, atores, requisitos, suggested_themes, source, confidence, model, content_hash, raw_json, detected_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now(), now())
+     ON CONFLICT (student_id, course_id) DO UPDATE SET
+       theme = EXCLUDED.theme,
+       atores = EXCLUDED.atores,
+       requisitos = EXCLUDED.requisitos,
+       suggested_themes = EXCLUDED.suggested_themes,
+       source = EXCLUDED.source,
+       confidence = EXCLUDED.confidence,
+       model = EXCLUDED.model,
+       content_hash = EXCLUDED.content_hash,
+       raw_json = EXCLUDED.raw_json,
+       detected_at = now(),
+       updated_at = now()`,
+    [
+      studentId,
+      courseId,
+      theme,
+      JSON.stringify(atores),
+      JSON.stringify(requisitos),
+      JSON.stringify(suggestedThemes),
+      source,
+      confidence,
+      model,
+      contentHash,
+      input.raw != null ? JSON.stringify(input.raw) : null,
+    ],
+  );
+  const saved = await getProjectProfile(courseId);
+  if (!saved) throw new Error(`falha ao salvar projeto do curso ${courseId}`);
+  return saved;
+}
+
+interface ActivityProjectRow {
+  content_item_id: string;
+  needs_project: boolean;
+  profile_mode: string;
+  theme: string | null;
+  atores: unknown;
+  requisitos: unknown;
+  confidence: number | null;
+  intent: string | null;
+  reason: string | null;
+  source: string;
+  model: string | null;
+  content_hash: string | null;
+  updated_at: Date;
+}
+
+function toActivityProject(r: ActivityProjectRow): ActivityProject {
+  const mode: ProjectProfileMode =
+    r.profile_mode === "activity" || r.profile_mode === "none" ? r.profile_mode : "main";
+  return {
+    contentItemId: Number(r.content_item_id),
+    needsProject: r.needs_project === true,
+    profileMode: mode,
+    theme: r.theme,
+    atores: toStrArray(r.atores),
+    requisitos: toStrArray(r.requisitos),
+    confidence: r.confidence,
+    intent: r.intent,
+    reason: r.reason,
+    source: r.source === "manual" ? "manual" : "auto",
+    model: r.model,
+    contentHash: r.content_hash,
+    updatedAt: iso(r.updated_at),
+  };
+}
+
+const ACTIVITY_PROJECT_COLS =
+  "content_item_id, needs_project, profile_mode, theme, atores, requisitos, confidence, intent, reason, source, model, content_hash, updated_at";
+
+export async function getActivityProject(itemId: number): Promise<ActivityProject | null> {
+  const studentId = await getStudentId();
+  const rows = await query<ActivityProjectRow>(
+    `SELECT ${ACTIVITY_PROJECT_COLS} FROM activity_project WHERE student_id = $1 AND content_item_id = $2`,
+    [studentId, itemId],
+  );
+  return rows[0] ? toActivityProject(rows[0]) : null;
+}
+
+export interface ActivityProjectInput {
+  needsProject?: boolean;
+  profileMode?: ProjectProfileMode;
+  theme?: string | null;
+  atores?: string[];
+  requisitos?: string[];
+  confidence?: number | null;
+  intent?: string | null;
+  reason?: string | null;
+  source?: ProjectSource;
+  model?: string | null;
+  contentHash?: string | null;
+}
+
+export async function saveActivityProject(
+  itemId: number,
+  input: ActivityProjectInput,
+): Promise<ActivityProject> {
+  const studentId = await getStudentId();
+  const existing = await getActivityProject(itemId);
+  const needsProject = input.needsProject ?? existing?.needsProject ?? false;
+  const profileMode = input.profileMode ?? existing?.profileMode ?? "main";
+  const theme = input.theme !== undefined ? input.theme : (existing?.theme ?? null);
+  const atores = input.atores ?? existing?.atores ?? [];
+  const requisitos = input.requisitos ?? existing?.requisitos ?? [];
+  const confidence = input.confidence !== undefined ? input.confidence : (existing?.confidence ?? null);
+  const intent = input.intent !== undefined ? input.intent : (existing?.intent ?? null);
+  const reason = input.reason !== undefined ? input.reason : (existing?.reason ?? null);
+  const source = input.source ?? existing?.source ?? "auto";
+  const model = input.model !== undefined ? input.model : (existing?.model ?? null);
+  const contentHash = input.contentHash !== undefined ? input.contentHash : (existing?.contentHash ?? null);
+  await query(
+    `INSERT INTO activity_project(student_id, content_item_id, needs_project, profile_mode, theme, atores, requisitos, confidence, intent, reason, source, model, content_hash, detected_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now(), now())
+     ON CONFLICT (content_item_id, student_id) DO UPDATE SET
+       needs_project = EXCLUDED.needs_project,
+       profile_mode = EXCLUDED.profile_mode,
+       theme = EXCLUDED.theme,
+       atores = EXCLUDED.atores,
+       requisitos = EXCLUDED.requisitos,
+       confidence = EXCLUDED.confidence,
+       intent = EXCLUDED.intent,
+       reason = EXCLUDED.reason,
+       source = EXCLUDED.source,
+       model = EXCLUDED.model,
+       content_hash = EXCLUDED.content_hash,
+       detected_at = now(),
+       updated_at = now()`,
+    [
+      studentId,
+      itemId,
+      needsProject,
+      profileMode,
+      theme,
+      JSON.stringify(atores),
+      JSON.stringify(requisitos),
+      confidence,
+      intent,
+      reason,
+      source,
+      model,
+      contentHash,
+    ],
+  );
+  const saved = await getActivityProject(itemId);
+  if (!saved) throw new Error(`falha ao salvar contexto do item ${itemId}`);
+  return saved;
 }

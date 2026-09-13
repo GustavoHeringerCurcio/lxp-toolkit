@@ -7,26 +7,30 @@ import { createRefreshController } from "../src/refresh.js";
 import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import { healthCheck, query, runMigrations } from "../src/db.js";
 import { importAll } from "../src/import.js";
-import { courseContextText, ensureContentText } from "../src/extract.js";
+import { ensureContentText } from "../src/extract.js";
 import { getCatalogVersion, readProjectionMeta, writeProjection } from "../src/project.js";
 import {
   clearAnswerHistory,
   deleteProfessorLink,
   getAiConfig,
   getAnswerRecord,
+  getActivityProject,
   getAnswers,
   getCurrentAttemptId,
   getOverrides,
   getProfessorLinks,
   getProfile,
+  getProjectProfile,
   recordAiRun,
   restoreAnswerVersion,
+  saveActivityProject,
   saveAiConfig,
   saveAiRequest,
   saveAnswerVersion,
   saveNote,
   saveProfessorLink,
   saveProfile,
+  saveProjectProfile,
   saveTag,
 } from "../src/store.js";
 import {
@@ -43,7 +47,13 @@ import {
   type TrainingAnswerInput,
 } from "../src/training-store.js";
 import { enrich, type ExerciseView } from "../src/view.js";
-import { detectActivityContext, generateAnswer } from "../src/ai.js";
+import { generateAnswer } from "../src/ai.js";
+import {
+  analyzeActivity,
+  buildProjectInstructionBlock,
+  composeEffectiveInstructions,
+  projectFormatHint,
+} from "../src/project-context.js";
 import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
 import type { AiActivitySections, AiStyle, AnswerRecord, QuizQ, QuizSelection } from "../src/types.js";
 import {
@@ -229,7 +239,20 @@ async function generateAndSave(
   const cfg = { ...(await getAiConfig()), ...(opts.model ? { model: opts.model } : {}) };
   const profile = await getProfile();
   const startedAt = Date.now();
-  const gen = await generateAnswer(cfg, view, view.aiRequestJson, profile, { onDelta: opts.onDelta }, view.notes);
+
+  // Ground the generation in the activity's project context (when enabled).
+  let projectBlock = "";
+  if (cfg.projectAutoDetect !== false && isAnswerable(view)) {
+    try {
+      const analysis = await analyzeActivity(cfg, view, { notes: view.notes ?? "" });
+      if (analysis.effective) projectBlock = buildProjectInstructionBlock(analysis.effective);
+    } catch {
+      /* project context is best-effort */
+    }
+  }
+  const extra = composeEffectiveInstructions(view.aiRequestJson, projectBlock, projectFormatHint(view));
+
+  const gen = await generateAnswer(cfg, view, extra, profile, { onDelta: opts.onDelta }, view.notes);
   const selections = view.kind === "quiz" ? parseQuizSelections(gen.text, view.questions) : [];
   const shown = view.kind === "quiz" ? humanizeQuizAnswer(gen.text, view.questions) : gen.text;
   const rec = await saveAnswerVersion(id, shown, "ai", undefined, selections, {
@@ -312,6 +335,7 @@ const server = createServer(async (req, res) => {
         configPath: "Postgres · ai_config",
         style: cfg.style,
         activitySections: cfg.activitySections,
+        projectAutoDetect: cfg.projectAutoDetect ?? true,
         profile: await getProfile(),
       });
     }
@@ -570,6 +594,18 @@ const server = createServer(async (req, res) => {
       const [last, all] = await Promise.all([lastSubmission(id), submissionsFor(id)]);
       return json(res, 200, { submission: last ?? null, submissions: all });
     }
+    if (url === "/api/project-profile" && method === "GET") {
+      const courseId = Number(new URL(req.url ?? "/", "http://local").searchParams.get("courseId"));
+      if (!courseId) return json(res, 400, { error: "courseId required" });
+      const profile = await getProjectProfile(courseId);
+      return json(res, 200, { profile });
+    }
+    if (url.startsWith("/api/activity-project/") && method === "GET") {
+      const id = Number(url.split("/")[3]);
+      if (!id) return json(res, 400, { error: "id required" });
+      const activity = await getActivityProject(id);
+      return json(res, 200, { activity });
+    }
 
     if (method === "POST") {
       if (url === "/api/note") {
@@ -588,21 +624,53 @@ const server = createServer(async (req, res) => {
         const view = await findView(id);
         return json(res, 200, { ok: true, aiRequestJson: view.aiRequestJson, hasAiOverride: view.hasAiOverride });
       }
-      if (url === "/api/context/detect") {
-        // Cheap-model "where does this activity belong?" detection. Returns the
-        // inferred theme/actors/requirements plus a ready-to-save instruction block.
+      if (url === "/api/context/analyze") {
+        // Lazy project-context analysis: relevance + main/quick profile.
         const b = await readBody(req);
         const id = Number(b.id);
         if (!id) return json(res, 400, { error: "id required" });
         const view = await findView(id);
         const cfg = await getAiConfig();
         try {
-          const courseContext = await courseContextText(view.courseId).catch(() => "");
-          const detected = await detectActivityContext(cfg, view, courseContext, view.notes ?? "");
-          return json(res, 200, { ok: true, ...detected });
+          const result = await analyzeActivity(cfg, view, {
+            notes: view.notes ?? "",
+            forceProfile: b.forceProfile === true,
+          });
+          return json(res, 200, { ok: true, ...result });
         } catch (err) {
           return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
         }
+      }
+      if (url === "/api/project-profile") {
+        // Manual edit of the course MAIN project (theme/actors/requirements).
+        const b = await readBody(req);
+        const courseId = Number(b.courseId);
+        if (!courseId) return json(res, 400, { error: "courseId required" });
+        const profile = await saveProjectProfile(courseId, {
+          theme: b.theme != null ? String(b.theme) : undefined,
+          atores: Array.isArray(b.atores) ? b.atores.map(String) : undefined,
+          requisitos: Array.isArray(b.requisitos) ? b.requisitos.map(String) : undefined,
+          suggestedThemes: Array.isArray(b.suggestedThemes) ? b.suggestedThemes.map(String) : undefined,
+          source: "manual",
+        });
+        return json(res, 200, { ok: true, profile });
+      }
+      if (url === "/api/activity-project") {
+        // Per-activity choice: use the main project, a quick project, or none.
+        const b = await readBody(req);
+        const id = Number(b.id);
+        if (!id) return json(res, 400, { error: "id required" });
+        const mode = b.profileMode;
+        const profileMode = mode === "activity" || mode === "none" || mode === "main" ? mode : undefined;
+        const activity = await saveActivityProject(id, {
+          needsProject: typeof b.needsProject === "boolean" ? b.needsProject : undefined,
+          profileMode,
+          theme: b.theme != null ? String(b.theme) : undefined,
+          atores: Array.isArray(b.atores) ? b.atores.map(String) : undefined,
+          requisitos: Array.isArray(b.requisitos) ? b.requisitos.map(String) : undefined,
+          source: "manual",
+        });
+        return json(res, 200, { ok: true, activity });
       }
       if (url === "/api/tag") {
         // set/clear a manual anomaly tag (ghost | print | anomalia | null)
@@ -654,6 +722,9 @@ const server = createServer(async (req, res) => {
             ...(b.activitySections as Partial<AiActivitySections>),
           };
         }
+        if (typeof b.projectAutoDetect === "boolean") {
+          next.projectAutoDetect = b.projectAutoDetect;
+        }
         await saveAiConfig(next);
         return json(res, 200, {
           ok: true,
@@ -662,6 +733,7 @@ const server = createServer(async (req, res) => {
           max_output_tokens: next.max_output_tokens,
           style: next.style,
           activitySections: next.activitySections,
+          projectAutoDetect: next.projectAutoDetect ?? true,
         });
       }
       if (url === "/api/answer/manual") {

@@ -3,6 +3,7 @@ import {
   Check,
   Building2,
   Eye,
+  FolderKanban,
   ListChecks,
   Loader2,
   MessageSquareQuote,
@@ -161,6 +162,7 @@ export function SettingsPage() {
   const [maxTokens, setMaxTokens] = useState("");
   const [nome, setNome] = useState("");
   const [matricula, setMatricula] = useState("");
+  const [projectAutoDetect, setProjectAutoDetect] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -175,6 +177,7 @@ export function SettingsPage() {
     setMaxTokens(String(cfg.max_output_tokens ?? ""));
     setNome(cfg.profile?.nome ?? "");
     setMatricula(cfg.profile?.matricula ?? "");
+    setProjectAutoDetect(cfg.projectAutoDetect !== false);
   }, [cfg]);
 
   const selectedModel = findModel(model);
@@ -229,6 +232,7 @@ export function SettingsPage() {
         max_output_tokens: maxTok,
         style,
         activitySections: sections,
+        projectAutoDetect,
       });
       await saveProfile(profile);
       patchConfig({
@@ -237,6 +241,7 @@ export function SettingsPage() {
         max_output_tokens: maxTok,
         style,
         activitySections: sections,
+        projectAutoDetect,
         profile,
       });
       setMsg(t("settings.saved"));
@@ -470,6 +475,20 @@ export function SettingsPage() {
                 onChange={(v) => patchSections({ observacoes: v })}
               />
             </div>
+          </Card>
+
+          <Card icon={<FolderKanban className="size-4 text-brand" aria-hidden />} title={t("settings.projectContext")}>
+            <p className="text-xs text-muted-foreground">{t("settings.projectContextIntro")}</p>
+            <Toggle
+              label={t("settings.projectAutoDetect")}
+              hint={t("settings.projectAutoDetectHint")}
+              checked={projectAutoDetect}
+              onChange={(v) => {
+                setProjectAutoDetect(v);
+                setMsg(null);
+                setErr(null);
+              }}
+            />
           </Card>
         </>
       )}

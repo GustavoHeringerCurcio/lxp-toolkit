@@ -180,7 +180,65 @@ export interface AiConfigDto {
   temperature?: number;
   style: AiStyle;
   activitySections: AiActivitySections;
+  /** Auto-detect project context for answerable activities. */
+  projectAutoDetect: boolean;
   profile: AiProfile;
+}
+
+// ── Project context ─────────────────────────────────────────────────────────
+
+export type ProjectSource = "auto" | "manual";
+export type ProjectProfileMode = "main" | "activity" | "none";
+
+/** The student's MAIN project for a course. */
+export interface ProjectProfileDto {
+  courseId: number;
+  theme: string;
+  atores: string[];
+  requisitos: string[];
+  suggestedThemes: string[];
+  source: ProjectSource;
+  confidence: number | null;
+  model: string | null;
+  contentHash: string | null;
+  updatedAt: string;
+}
+
+/** Per-activity relevance + optional quick project override. */
+export interface ActivityProjectDto {
+  contentItemId: number;
+  needsProject: boolean;
+  profileMode: ProjectProfileMode;
+  theme: string | null;
+  atores: string[];
+  requisitos: string[];
+  confidence: number | null;
+  intent: string | null;
+  reason: string | null;
+  source: ProjectSource;
+  model: string | null;
+  contentHash: string | null;
+  updatedAt: string;
+}
+
+export interface EffectiveProfileDto {
+  theme: string;
+  atores: string[];
+  requisitos: string[];
+  origin: "main" | "activity";
+}
+
+export interface AnalyzeResultDto {
+  ok: boolean;
+  needsProject: boolean;
+  confidence: number | null;
+  intent: string | null;
+  reason: string | null;
+  source: ProjectSource;
+  mainProfile: ProjectProfileDto | null;
+  activity: ActivityProjectDto;
+  proposed: { theme: string; atores: string[]; requisitos: string[] } | null;
+  effective: EffectiveProfileDto | null;
 }
 
 // ── Professor photos ────────────────────────────────────────────────────────

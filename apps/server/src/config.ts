@@ -53,6 +53,7 @@ const DEFAULT_AI_CONFIG: AiConfig = {
   model: "gpt-4o",
   temperature: 0.7,
   max_output_tokens: 4000,
+  projectAutoDetect: true,
   style: { ...DEFAULT_STYLE },
   activitySections: { ...DEFAULT_ACTIVITY_SECTIONS },
 };

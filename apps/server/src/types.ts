@@ -200,11 +200,51 @@ export interface AiActivitySections {
   observacoes: boolean;
 }
 
+// ── Project context ─────────────────────────────────────────────────────────
+
+export type ProjectSource = "auto" | "manual";
+export type ProjectProfileMode = "main" | "activity" | "none";
+
+/** The student's MAIN project for a course (theme + actors + requirements). */
+export interface ProjectProfile {
+  courseId: number;
+  theme: string;
+  atores: string[];
+  requisitos: string[];
+  /** Themes suggested by the course material, used to populate the dropdown. */
+  suggestedThemes: string[];
+  source: ProjectSource;
+  confidence: number | null;
+  model: string | null;
+  contentHash: string | null;
+  updatedAt: string;
+}
+
+/** Per-activity project relevance, plus an optional quick project override. */
+export interface ActivityProject {
+  contentItemId: number;
+  needsProject: boolean;
+  profileMode: ProjectProfileMode;
+  /** Quick project (used when `profileMode === "activity"`). */
+  theme: string | null;
+  atores: string[];
+  requisitos: string[];
+  confidence: number | null;
+  intent: string | null;
+  reason: string | null;
+  source: ProjectSource;
+  model: string | null;
+  contentHash: string | null;
+  updatedAt: string;
+}
+
 export interface AiConfig {
   provider: "openai";
   model: string;
   temperature: number;
   max_output_tokens?: number;
+  /** Auto-detect project context for answerable activities (default true). */
+  projectAutoDetect?: boolean;
   /** Structured writing rules (system message). */
   style: AiStyle;
   /** Which activity sections are included in the user message. */
