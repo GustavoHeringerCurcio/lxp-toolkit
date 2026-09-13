@@ -204,6 +204,36 @@ export async function extractAllContentText(): Promise<ExtractSummary> {
   return summary;
 }
 
+/**
+ * Concatenate a course's extracted material (project/requirements/user-story
+ * items first) for grounding a detection or generation prompt. Capped so the
+ * cheap detection call stays small.
+ */
+export async function courseContextText(courseId: number, maxChars = 8000): Promise<string> {
+  const rows = await query<{ title: string; text: string }>(
+    `SELECT ci.title AS title, ct.text AS text
+       FROM content_text ct
+       JOIN content_item ci ON ci.id = ct.content_item_id
+      WHERE ci.course_id = $1 AND ct.status = 'ok' AND ct.text <> ''
+      ORDER BY ci.id`,
+    [courseId],
+  );
+  const priority = /projeto|requisit|tema|hist[oó]ria|escopo|documento|proposta/i;
+  const ordered = [
+    ...rows.filter((r) => priority.test(r.title)),
+    ...rows.filter((r) => !priority.test(r.title)),
+  ];
+  const chunks: string[] = [];
+  let total = 0;
+  for (const r of ordered) {
+    const block = `--- ${r.title} ---\n${r.text}`;
+    if (total + block.length > maxChars) break;
+    chunks.push(block);
+    total += block.length;
+  }
+  return chunks.join("\n\n");
+}
+
 /** Populate `content_text` once when empty and scraped files exist (bootstrap). */
 export async function ensureContentText(): Promise<ExtractSummary | null> {
   const rows = await query<{ n: string }>("SELECT count(*)::text AS n FROM content_text");

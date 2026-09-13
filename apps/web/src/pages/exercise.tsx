@@ -47,6 +47,7 @@ import { BackLink } from "@/components/app-sidebar";
 import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
 import { ProfessorTag, SubjectLabel } from "@/components/identity";
 import { AiRequestPanel } from "@/components/ai-request-panel";
+import { ProjectPanel } from "@/components/project-panel";
 import { MarkPanel, PortalOnlyPanel } from "@/components/mark-panel";
 import { SendDialog } from "@/components/send-dialog";
 import { SendIcon } from "@/components/icons/send-icons";
@@ -948,6 +949,8 @@ export function ExercisePage() {
               })}
             </CollapsibleCard>
           )}
+
+          {e.kind === "upload" && <ProjectPanel e={e} onSaved={() => setRegenToken((t) => t + 1)} />}
 
           {canAiAnswer(e) && <AiRequestPanel e={e} onSaved={() => setRegenToken((t) => t + 1)} />}
         </div>

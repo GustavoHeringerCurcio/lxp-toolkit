@@ -110,6 +110,23 @@ export function PdfIcon(props: SendIconProps) {
   );
 }
 
+/** "Fill" — the exercise completed in place (form + check). */
+export function FillIcon(props: SendIconProps) {
+  return (
+    <IconBase {...props}>
+      <path
+        d="M13.75 3.5H7.5A2.25 2.25 0 0 0 5.25 5.75v12.5A2.25 2.25 0 0 0 7.5 20.5h9a2.25 2.25 0 0 0 2.25-2.25V8.5z"
+        fill="currentColor"
+        fillOpacity=".12"
+      />
+      <path d="M13.75 3.5v5h5" />
+      <path d="M8.75 12.5h3" />
+      <path d="M8.75 16h2" />
+      <path d="m13.25 15.75 1.75 1.75 3-3.5" />
+    </IconBase>
+  );
+}
+
 /** Preview an artifact. */
 export function EyeIcon(props: SendIconProps) {
   return (

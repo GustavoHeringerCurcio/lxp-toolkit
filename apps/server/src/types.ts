@@ -335,7 +335,7 @@ export interface ProfessorLink {
 
 export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
 
-export type SendMode = "text" | "txt" | "pdf" | "image";
+export type SendMode = "text" | "txt" | "pdf" | "image" | "fill";
 
 export interface SubmissionEntry {
   exerciseId: number;

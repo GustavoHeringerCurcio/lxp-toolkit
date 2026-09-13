@@ -19,13 +19,15 @@ import { config, logger } from "../src/config.js";
  *
  * Upload request JSON:
  *   { "action": "upload", "courseId": number, "itemId": number, "answer": string,
- *     "mode"?: "text"|"txt"|"pdf", "ext"?: "md"|"txt", "filename"?: string,
- *     "filePath"?: string }
+ *     "mode"?: "text"|"txt"|"pdf"|"image"|"fill", "ext"?: "md"|"txt",
+ *     "filename"?: string, "filePath"?: string }
  *   `mode` selects how the answer reaches the portal:
  *     - "text" (default when set): typed straight into the reply editor, no file.
  *     - "txt": written to a temp `.txt` file and attached.
  *     - "pdf": attaches the pre-generated PDF at `filePath` (the assistant server
-  *       renders it from the answer and passes the absolute path).
+ *       renders it from the answer and passes the absolute path).
+ *     - "fill": same attachment path as "pdf", but the server renders a
+ *       structure-aware PDF (headings/lists/tables) for "fill the exercise" tasks.
  *     - "image": attaches a user-provided screenshot at `filePath` (print tasks).
  *   When omitted, "txt" is assumed for backward compatibility.
  *   `filename` is an optional attachment base name (no extension), e.g.
@@ -66,7 +68,7 @@ interface QuizItem {
   optionText: string;
 }
 
-type UploadMode = "text" | "txt" | "pdf" | "image";
+type UploadMode = "text" | "txt" | "pdf" | "image" | "fill";
 
 type SubmitRequest =
   | {
@@ -1038,8 +1040,8 @@ async function main(): Promise<void> {
     // Resolve the attachment according to the requested mode.
     const mode: UploadMode = req.mode ?? "txt";
     let attachedPath: string | null = null;
-    if (mode === "pdf") {
-      if (!req.filePath) return fail("pdf mode requires a filePath");
+    if (mode === "pdf" || mode === "fill") {
+      if (!req.filePath) return fail(`${mode} mode requires a filePath`);
       if (!existsSync(req.filePath)) return fail(`attachment not found: ${req.filePath}`);
       attachedPath = req.filePath;
     } else if (mode === "image") {

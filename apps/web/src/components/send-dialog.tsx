@@ -63,7 +63,9 @@ export function SendDialog({
           ? "send.action.text"
           : mode === "pdf"
             ? "send.action.pdf"
-            : "send.action.txt";
+            : mode === "fill"
+              ? "send.action.fill"
+              : "send.action.txt";
 
   useEffect(() => {
     setPreviewUrl(null);
@@ -78,12 +80,12 @@ export function SendDialog({
   }, [previewUrl]);
 
   const previewArtifact = async () => {
-    if (mode !== "txt" && mode !== "pdf") return;
+    if (mode !== "txt" && mode !== "pdf" && mode !== "fill") return;
     setPreviewBusy(true);
     setPreviewErr(null);
     try {
       const { blob } = await fetchSendArtifact(exercise.id, draft, mode);
-      if (mode === "pdf") {
+      if (mode === "pdf" || mode === "fill") {
         setPreviewText(null);
         setPreviewUrl(URL.createObjectURL(blob));
       } else {
@@ -98,7 +100,7 @@ export function SendDialog({
   };
 
   const downloadArtifact = async () => {
-    if (mode !== "txt" && mode !== "pdf") return;
+    if (mode !== "txt" && mode !== "pdf" && mode !== "fill") return;
     setDownloadBusy(true);
     setPreviewErr(null);
     try {
@@ -161,7 +163,7 @@ export function SendDialog({
               <div
                 role="radiogroup"
                 aria-label={t("send.formatTitle")}
-                className="grid grid-cols-3 gap-1 rounded-xl border border-border bg-muted/40 p-1"
+                className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:grid-cols-4"
               >
                 {SEND_MODES.map((m) => {
                   const Icon = m.icon;
@@ -191,7 +193,7 @@ export function SendDialog({
               </div>
               <p className="mt-2 text-xs text-muted-foreground">{t(actionKey)}</p>
 
-              {(mode === "txt" || mode === "pdf") && (
+              {(mode === "txt" || mode === "pdf" || mode === "fill") && (
                 <div className="mt-3">
                   <div className="flex items-center gap-2">
                     <Button

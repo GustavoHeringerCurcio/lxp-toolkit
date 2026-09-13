@@ -7,7 +7,7 @@ import { createRefreshController } from "../src/refresh.js";
 import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import { healthCheck, query, runMigrations } from "../src/db.js";
 import { importAll } from "../src/import.js";
-import { ensureContentText } from "../src/extract.js";
+import { courseContextText, ensureContentText } from "../src/extract.js";
 import { getCatalogVersion, readProjectionMeta, writeProjection } from "../src/project.js";
 import {
   clearAnswerHistory,
@@ -43,7 +43,7 @@ import {
   type TrainingAnswerInput,
 } from "../src/training-store.js";
 import { enrich, type ExerciseView } from "../src/view.js";
-import { generateAnswer } from "../src/ai.js";
+import { detectActivityContext, generateAnswer } from "../src/ai.js";
 import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
 import type { AiActivitySections, AiStyle, AnswerRecord, QuizQ, QuizSelection } from "../src/types.js";
 import {
@@ -532,18 +532,19 @@ const server = createServer(async (req, res) => {
       const b = await readBody(req);
       const id = Number(b.id);
       const answer = String(b.answer ?? "");
-      const mode = b.mode === "pdf" ? "pdf" : "txt";
+      const rich = b.mode === "fill";
+      const isPdf = b.mode === "pdf" || rich;
       const download = b.download === true;
       if (!id) return json(res, 400, { error: "id obrigatório" });
       if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de gerar o arquivo." });
       const view = await findView(id);
       const baseName = await uploadBaseName(view);
-      const ext = mode === "pdf" ? "pdf" : "txt";
+      const ext = isPdf ? "pdf" : "txt";
       const filename = safeFilename(baseName, ext);
       const disposition = `${download ? "attachment" : "inline"}; filename="${filename}"`;
 
-      if (mode === "pdf") {
-        const pdf = await answerToPdf(answer, baseName);
+      if (isPdf) {
+        const pdf = await answerToPdf(answer, baseName, { rich });
         if (!pdf) return json(res, 500, { error: "Não foi possível gerar o PDF (LibreOffice indisponível?)." });
         res.writeHead(200, {
           "content-type": "application/pdf",
@@ -586,6 +587,22 @@ const server = createServer(async (req, res) => {
         await saveAiRequest(id, b.raw == null ? null : String(b.raw));
         const view = await findView(id);
         return json(res, 200, { ok: true, aiRequestJson: view.aiRequestJson, hasAiOverride: view.hasAiOverride });
+      }
+      if (url === "/api/context/detect") {
+        // Cheap-model "where does this activity belong?" detection. Returns the
+        // inferred theme/actors/requirements plus a ready-to-save instruction block.
+        const b = await readBody(req);
+        const id = Number(b.id);
+        if (!id) return json(res, 400, { error: "id required" });
+        const view = await findView(id);
+        const cfg = await getAiConfig();
+        try {
+          const courseContext = await courseContextText(view.courseId).catch(() => "");
+          const detected = await detectActivityContext(cfg, view, courseContext, view.notes ?? "");
+          return json(res, 200, { ok: true, ...detected });
+        } catch (err) {
+          return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+        }
       }
       if (url === "/api/tag") {
         // set/clear a manual anomaly tag (ghost | print | anomalia | null)
@@ -728,7 +745,7 @@ const server = createServer(async (req, res) => {
         let answer = String(b.answer ?? "");
         const rawMode = String(b.mode ?? "");
         const mode: SendMode =
-          rawMode === "text" || rawMode === "pdf" || rawMode === "txt" || rawMode === "image"
+          rawMode === "text" || rawMode === "pdf" || rawMode === "txt" || rawMode === "image" || rawMode === "fill"
             ? rawMode
             : "txt";
         const view = await findView(id);
@@ -763,8 +780,8 @@ const server = createServer(async (req, res) => {
             submission = await launchForumSubmit(view, answer);
           } else {
             let filePath: string | undefined;
-            if (mode === "pdf") {
-              const pdf = await answerToPdf(answer, await uploadBaseName(view));
+            if (mode === "pdf" || mode === "fill") {
+              const pdf = await answerToPdf(answer, await uploadBaseName(view), { rich: mode === "fill" });
               if (!pdf)
                 return json(res, 500, {
                   error: "Não foi possível gerar o PDF da resposta (LibreOffice indisponível?).",

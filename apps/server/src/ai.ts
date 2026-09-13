@@ -87,3 +87,88 @@ export async function generateAnswer(
     tokensOut,
   };
 }
+
+/**
+ * Cheapest catalog model, used for the lightweight "where does this activity
+ * belong?" detection. Falls back to the configured model when unavailable.
+ */
+export const DETECT_MODEL = "gpt-5-nano";
+
+export interface DetectedContext {
+  /** Project/theme the activity belongs to (empty when undetectable). */
+  theme: string;
+  atores: string[];
+  requisitos: string[];
+  /** Ready-to-inject instruction block (Portuguese) grounding the generation. */
+  instructions: string;
+  /** Model that actually answered. */
+  model: string;
+}
+
+/**
+ * Infer the project context an activity belongs to (theme, actors, functional
+ * requirements) from the activity itself plus the surrounding course material.
+ * Deliberately small and cheap: one short JSON completion on `gpt-5-nano`.
+ */
+export async function detectActivityContext(
+  cfg: AiConfig,
+  e: Exercise,
+  courseContext: string,
+  notes = "",
+): Promise<DetectedContext> {
+  const system =
+    "Você ajuda um estudante a situar uma atividade no projeto dele. " +
+    "Responda SOMENTE com um objeto JSON, sem texto ao redor, no formato " +
+    '{"theme": string, "atores": string[], "requisitos": string[], "instructions": string}. ' +
+    "`theme` é o tema do projeto (ex.: \"Loja Virtual\"); `atores` são os usuários/sistemas externos; " +
+    "`requisitos` são os requisitos funcionais relevantes; `instructions` é um bloco curto em português, " +
+    "pronto para anexar a um prompt, descrevendo tema, atores e requisitos para preencher a atividade. " +
+    "Se não houver informação suficiente, devolva strings/arrays vazios — nunca invente.";
+  const user = [
+    `Atividade: ${e.title}`,
+    `Módulo: ${e.moduleTitle}`,
+    e.instructionsText ? `Enunciado:\n${e.instructionsText}` : "",
+    notes ? `Observações do aluno:\n${notes}` : "",
+    courseContext ? `Material do curso (pode conter o tema/projeto e os requisitos):\n${courseContext}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const attempt = async (model: string): Promise<string> => {
+    const resp = await client().chat.completions.create({
+      model,
+      temperature: 0.2,
+      max_tokens: 700,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    });
+    return resp.choices[0]?.message?.content ?? "";
+  };
+
+  let raw = "";
+  let model = DETECT_MODEL;
+  try {
+    raw = await attempt(DETECT_MODEL);
+  } catch {
+    model = cfg.model;
+    raw = await attempt(cfg.model);
+  }
+
+  let parsed: Partial<DetectedContext> = {};
+  try {
+    parsed = JSON.parse(raw) as Partial<DetectedContext>;
+  } catch {
+    parsed = {};
+  }
+  const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.map((i) => String(i)).filter(Boolean) : []);
+  return {
+    theme: typeof parsed.theme === "string" ? parsed.theme : "",
+    atores: strArr(parsed.atores),
+    requisitos: strArr(parsed.requisitos),
+    instructions: typeof parsed.instructions === "string" ? parsed.instructions : "",
+    model,
+  };
+}

@@ -138,6 +138,10 @@ export function buildStylePrompt(style: AiStyle, extraInstructions = ""): string
     );
   if (style.noIntroOutro) rules.push("- Sem introdução, sem despedida e sem oferecer ajuda extra.");
   rules.push("- Escreva em texto simples, sem símbolos, emojis ou negrito.");
+  rules.push(
+    "- Entregue exatamente o conteúdo final que a atividade pede (por exemplo, uma tabela preenchida, lacunas completadas ou respostas). " +
+      "Nunca diga que não pode criar ou enviar arquivos, nunca peça para o usuário completar algo e nunca ofereça ajuda.",
+  );
   for (const raw of style.extraRules.split("\n")) {
     const line = raw.trim();
     if (!line) continue;
@@ -306,6 +310,19 @@ export async function buildMessages(
       ` Responda à pergunta do professor com naturalidade (linguagem simples, como um aluno escrevendo para a turma),` +
       ` sem saudações longas, sem repetir o enunciado e sem se dirigir a colegas específicos.` +
       ` Se já houver publicações parecidas, complemente o que falta em vez de repetir.`;
+  }
+  if (e.kind === "upload") {
+    // Template-style activities ("fill the table", "mark the ( )", "complete
+    // the sheet") need structured output so the "fill" renderer can preserve
+    // the shape instead of flattening it to a paragraph.
+    const hay = `${e.instructionsText}\n${vars.arquivos}`;
+    const wantsTable = /\|.*\|/.test(hay) || /tabela|quadro|preench|complete|fill/i.test(hay);
+    if (wantsTable) {
+      user +=
+        `\n\nSe a atividade pede para preencher uma tabela/quadro, responda com a tabela já preenchida em Markdown:` +
+        ` uma linha de cabeçalho, uma linha separadora (|---|---|) e as linhas de dados, com as colunas separadas por "|".` +
+        ` Preencha todas as células pedidas e não deixe nenhuma em branco.`;
+    }
   }
   if (user) messages.push({ role: "user", content: user });
 

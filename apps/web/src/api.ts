@@ -103,6 +103,23 @@ export async function saveAiRequest(id: number, raw: string | null): Promise<AiR
   return (await post("/api/ai-request", { id, raw })) as AiRequestSaveResult;
 }
 
+export interface DetectedContextDto {
+  ok: boolean;
+  theme: string;
+  atores: string[];
+  requisitos: string[];
+  instructions: string;
+  model: string;
+}
+
+/**
+ * Cheap-model detection of the project context an activity belongs to. Returns
+ * the inferred theme/actors/requirements and a ready-to-save instruction block.
+ */
+export async function detectActivityContext(id: number): Promise<DetectedContextDto> {
+  return (await post("/api/context/detect", { id })) as DetectedContextDto;
+}
+
 export interface TagSaveResult {
   ok: boolean;
   tag: string | null;
@@ -269,7 +286,7 @@ export async function fetchSendPreview(id: number): Promise<SendPreviewDto> {
 export type SubmissionStatus = "running" | "ok" | "already" | "unknown" | "failed";
 
 /** How an upload answer reaches the portal. */
-export type SendMode = "text" | "txt" | "pdf" | "image";
+export type SendMode = "text" | "txt" | "pdf" | "image" | "fill";
 
 export interface SubmissionDto {
   status: SubmissionStatus;
