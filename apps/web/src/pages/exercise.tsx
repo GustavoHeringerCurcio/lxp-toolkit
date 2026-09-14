@@ -43,7 +43,7 @@ import { fmtDeadline } from "@/lib/status";
 import { isOffice, previewUrl, remoteFileName } from "@/lib/files";
 import { useT, type TranslateFn } from "@/lib/i18n";
 import { cn, stripHtml } from "@/lib/utils";
-import type { AnswerState, Exercise, ForumInfo, ForumPost, RemoteFile } from "@/types";
+import type { AnswerState, Exercise, ForumInfo, ForumPost, GateResultDto, RemoteFile } from "@/types";
 import { BackLink } from "@/components/app-sidebar";
 import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
 import { ProfessorTag, SubjectLabel } from "@/components/identity";
@@ -112,7 +112,7 @@ function AnswerPanel({
   const [subs, setSubs] = useState<SubmissionDto[]>([]);
   const [printFile, setPrintFile] = useState<File | null>(null);
   const [printPreview, setPrintPreview] = useState<string | null>(null);
-  const [gateToken, setGateToken] = useState(0);
+  const [gateResult, setGateResult] = useState<GateResultDto | null>(null);
   const cancelRef = useRef(false);
   const busyRef = useRef(false);
   const draftRef = useRef(draft);
@@ -132,6 +132,7 @@ function AnswerPanel({
     setSendErr(null);
     setPrintFile(null);
     setPrintPreview(null);
+    setGateResult(null);
     cancelRef.current = false;
     fetchSendConfig().then(setSendCfg);
     // Ghost tasks have no answer to edit or show: skip the stored (legacy)
@@ -188,6 +189,7 @@ function AnswerPanel({
     setBusySync(true);
     setErr(null);
     setDraft("");
+    setGateResult(null);
     const live = { value: "" };
     try {
       const st = await streamGenerate(e.id, (ev) => {
@@ -198,8 +200,9 @@ function AnswerPanel({
         if (ev.type === "done") {
           if (ev.answer) setDraft(ev.answer);
           setState({ current: ev.current ?? null, history: ev.history ?? [] });
-          setGateToken((n) => n + 1);
         }
+        // Server-side confidence result, delivered after `done`.
+        if (ev.type === "gate" && ev.result) setGateResult(ev.result);
       });
       setState(st);
       onRefresh();
@@ -359,7 +362,7 @@ function AnswerPanel({
   return (
     <div className="flex min-h-0 flex-col gap-3 xl:h-full">
       {wantsText && (
-        <GatePanel e={e} draft={draft} token={gateToken} initial={state?.current?.gate ?? null} />
+        <GatePanel e={e} draft={draft} initial={gateResult ?? state?.current?.gate ?? null} />
       )}
       {canAi && <AbilityPanel e={e} />}
       <CollapsibleCard

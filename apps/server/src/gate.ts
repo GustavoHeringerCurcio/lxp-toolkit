@@ -14,6 +14,15 @@ export function draftHash(text: string): string {
   return `${s.length}:${h}`;
 }
 
+/**
+ * The exact text a saved analysis is hashed from: the RAW draft, only trimmed.
+ * Must never be the HTML-stripped/whitespace-collapsed text, otherwise the web
+ * panel (which hashes the raw draft) can never match it after a refresh.
+ */
+export function draftHashInput(draft: string): string {
+  return (draft ?? "").trim();
+}
+
 /** Clamp a model-provided number into an integer 0–100. */
 export function clampScore(value: unknown, fallback = 0): number {
   if (value == null) return fallback;
@@ -221,7 +230,10 @@ export async function analyzeDraftQuality(
     return applyGateRules({
       ...result,
       checks: gateChecks(e, draftText),
-      draftHash: draftHash(draftText),
+      // Hash the RAW draft (only trimmed), never the HTML-stripped/whitespace-
+      // collapsed text: the web panel hashes the raw draft, and the two must
+      // match for a saved analysis to be recognized after a refresh.
+      draftHash: draftHash(draftHashInput(draft)),
     });
   } catch {
     return null;

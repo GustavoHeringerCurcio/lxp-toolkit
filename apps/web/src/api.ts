@@ -332,15 +332,21 @@ export async function clearAnswerHistory(id: number): Promise<AnswerState> {
 }
 
 export interface GenerateEvent {
-  type: "start" | "delta" | "done" | "error";
+  type: "start" | "delta" | "done" | "gate" | "error";
   delta?: string;
   answer?: string;
   current?: AnswerEntry;
   history?: AnswerEntry[];
+  /** Quality-gate result, delivered after `done` (server-side analysis). */
+  result?: GateResultDto;
   error?: string;
 }
 
-/** Stream an AI generation via SSE. Resolves on done; rejects on error. */
+/**
+ * Stream an AI generation via SSE. Resolves once the stream closes; rejects on
+ * error. Keeps reading past `done` so a trailing `gate` event (the server-side
+ * confidence result) is still delivered to `onEvent`.
+ */
 export async function streamGenerate(id: number, onEvent: (e: GenerateEvent) => void): Promise<AnswerState> {
   const res = await fetch("/api/answer/stream", {
     method: "POST",
@@ -361,6 +367,7 @@ export async function streamGenerate(id: number, onEvent: (e: GenerateEvent) => 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let finalState: AnswerState | null = null;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -373,14 +380,15 @@ export async function streamGenerate(id: number, onEvent: (e: GenerateEvent) => 
       const payload = JSON.parse(line.slice(5).trim()) as GenerateEvent;
       onEvent(payload);
       if (payload.type === "done") {
-        return { current: payload.current ?? null, history: payload.history ?? [] };
+        finalState = { current: payload.current ?? null, history: payload.history ?? [] };
       }
       if (payload.type === "error") {
         throw new Error(payload.error ?? translate(getLang(), "api.genFail"));
       }
     }
   }
-  throw new Error(translate(getLang(), "api.streamEnded"));
+  if (!finalState) throw new Error(translate(getLang(), "api.streamEnded"));
+  return finalState;
 }
 
 export async function generateAnswerPlain(id: number): Promise<AnswerState> {

@@ -3,11 +3,13 @@ import {
   applyGateRules,
   clampScore,
   draftHash,
+  draftHashInput,
   gateChecks,
   parseGateResult,
   scoreFromParts,
   verdictFor,
 } from "../src/gate.js";
+import { stripHtml } from "../src/build.js";
 import type { GateResult } from "../src/types.js";
 import { makeExercise } from "./helpers.js";
 
@@ -17,6 +19,23 @@ describe("draftHash", () => {
     expect(draftHash("hello world")).not.toBe(draftHash("hello worlds"));
     // Must match the web-side `hashDraft` (djb2 variant).
     expect(draftHash("UC-01")).toBe("5:237413931");
+  });
+});
+
+describe("draftHashInput", () => {
+  it("keeps the raw multi-line draft (newlines preserved)", () => {
+    const draft = "UC-01 — Login\nFluxo Principal:\n1. Acessa";
+    expect(draftHashInput(draft)).toBe(draft);
+    expect(draftHashInput("  padded  ")).toBe("padded");
+  });
+
+  it("is NOT the whitespace-collapsed stripHtml text (the refresh bug)", () => {
+    const draft = "UC-01 — Login\nFluxo Principal:\n1. Acessa";
+    // The web panel hashes the raw draft; the server must hash the same text.
+    expect(draftHash(draftHashInput(draft))).toBe(draftHash(draft));
+    expect(draftHash(draftHashInput(draft))).not.toBe(draftHash(stripHtml(draft)));
+    // Locks the djb2 variant shared with the web `hashDraft`.
+    expect(draftHash("UC-01\nFluxo")).toBe("11:-526983549");
   });
 });
 

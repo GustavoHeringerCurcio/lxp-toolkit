@@ -64,12 +64,10 @@ function BulletList({ title, items, tone }: { title: string; items: string[]; to
 export function GatePanel({
   e,
   draft,
-  token,
   initial,
 }: {
   e: Exercise;
   draft: string;
-  token: number;
   initial?: GateResultDto | null;
 }) {
   const { t } = useT();
@@ -119,20 +117,26 @@ export function GatePanel({
     cache.current.clear();
   }, [e.id]);
 
-  // Hydrate from the saved analysis (persisted with the answer version) when it
-  // matches the current draft, so revisiting an activity costs no AI call.
+  // Hydrate from the saved analysis (persisted with the answer version, or
+  // delivered by the generation stream) when it matches the current draft, so
+  // revisiting an activity costs no AI call.
   useEffect(() => {
     if (result || !initial) return;
     const text = draft.trim();
-    if (text && initial.draftHash === hashDraft(text)) setResult(initial);
+    if (text && initial.draftHash === hashDraft(text)) {
+      cache.current.set(`${e.id}:${hashDraft(text)}`, initial);
+      setResult(initial);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial, result]);
 
-  // Auto-run after each generation (the parent bumps `token`).
+  // A changed draft invalidates the shown confidence, so the user is never
+  // looking at a score for text that no longer exists.
   useEffect(() => {
-    if (token > 0) void run(draft);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    if (!result) return;
+    const text = draft.trim();
+    if (!text || result.draftHash !== hashDraft(text)) setResult(null);
+  }, [draft, result]);
 
   const hasDraft = Boolean(draft.trim());
   const tone = result ? TONE[result.verdict] : TONE.review;

@@ -78,6 +78,7 @@ import type {
   AiModels,
   AiStyle,
   AnswerRecord,
+  GateResult,
   QuizQ,
   QuizSelection,
 } from "../src/types.js";
@@ -346,10 +347,10 @@ async function runGateAndLog(
   view: ExerciseView,
   shown: string,
   ctx: GateContext,
-): Promise<void> {
+): Promise<GateResult | null> {
   try {
     const gate = await analyzeDraftQuality(cfg, view, shown);
-    if (!gate) return;
+    if (!gate) return null;
     if (shouldLog(gate)) {
       const written = await writeDebugLog({
         contentItemId: ctx.contentItemId,
@@ -381,8 +382,10 @@ async function runGateAndLog(
       gate.logged = Boolean(written && (written.id || written.file));
     }
     await saveAnswerGate(ctx.contentItemId, gate);
+    return gate;
   } catch {
     /* gate is best-effort */
+    return null;
   }
 }
 
@@ -394,7 +397,7 @@ async function generateAndSave(
   id: number,
   view: ExerciseView,
   opts: { onDelta?: (delta: string) => void; model?: string } = {},
-): Promise<{ shown: string; rec: AnswerRecord }> {
+): Promise<{ shown: string; rec: AnswerRecord; gate: Promise<GateResult | null> }> {
   const cfg = { ...(await getAiConfig()), ...(opts.model ? { model: opts.model } : {}) };
   const profile = await getProfile();
   const startedAt = Date.now();
@@ -498,10 +501,10 @@ async function generateAndSave(
 
   // Quality gate: runs automatically on every generation (advisory; never
   // blocks sending) and is persisted with the answer version. It is detached
-  // from the response path so the draft is delivered immediately — the client
-  // runs its own `/api/gate` anyway; this pass is for persistence and for the
-  // full-context debug log. A weak result or a failed rubric check logs.
-  void runGateAndLog(cfg, view, shown, {
+  // from the response path so the draft is delivered immediately, but the
+  // promise is returned so callers can forward the result to the client
+  // (streaming sends a `gate` event) instead of the client re-analyzing.
+  const gate = runGateAndLog(cfg, view, shown, {
     contentItemId: id,
     answerAttemptId: attemptId,
     project: projectInfo,
@@ -512,7 +515,7 @@ async function generateAndSave(
     tokensIn: gen.tokensIn,
     tokensOut: gen.tokensOut,
   });
-  return { shown, rec };
+  return { shown, rec, gate };
 }
 
 /** Tasks, quizzes and forums with a real question have AI-answerable content. */
@@ -1152,6 +1155,9 @@ const server = createServer(async (req, res) => {
         try {
           const cfg = await getAiConfig();
           const result = await analyzeDraftQuality(cfg, view, draft);
+          // Persist so a manual "Analyze" survives a page refresh. No-op when the
+          // item has no saved attempt yet (unsaved manual draft).
+          if (result) await saveAnswerGate(id, result).catch(() => undefined);
           return json(res, 200, { ok: true, result });
         } catch (err) {
           return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
@@ -1205,9 +1211,11 @@ const server = createServer(async (req, res) => {
         const id = Number(b.id);
         const view = await findView(id);
         if (!isAnswerable(view)) return json(res, 400, { error: "Esta atividade não aceita resposta por aqui." });
-        const { shown, rec } = await generateAndSave(id, view, {
+        const { shown, rec, gate } = await generateAndSave(id, view, {
           model: b.model ? String(b.model) : undefined,
         });
+        const gateResult = await gate;
+        if (gateResult) rec.gate = gateResult;
         return json(res, 200, { answer: shown, current: rec, history: rec.history, updatedAt: rec.updatedAt });
       }
       if (url === "/api/answer/stream") {
@@ -1225,7 +1233,7 @@ const server = createServer(async (req, res) => {
         const sendEvent = (payload: unknown) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
         sendEvent({ type: "start" });
         try {
-          const { shown, rec } = await generateAndSave(id, view, {
+          const { shown, rec, gate } = await generateAndSave(id, view, {
             model: b.model ? String(b.model) : undefined,
             onDelta: (delta) => {
               sendEvent({ type: "delta", delta });
@@ -1238,7 +1246,10 @@ const server = createServer(async (req, res) => {
               }
             },
           });
+          // Deliver the draft first, then the persisted confidence result.
           sendEvent({ type: "done", answer: shown, current: rec, history: rec.history });
+          const gateResult = await gate;
+          if (gateResult) sendEvent({ type: "gate", result: gateResult });
           res.end();
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
