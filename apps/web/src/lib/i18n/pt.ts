@@ -299,6 +299,24 @@ export const pt = {
   "project.saved": "Contexto salvo. Gere o rascunho novamente para aplicá-lo.",
   "project.removed": "Contexto removido.",
 
+  // quality gate (above the draft)
+  "gate.title": "Confiança da resposta",
+  "gate.analyze": "Analisar",
+  "gate.analyzing": "Analisando…",
+  "gate.reanalyze": "Reanalisar",
+  "gate.idle": "Gere um rascunho para avaliar a confiança.",
+  "gate.pending": "Clique em “Analisar” para avaliar a resposta.",
+  "gate.error": "Não foi possível analisar agora.",
+  "gate.verdict.ready": "Pronta para enviar",
+  "gate.verdict.review": "Revisar antes de enviar",
+  "gate.verdict.weak": "Resposta fraca",
+  "gate.human": "Parece humana",
+  "gate.relevance": "Aderência",
+  "gate.completeness": "Completude",
+  "gate.issues": "Pontos de atenção",
+  "gate.suggestions": "Sugestões",
+  "gate.advisory": "Análise orientativa gerada por IA — revise antes de enviar.",
+
   // draft panel
   "draft.title": "Rascunho",
   "draft.saved": "salvo {{date}} · {{source}}",

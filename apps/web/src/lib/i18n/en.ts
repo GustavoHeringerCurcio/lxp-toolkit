@@ -295,6 +295,24 @@ export const en: Dict = {
   "project.saved": "Context saved. Regenerate the draft to apply it.",
   "project.removed": "Context removed.",
 
+  // quality gate (above the draft)
+  "gate.title": "Answer confidence",
+  "gate.analyze": "Analyze",
+  "gate.analyzing": "Analyzing…",
+  "gate.reanalyze": "Re-analyze",
+  "gate.idle": "Generate a draft to assess its confidence.",
+  "gate.pending": "Click “Analyze” to assess the answer.",
+  "gate.error": "Couldn't analyze right now.",
+  "gate.verdict.ready": "Ready to send",
+  "gate.verdict.review": "Review before sending",
+  "gate.verdict.weak": "Weak answer",
+  "gate.human": "Sounds human",
+  "gate.relevance": "Relevance",
+  "gate.completeness": "Completeness",
+  "gate.issues": "Points to fix",
+  "gate.suggestions": "Suggestions",
+  "gate.advisory": "AI-generated advisory — review before sending.",
+
   // draft panel
   "draft.title": "Draft",
   "draft.saved": "saved {{date}} · {{source}}",

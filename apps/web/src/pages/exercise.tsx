@@ -49,6 +49,7 @@ import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/c
 import { ProfessorTag, SubjectLabel } from "@/components/identity";
 import { AiRequestPanel } from "@/components/ai-request-panel";
 import { ProjectPanel } from "@/components/project-panel";
+import { GatePanel } from "@/components/gate-panel";
 import { RichText } from "@/components/rich-text";
 import { MarkPanel, PortalOnlyPanel } from "@/components/mark-panel";
 import { SendDialog } from "@/components/send-dialog";
@@ -110,6 +111,7 @@ function AnswerPanel({
   const [subs, setSubs] = useState<SubmissionDto[]>([]);
   const [printFile, setPrintFile] = useState<File | null>(null);
   const [printPreview, setPrintPreview] = useState<string | null>(null);
+  const [gateToken, setGateToken] = useState(0);
   const cancelRef = useRef(false);
   const busyRef = useRef(false);
   const draftRef = useRef(draft);
@@ -195,6 +197,7 @@ function AnswerPanel({
         if (ev.type === "done") {
           if (ev.answer) setDraft(ev.answer);
           setState({ current: ev.current ?? null, history: ev.history ?? [] });
+          setGateToken((n) => n + 1);
         }
       });
       setState(st);
@@ -353,11 +356,13 @@ function AnswerPanel({
           : e.selections.length > 0);
 
   return (
-    <CollapsibleCard
-      id="resposta"
-      icon={<Sparkles className="size-4 shrink-0 text-brand" aria-hidden />}
-      title={t("draft.title")}
-      className="xl:flex xl:max-h-[calc(100vh-6rem)] xl:min-h-0 xl:flex-col data-[open=false]:xl:h-auto"
+    <div className="flex min-h-0 flex-col gap-3 xl:h-full">
+      {wantsText && <GatePanel e={e} draft={draft} token={gateToken} />}
+      <CollapsibleCard
+        id="resposta"
+        icon={<Sparkles className="size-4 shrink-0 text-brand" aria-hidden />}
+        title={t("draft.title")}
+        className="xl:flex xl:flex-1 xl:min-h-0 xl:flex-col data-[open=false]:xl:flex-none data-[open=false]:xl:h-auto"
       bodyClassName="flex-auto min-h-0 space-y-3 overflow-y-auto p-4"
       badge={
         <>
@@ -631,7 +636,8 @@ function AnswerPanel({
             </ul>
           </div>
         )}
-    </CollapsibleCard>
+      </CollapsibleCard>
+    </div>
   );
 }
 

@@ -62,6 +62,7 @@ import {
   resolveProjectContext,
 } from "../src/project-context.js";
 import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
+import { analyzeDraftQuality } from "../src/gate.js";
 import { findTemplateDocx } from "../src/template.js";
 import type { AiActivitySections, AiStyle, AnswerRecord, QuizQ, QuizSelection } from "../src/types.js";
 import {
@@ -970,6 +971,23 @@ const server = createServer(async (req, res) => {
           activitySections: next.activitySections,
           projectAutoDetect: next.projectAutoDetect ?? true,
         });
+      }
+      if (url === "/api/gate") {
+        // Quality gate: cheap-model analysis of the draft against the question.
+        const b = await readBody(req);
+        const id = Number(b.id);
+        if (!id) return json(res, 400, { error: "id required" });
+        const view = await findView(id);
+        if (!isAnswerable(view)) return json(res, 400, { error: "Esta atividade não aceita resposta por aqui." });
+        const draft = String(b.draft ?? view.answer ?? "").trim();
+        if (!draft) return json(res, 200, { ok: true, result: null });
+        try {
+          const cfg = await getAiConfig();
+          const result = await analyzeDraftQuality(cfg, view, draft);
+          return json(res, 200, { ok: true, result });
+        } catch (err) {
+          return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+        }
       }
       if (url === "/api/answer/manual") {
         const b = await readBody(req);

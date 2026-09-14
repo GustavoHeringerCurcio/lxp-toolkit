@@ -10,6 +10,7 @@ import type {
   AnswerState,
   ExercisesPayload,
   FlavorSource,
+  GateResultDto,
   OrganizationDto,
   ProfessorLink,
   ProjectProfileDto,
@@ -356,6 +357,12 @@ export async function streamGenerate(id: number, onEvent: (e: GenerateEvent) => 
 export async function generateAnswerPlain(id: number): Promise<AnswerState> {
   const res = (await post("/api/answer", { id })) as { answer: string; current: AnswerEntry; history: AnswerEntry[] };
   return { current: res.current ?? { answer: res.answer, updatedAt: "", source: "ai" }, history: res.history ?? [] };
+}
+
+/** Quality-gate analysis of a draft against the professor's question. */
+export async function analyzeDraftGate(id: number, draft: string): Promise<GateResultDto | null> {
+  const res = (await post("/api/gate", { id, draft })) as { result: GateResultDto | null };
+  return res.result ?? null;
 }
 
 export interface SendConfigDto {

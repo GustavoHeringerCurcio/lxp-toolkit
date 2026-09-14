@@ -158,6 +158,20 @@ export interface AnswerState {
   history: AnswerEntry[];
 }
 
+/** Quality-gate analysis of a draft (cheap model). */
+export interface GateResultDto {
+  /** Weighted 0–100 confidence that the answer is ready to send. */
+  score: number;
+  humanScore: number;
+  relevanceScore: number;
+  completenessScore: number;
+  verdict: "ready" | "review" | "weak";
+  summary: string;
+  issues: string[];
+  suggestions: string[];
+  model: string;
+}
+
 export interface AiStyle {
   persona: string;
   voice: string;
