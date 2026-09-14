@@ -51,7 +51,6 @@ import { AiRequestPanel } from "@/components/ai-request-panel";
 import { ProjectPanel } from "@/components/project-panel";
 import { GatePanel } from "@/components/gate-panel";
 import { AbilityPanel } from "@/components/ability-panel";
-import { DiagramPanel } from "@/components/diagram-panel";
 import { RichText } from "@/components/rich-text";
 import { MarkPanel, PortalOnlyPanel } from "@/components/mark-panel";
 import { SendDialog } from "@/components/send-dialog";
@@ -363,7 +362,6 @@ function AnswerPanel({
         <GatePanel e={e} draft={draft} token={gateToken} initial={state?.current?.gate ?? null} />
       )}
       {canAi && <AbilityPanel e={e} />}
-      {canAi && <DiagramPanel e={e} draft={draft} />}
       <CollapsibleCard
         id="resposta"
         icon={<Sparkles className="size-4 shrink-0 text-brand" aria-hidden />}
