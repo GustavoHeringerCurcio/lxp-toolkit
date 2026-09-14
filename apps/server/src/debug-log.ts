@@ -7,11 +7,14 @@
  * both a Postgres row (queryable) and a markdown file (readable by a human or
  * an agent). The goal is that "why did this happen?" is reproducible later.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { assist } from "./paths.js";
-import { insertDebugLog } from "./store.js";
+import { insertDebugLog, pruneDebugLogs } from "./store.js";
 import type { GateResult } from "./types.js";
+
+/** How many recent diagnostics to keep (rows and markdown files). */
+export const DEBUG_LOG_KEEP = 100;
 
 export interface DebugActivity {
   title: string;
@@ -59,12 +62,16 @@ export interface DebugLogBundle {
   createdAt: string;
 }
 
-/** Why a draft should be logged, or null when it is ready to send. */
+/**
+ * Why a draft should be logged, or null when it is ready to send. Only the
+ * genuinely actionable cases log — a plain "review" (score 50–79) is not enough
+ * on its own, otherwise nearly every draft would produce a file.
+ */
 export function gateLogReason(gate: GateResult): string | null {
   const failed = (gate.checks ?? []).filter((c) => !c.ok).map((c) => c.code);
   const parts: string[] = [];
   if (gate.completenessScore <= 90) parts.push(`completude ${gate.completenessScore}% <= 90`);
-  if (gate.verdict !== "ready") parts.push(`veredito "${gate.verdict}"`);
+  if (gate.verdict === "weak") parts.push('veredito "weak"');
   if (failed.length) parts.push(`verificações falhas: ${failed.join(", ")}`);
   return parts.length ? parts.join("; ") : null;
 }
@@ -170,5 +177,16 @@ export async function writeDebugLog(
     filePath: file,
     payload: bundle,
   }).catch(() => null);
+
+  // Retention: keep only the newest DEBUG_LOG_KEEP rows, deleting the markdown
+  // files that fall out of the window. Best-effort.
+  try {
+    const stale = await pruneDebugLogs(DEBUG_LOG_KEEP);
+    for (const stalePath of stale) {
+      if (stalePath) unlinkSync(stalePath);
+    }
+  } catch {
+    /* retention is best-effort */
+  }
   return { id, file };
 }

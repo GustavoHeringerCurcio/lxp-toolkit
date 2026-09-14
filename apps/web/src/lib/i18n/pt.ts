@@ -314,6 +314,7 @@ export const pt = {
   "gate.relevance": "Aderência",
   "gate.completeness": "Completude",
   "gate.checks": "Verificações do modelo",
+  "gate.completenessLow": "Completude abaixo de 90% — revise antes de enviar.",
   "gate.logged": "Diagnóstico salvo",
   "debug.title": "Diagnósticos",
   "debug.intro": "Rascunhos com baixa confiança geram um log completo (contexto, prompt e resposta) para você e seu agente entenderem o que houve.",

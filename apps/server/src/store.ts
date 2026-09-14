@@ -824,6 +824,24 @@ export async function getDebugLog(id: number): Promise<DebugLogEntry | null> {
   return rows[0] ? toDebugLog(rows[0]) : null;
 }
 
+/**
+ * Delete debug logs beyond the newest `keep` for the student, returning the
+ * markdown paths that were removed so the caller can delete the files too.
+ */
+export async function pruneDebugLogs(keep: number): Promise<string[]> {
+  const studentId = await getStudentId();
+  const rows = await query<{ file_path: string | null }>(
+    `DELETE FROM debug_log
+      WHERE student_id = $1
+        AND id NOT IN (
+          SELECT id FROM debug_log WHERE student_id = $1 ORDER BY created_at DESC LIMIT $2
+        )
+      RETURNING file_path`,
+    [studentId, keep],
+  );
+  return rows.map((r) => r.file_path).filter((p): p is string => Boolean(p));
+}
+
 // ── Project context ─────────────────────────────────────────────────────────
 
 function toStrArray(v: unknown): string[] {

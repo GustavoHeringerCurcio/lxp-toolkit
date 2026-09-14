@@ -47,6 +47,9 @@ export async function buildDiagram(
   const text = (draft ?? "").trim();
   if (!text) return null;
   const parsed = parseUseCases(text);
+  // No parseable use cases: only fall back to a single synthetic case when the
+  // activity actually asks for a diagram, so we never invent one on a hunch.
+  if (!parsed.length && !diagramRequested(`${e.title}\n${e.instructionsText}`)) return null;
   const cases = parsed.length ? parsed : syntheticCases(e, text);
   const system = (opts.systemName ?? "").trim() || e.courseName;
   const spec = await generateDiagramSpec(cfg, cases, system);

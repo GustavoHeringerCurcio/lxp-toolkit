@@ -207,6 +207,9 @@ export function GatePanel({
             <SubScore label={t("gate.relevance")} value={result.relevanceScore} />
             <SubScore label={t("gate.completeness")} value={result.completenessScore} />
           </div>
+          {result.completenessScore <= 90 && (
+            <p className="text-xs text-soon">{t("gate.completenessLow")}</p>
+          )}
           {result.checks.length > 0 && (
             <div className="space-y-1 border-t border-border/60 pt-2.5">
               <p className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">

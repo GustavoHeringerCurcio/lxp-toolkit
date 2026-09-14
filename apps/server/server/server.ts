@@ -74,10 +74,10 @@ import { gateLogReason, shouldLog, writeDebugLog, type DebugProject } from "../s
 import { findTemplateDocx } from "../src/template.js";
 import type {
   AiActivitySections,
+  AiConfig,
   AiModels,
   AiStyle,
   AnswerRecord,
-  GateResult,
   QuizQ,
   QuizSelection,
 } from "../src/types.js";
@@ -324,6 +324,68 @@ async function allViews(): Promise<ExerciseView[]> {
   return (await loadViews()).filter((v) => !v.hidden);
 }
 
+interface GateContext {
+  contentItemId: number;
+  answerAttemptId: number | null;
+  project: DebugProject | null;
+  templateFields: string[];
+  model: string;
+  prompt: string;
+  promptHash: string;
+  tokensIn: number | null;
+  tokensOut: number | null;
+}
+
+/**
+ * Run the quality gate for a just-saved draft and persist it. Detached from the
+ * request path: never throws, so generation is never affected. When the draft is
+ * not ready to send, a full-context debug log is written.
+ */
+async function runGateAndLog(
+  cfg: AiConfig,
+  view: ExerciseView,
+  shown: string,
+  ctx: GateContext,
+): Promise<void> {
+  try {
+    const gate = await analyzeDraftQuality(cfg, view, shown);
+    if (!gate) return;
+    if (shouldLog(gate)) {
+      const written = await writeDebugLog({
+        contentItemId: ctx.contentItemId,
+        answerAttemptId: ctx.answerAttemptId,
+        reason: gateLogReason(gate) ?? "gate",
+        activity: {
+          title: view.title,
+          kind: view.kind,
+          courseName: view.courseName,
+          moduleTitle: view.moduleTitle,
+          instructionsText: view.instructionsText ?? "",
+          files: view.files.map((f) => f.name),
+        },
+        project: ctx.project,
+        templateFields: ctx.templateFields,
+        abilities: cfg.abilities ?? {},
+        generation: {
+          model: ctx.model,
+          temperature: cfg.temperature,
+          prompt: ctx.prompt,
+          completion: shown,
+          promptHash: ctx.promptHash,
+          tokensIn: ctx.tokensIn,
+          tokensOut: ctx.tokensOut,
+        },
+        gate,
+        createdAt: new Date().toISOString(),
+      }).catch(() => null);
+      gate.logged = Boolean(written && (written.id || written.file));
+    }
+    await saveAnswerGate(ctx.contentItemId, gate);
+  } catch {
+    /* gate is best-effort */
+  }
+}
+
 /**
  * Generate an AI answer, persist it as an immutable attempt (with model +
  * prompt provenance) and record an `ai_run`.
@@ -435,48 +497,21 @@ async function generateAndSave(
   }).catch(() => undefined);
 
   // Quality gate: runs automatically on every generation (advisory; never
-  // blocks sending) and is persisted with the answer version. A weak result or
-  // a failed rubric check writes a full-context debug log for later analysis.
-  let gate: GateResult | null = null;
-  try {
-    gate = await analyzeDraftQuality(cfg, view, shown);
-    if (gate) {
-      if (shouldLog(gate)) {
-        const written = await writeDebugLog({
-          contentItemId: id,
-          answerAttemptId: attemptId,
-          reason: gateLogReason(gate) ?? "gate",
-          activity: {
-            title: view.title,
-            kind: view.kind,
-            courseName: view.courseName,
-            moduleTitle: view.moduleTitle,
-            instructionsText: view.instructionsText ?? "",
-            files: view.files.map((f) => f.name),
-          },
-          project: projectInfo,
-          templateFields,
-          abilities: cfg.abilities ?? {},
-          generation: {
-            model: gen.model,
-            temperature: cfg.temperature,
-            prompt: gen.prompt,
-            completion: shown,
-            promptHash: gen.promptHash,
-            tokensIn: gen.tokensIn,
-            tokensOut: gen.tokensOut,
-          },
-          gate,
-          createdAt: new Date().toISOString(),
-        }).catch(() => null);
-        gate.logged = Boolean(written && (written.id || written.file));
-      }
-      await saveAnswerGate(id, gate);
-      rec.gate = gate;
-    }
-  } catch {
-    /* gate is best-effort */
-  }
+  // blocks sending) and is persisted with the answer version. It is detached
+  // from the response path so the draft is delivered immediately — the client
+  // runs its own `/api/gate` anyway; this pass is for persistence and for the
+  // full-context debug log. A weak result or a failed rubric check logs.
+  void runGateAndLog(cfg, view, shown, {
+    contentItemId: id,
+    answerAttemptId: attemptId,
+    project: projectInfo,
+    templateFields,
+    model: gen.model,
+    prompt: gen.prompt,
+    promptHash: gen.promptHash,
+    tokensIn: gen.tokensIn,
+    tokensOut: gen.tokensOut,
+  });
   return { shown, rec };
 }
 

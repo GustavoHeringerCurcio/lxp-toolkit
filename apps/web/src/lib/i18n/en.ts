@@ -310,6 +310,7 @@ export const en: Dict = {
   "gate.relevance": "Relevance",
   "gate.completeness": "Completeness",
   "gate.checks": "Template checks",
+  "gate.completenessLow": "Completeness below 90% — review before sending.",
   "gate.logged": "Diagnostic saved",
   "debug.title": "Diagnostics",
   "debug.intro": "Low-confidence drafts produce a full log (context, prompt and answer) so you and your agent can understand what happened.",
