@@ -1,13 +1,19 @@
 import type {
+  AbilityId,
+  AbilitySettings,
   ActivityProjectDto,
   AiActivitySections,
   AiConfigDto,
+  AiModels,
   AiProfile,
   AiStyle,
   AnalyzeResultDto,
   Anomaly,
   AnswerEntry,
   AnswerState,
+  DebugLogDto,
+  DebugLogFullDto,
+  DiagramArtifactDto,
   ExercisesPayload,
   FlavorSource,
   GateResultDto,
@@ -254,15 +260,38 @@ export async function uploadSendFile(id: number, file: File): Promise<string> {
 
 export interface AiConfigSavePatch {
   model?: string;
+  models?: Partial<AiModels>;
   temperature?: number;
   max_output_tokens?: number;
   style?: Partial<AiStyle>;
   activitySections?: Partial<AiActivitySections>;
   projectAutoDetect?: boolean;
+  abilities?: AbilitySettings;
 }
 
 export async function saveAiConfig(patch: AiConfigSavePatch): Promise<void> {
   await post("/api/ai-config", patch);
+}
+
+/** Per-activity ability overrides (ability id -> enabled). */
+export async function fetchActivityAbilities(id: number): Promise<Partial<Record<AbilityId, boolean>>> {
+  const body = await req<{ abilities: Partial<Record<AbilityId, boolean>> }>(`/api/activity-abilities/${id}`);
+  return body.abilities ?? {};
+}
+
+/**
+ * Set (or clear, with `null`) a per-activity ability override. The override wins
+ * over the global config switch for that activity.
+ */
+export async function setActivityAbility(
+  id: number,
+  ability: AbilityId,
+  enabled: boolean | null,
+): Promise<Partial<Record<AbilityId, boolean>>> {
+  const body = (await post("/api/activity-ability", { id, ability, enabled })) as {
+    abilities: Partial<Record<AbilityId, boolean>>;
+  };
+  return body.abilities ?? {};
 }
 
 export interface RefreshStatus {
@@ -363,6 +392,29 @@ export async function generateAnswerPlain(id: number): Promise<AnswerState> {
 export async function analyzeDraftGate(id: number, draft: string): Promise<GateResultDto | null> {
   const res = (await post("/api/gate", { id, draft })) as { result: GateResultDto | null };
   return res.result ?? null;
+}
+
+/** Build a UML use-case diagram from the draft (SVG; PNG when requested). */
+export async function generateDiagram(
+  id: number,
+  draft: string,
+  png = false,
+): Promise<DiagramArtifactDto | null> {
+  const res = (await post("/api/diagram", { id, draft, png })) as {
+    diagram: DiagramArtifactDto | null;
+  };
+  return res.diagram ?? null;
+}
+
+/** Recent weak-draft diagnostics (newest first). */
+export async function fetchDebugLogs(): Promise<DebugLogDto[]> {
+  const body = await req<{ logs: DebugLogDto[] }>("/api/debug-logs");
+  return body.logs ?? [];
+}
+
+export async function fetchDebugLog(id: number): Promise<DebugLogFullDto | null> {
+  const body = await req<{ log: DebugLogFullDto }>(`/api/debug-log/${id}`);
+  return body.log ?? null;
 }
 
 export interface SendConfigDto {

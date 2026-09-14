@@ -507,7 +507,7 @@ function promptHash(messages: ChatMessage[]): string {
 
 async function jsonCompletion(messages: ChatMessage[], cfg: AiConfig): Promise<{ text: string; provenance: AiProvenance }> {
   const completion = await client().chat.completions.create({
-    model: cfg.model,
+    model: cfg.models.training,
     temperature: cfg.temperature,
     max_tokens: cfg.max_output_tokens ?? 4000,
     response_format: { type: "json_object" },
@@ -517,7 +517,7 @@ async function jsonCompletion(messages: ChatMessage[], cfg: AiConfig): Promise<{
   return {
     text,
     provenance: {
-      model: cfg.model,
+      model: cfg.models.training,
       prompt: serializePrompt(messages),
       promptHash: promptHash(messages),
       tokensIn: completion.usage?.prompt_tokens ?? null,
@@ -601,7 +601,7 @@ export async function generateStudyGuide(
   ];
 
   const stream = await client().chat.completions.create({
-    model: config.model,
+    model: config.models.training,
     temperature: config.temperature,
     max_tokens: config.max_output_tokens ?? 2200,
     stream: true,
@@ -627,7 +627,7 @@ export async function generateStudyGuide(
   return {
     text: full,
     provenance: {
-      model: config.model,
+      model: config.models.training,
       prompt: serializePrompt(messages),
       promptHash: promptHash(messages),
       tokensIn,

@@ -581,16 +581,18 @@ async function importAiConfig(studentId: number): Promise<void> {
   if (Number(existing[0]?.n ?? "0") > 0) return;
   const cfg = loadAiConfig();
   await query(
-    `INSERT INTO ai_config(student_id, provider, model, temperature, max_output_tokens, style_json, sections_json, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7, now())`,
+    `INSERT INTO ai_config(student_id, provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect, models_json, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())`,
     [
       studentId,
       cfg.provider,
-      cfg.model,
+      cfg.models?.generation ?? cfg.model,
       cfg.temperature ?? null,
       cfg.max_output_tokens ?? null,
       JSON.stringify(cfg.style ?? {}),
       JSON.stringify(cfg.activitySections ?? {}),
+      cfg.projectAutoDetect ?? true,
+      JSON.stringify(cfg.models ?? {}),
     ],
   );
 }

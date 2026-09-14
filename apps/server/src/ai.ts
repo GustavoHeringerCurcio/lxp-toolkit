@@ -10,6 +10,9 @@ function client(): OpenAI {
   return _client;
 }
 
+/** Low temperature used for deterministic template-fill generation. */
+export const TEMPLATE_TEMPERATURE = 0.2;
+
 export interface GenerateOpts {
   onDelta?: (text: string) => void;
   /** Generic template-fill mode (professor-provided table/model). */
@@ -60,9 +63,13 @@ export async function generateAnswer(
     },
   );
 
+  // Structured "fill the professor's template" tasks are deterministic, so use
+  // a low temperature instead of the (higher) free-form default to curb invented
+  // fields, actors and business rules.
+  const temperature = opts.wantsTemplate ? TEMPLATE_TEMPERATURE : cfg.temperature;
   const stream = await client().chat.completions.create({
-    model: cfg.model,
-    temperature: cfg.temperature,
+    model: cfg.models.generation,
+    temperature,
     max_tokens: cfg.max_output_tokens ?? 2200,
     stream: true,
     stream_options: { include_usage: true },
@@ -90,7 +97,7 @@ export async function generateAnswer(
 
   return {
     text: full,
-    model: cfg.model,
+    model: cfg.models.generation,
     prompt,
     promptHash: createHash("sha256").update(JSON.stringify(messages)).digest("hex"),
     tokensIn,
@@ -99,8 +106,7 @@ export async function generateAnswer(
 }
 
 /**
- * Cheapest catalog model, used for the lightweight project-context detection.
- * Falls back to the configured model when unavailable.
+ * Default cheapest catalog model, used when a role has no explicit model.
  */
 export const DETECT_MODEL = "gpt-5-nano";
 
@@ -124,20 +130,21 @@ function safeParse(text: string): JsonRecord {
 }
 
 /**
- * One small JSON completion on the cheapest model (`gpt-5-nano`), falling back
- * to the configured model. Shared by all project-context detection calls.
+ * One small JSON completion on the given model, falling back to the configured
+ * generation model when the chosen one is unavailable. Shared by every
+ * lightweight structured call (detection, classification, diagram, gate).
  */
 export async function cheapJsonCompletion(
   cfg: AiConfig,
   system: string,
   user: string,
   maxTokens = 700,
-  /** When false, use the configured model first (better for structured inference). */
-  preferCheap = true,
+  /** Role model to use; defaults to the cheap detection model. */
+  model: string = cfg.models?.detection ?? DETECT_MODEL,
 ): Promise<{ text: string; model: string }> {
-  const attempt = async (model: string): Promise<string> => {
+  const attempt = async (m: string): Promise<string> => {
     const resp = await client().chat.completions.create({
-      model,
+      model: m,
       temperature: 0.2,
       max_tokens: maxTokens,
       response_format: { type: "json_object" },
@@ -148,12 +155,12 @@ export async function cheapJsonCompletion(
     });
     return resp.choices[0]?.message?.content ?? "";
   };
-  const first = preferCheap ? DETECT_MODEL : cfg.model;
-  const second = preferCheap ? cfg.model : DETECT_MODEL;
+  const fallback = cfg.models?.generation ?? cfg.model;
   try {
-    return { text: await attempt(first), model: first };
+    return { text: await attempt(model), model };
   } catch {
-    return { text: await attempt(second), model: second };
+    if (model === fallback) throw new Error(`falha ao chamar o modelo ${model}`);
+    return { text: await attempt(fallback), model: fallback };
   }
 }
 
@@ -217,7 +224,7 @@ export async function detectActivityRelevance(
     .filter(Boolean)
     .join("\n\n");
 
-  const { text, model } = await cheapJsonCompletion(cfg, system, user, 600);
+  const { text, model } = await cheapJsonCompletion(cfg, system, user, 600, cfg.models.detection);
   const parsed = safeParse(text);
   const proposedTheme = str(parsed.proposedTheme);
   const proposedAtores = strArr(parsed.proposedAtores);
@@ -273,7 +280,7 @@ export async function detectCourseProject(
     .filter(Boolean)
     .join("\n\n");
 
-  const { text, model } = await cheapJsonCompletion(cfg, system, user, 700);
+  const { text, model } = await cheapJsonCompletion(cfg, system, user, 700, cfg.models.detection);
   const parsed = safeParse(text);
   return {
     theme: str(parsed.theme),

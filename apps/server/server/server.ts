@@ -13,21 +13,25 @@ import {
   clearAnswerHistory,
   deleteProfessorLink,
   getAiConfig,
+  getActivityAbilities,
   getAnswerRecord,
   getActivityProject,
   getAnswers,
   getCurrentAttemptId,
+  getDebugLog,
   getOverrides,
   getProfessorLinks,
   getProfile,
   getProjectProfile,
   getProjectSource,
+  listDebugLogs,
   listProjectSourceFiles,
   recordAiRun,
   restoreAnswerVersion,
   saveActivityProject,
   saveAiConfig,
   saveAiRequest,
+  saveAnswerGate,
   saveAnswerVersion,
   saveAutoFlavor,
   saveNote,
@@ -37,6 +41,7 @@ import {
   saveProjectSource,
   saveProjectSourceReadme,
   saveTag,
+  setActivityAbility,
 } from "../src/store.js";
 import {
   buildSubjectContext,
@@ -58,13 +63,24 @@ import {
   analyzeActivity,
   buildProjectInstructionBlock,
   composeEffectiveInstructions,
+  isProjectConfident,
   projectFormatHint,
   resolveProjectContext,
 } from "../src/project-context.js";
 import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
 import { analyzeDraftQuality } from "../src/gate.js";
+import { ABILITY_REGISTRY, isAbilityId, mergeAbilities } from "../src/abilities.js";
+import { gateLogReason, shouldLog, writeDebugLog, type DebugProject } from "../src/debug-log.js";
 import { findTemplateDocx } from "../src/template.js";
-import type { AiActivitySections, AiStyle, AnswerRecord, QuizQ, QuizSelection } from "../src/types.js";
+import type {
+  AiActivitySections,
+  AiModels,
+  AiStyle,
+  AnswerRecord,
+  GateResult,
+  QuizQ,
+  QuizSelection,
+} from "../src/types.js";
 import {
   launchUploadSubmit,
   launchQuizSubmit,
@@ -83,6 +99,7 @@ import { officeToPdf, previewCacheDir } from "../src/office.js";
 import { answerToPdf } from "../src/pdf.js";
 import { renderFilledDocx } from "../src/docx.js";
 import { generateDiagramSpec, renderDiagramPng } from "../src/diagram.js";
+import { buildDiagram } from "../src/diagram-tool.js";
 import { applyTemplateDefaults, forceTodayDate, parseUseCases, type UseCase } from "../src/usecase.js";
 import { parseLinkedinUrl } from "../src/linkedin.js";
 import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/organizations.js";
@@ -327,6 +344,7 @@ async function generateAndSave(
   let externalBlock = "";
   let wantsTemplate = false;
   let templateFields: string[] = [];
+  let projectInfo: DebugProject | null = null;
   if (cfg.projectAutoDetect !== false && isAnswerable(view)) {
     try {
       const analysis = await analyzeActivity(cfg, view, { notes: view.notes ?? "" });
@@ -334,7 +352,7 @@ async function generateAndSave(
       templateFields = analysis.templateFields;
       if (wantsTemplate) {
         const main = analysis.mainProfile;
-        if (main) {
+        if (main && isProjectConfident(main)) {
           projectBlock = buildProjectInstructionBlock({
             theme: main.theme,
             atores: main.atores,
@@ -342,10 +360,36 @@ async function generateAndSave(
             origin: "main",
           });
         }
+        projectInfo = {
+          theme: main?.theme ?? "",
+          atores: main?.atores ?? [],
+          requisitos: main?.requisitos ?? [],
+          origin: main ? "main" : null,
+          confidence: main?.confidence ?? analysis.confidence ?? null,
+          source: analysis.source ?? null,
+          model: analysis.activity.model ?? null,
+          intent: analysis.intent ?? null,
+          reason: analysis.reason ?? null,
+          needsProject: analysis.needsProject,
+        };
       } else {
         const resolved = await resolveProjectContext(cfg, view, { notes: view.notes ?? "" });
         if (resolved.effective) projectBlock = buildProjectInstructionBlock(resolved.effective);
         externalBlock = resolved.external;
+        projectInfo = resolved.effective
+          ? {
+              theme: resolved.effective.theme,
+              atores: resolved.effective.atores,
+              requisitos: resolved.effective.requisitos,
+              origin: resolved.effective.origin,
+              confidence: analysis.confidence ?? null,
+              source: analysis.source ?? null,
+              model: analysis.activity.model ?? null,
+              intent: analysis.intent ?? null,
+              reason: analysis.reason ?? null,
+              needsProject: analysis.needsProject,
+            }
+          : null;
       }
     } catch {
       /* project context is best-effort */
@@ -389,6 +433,50 @@ async function generateAndSave(
     latencyMs: Date.now() - startedAt,
     answerAttemptId: attemptId,
   }).catch(() => undefined);
+
+  // Quality gate: runs automatically on every generation (advisory; never
+  // blocks sending) and is persisted with the answer version. A weak result or
+  // a failed rubric check writes a full-context debug log for later analysis.
+  let gate: GateResult | null = null;
+  try {
+    gate = await analyzeDraftQuality(cfg, view, shown);
+    if (gate) {
+      if (shouldLog(gate)) {
+        const written = await writeDebugLog({
+          contentItemId: id,
+          answerAttemptId: attemptId,
+          reason: gateLogReason(gate) ?? "gate",
+          activity: {
+            title: view.title,
+            kind: view.kind,
+            courseName: view.courseName,
+            moduleTitle: view.moduleTitle,
+            instructionsText: view.instructionsText ?? "",
+            files: view.files.map((f) => f.name),
+          },
+          project: projectInfo,
+          templateFields,
+          abilities: cfg.abilities ?? {},
+          generation: {
+            model: gen.model,
+            temperature: cfg.temperature,
+            prompt: gen.prompt,
+            completion: shown,
+            promptHash: gen.promptHash,
+            tokensIn: gen.tokensIn,
+            tokensOut: gen.tokensOut,
+          },
+          gate,
+          createdAt: new Date().toISOString(),
+        }).catch(() => null);
+        gate.logged = Boolean(written && (written.id || written.file));
+      }
+      await saveAnswerGate(id, gate);
+      rec.gate = gate;
+    }
+  } catch {
+    /* gate is best-effort */
+  }
   return { shown, rec };
 }
 
@@ -448,12 +536,15 @@ const server = createServer(async (req, res) => {
       const cfg = await getAiConfig();
       return json(res, 200, {
         model: cfg.model,
+        models: cfg.models,
         max_output_tokens: cfg.max_output_tokens,
         temperature: cfg.temperature,
         configPath: "Postgres · ai_config",
         style: cfg.style,
         activitySections: cfg.activitySections,
         projectAutoDetect: cfg.projectAutoDetect ?? true,
+        abilities: cfg.abilities,
+        abilityRegistry: ABILITY_REGISTRY,
         profile: await getProfile(),
       });
     }
@@ -740,6 +831,22 @@ const server = createServer(async (req, res) => {
       const activity = await getActivityProject(id);
       return json(res, 200, { activity });
     }
+    if (url.startsWith("/api/activity-abilities/") && method === "GET") {
+      const id = Number(url.split("/")[3]);
+      if (!id) return json(res, 400, { error: "id required" });
+      const abilities = await getActivityAbilities(id);
+      return json(res, 200, { abilities });
+    }
+    if (url === "/api/debug-logs" && method === "GET") {
+      return json(res, 200, { logs: await listDebugLogs(50) });
+    }
+    if (url.startsWith("/api/debug-log/") && method === "GET") {
+      const id = Number(url.split("/")[3]);
+      if (!id) return json(res, 400, { error: "id required" });
+      const log = await getDebugLog(id);
+      if (!log) return json(res, 404, { error: "log não encontrado" });
+      return json(res, 200, { log });
+    }
 
     // external project source (Ajustes → Organização): repo + uploaded files
     if (url === "/api/project-source" && method === "GET") {
@@ -817,6 +924,16 @@ const server = createServer(async (req, res) => {
           source: "manual",
         });
         return json(res, 200, { ok: true, activity });
+      }
+      if (url === "/api/activity-ability") {
+        // Per-activity ability toggle: true/false sets an override, null clears it.
+        const b = await readBody(req);
+        const id = Number(b.id);
+        if (!id) return json(res, 400, { error: "id required" });
+        if (!isAbilityId(b.ability)) return json(res, 400, { error: "ability inválida" });
+        const enabled = b.enabled === null ? null : b.enabled === true;
+        const abilities = await setActivityAbility(id, b.ability, enabled);
+        return json(res, 200, { ok: true, abilities });
       }
       if (url === "/api/project-source") {
         // Manual edit of the global project source (title/repo/notes).
@@ -939,8 +1056,19 @@ const server = createServer(async (req, res) => {
       if (url === "/api/ai-config") {
         const b = await readBody(req);
         const cfg = await getAiConfig();
-        const next = { ...cfg };
-        if (b.model != null) next.model = String(b.model).trim() || cfg.model;
+        const next = { ...cfg, models: { ...cfg.models } };
+        if (b.model != null) {
+          next.model = String(b.model).trim() || cfg.model;
+          next.models.generation = next.model;
+        }
+        if (b.models && typeof b.models === "object" && !Array.isArray(b.models)) {
+          const patch = b.models as Record<string, unknown>;
+          for (const key of Object.keys(next.models) as (keyof AiModels)[]) {
+            const v = patch[key];
+            if (typeof v === "string" && v.trim()) next.models[key] = v.trim();
+          }
+          next.model = next.models.generation;
+        }
         if (b.temperature != null) {
           const t = Number(b.temperature);
           if (!Number.isNaN(t)) next.temperature = t;
@@ -961,12 +1089,17 @@ const server = createServer(async (req, res) => {
         if (typeof b.projectAutoDetect === "boolean") {
           next.projectAutoDetect = b.projectAutoDetect;
         }
+        if (b.abilities && typeof b.abilities === "object" && !Array.isArray(b.abilities)) {
+          next.abilities = mergeAbilities({ ...next.abilities, ...(b.abilities as Record<string, unknown>) });
+        }
         await saveAiConfig(next);
         return json(res, 200, {
           ok: true,
           model: next.model,
+          models: next.models,
           temperature: next.temperature,
           max_output_tokens: next.max_output_tokens,
+          abilities: next.abilities,
           style: next.style,
           activitySections: next.activitySections,
           projectAutoDetect: next.projectAutoDetect ?? true,
@@ -985,6 +1118,37 @@ const server = createServer(async (req, res) => {
           const cfg = await getAiConfig();
           const result = await analyzeDraftQuality(cfg, view, draft);
           return json(res, 200, { ok: true, result });
+        } catch (err) {
+          return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+      if (url === "/api/diagram") {
+        // UML diagram tool: build a spec + SVG from the draft (PNG on request).
+        const b = await readBody(req);
+        const id = Number(b.id);
+        if (!id) return json(res, 400, { error: "id required" });
+        const view = await findView(id);
+        const draft = String(b.draft ?? view.answer ?? "").trim();
+        if (!draft) return json(res, 200, { ok: true, diagram: null });
+        try {
+          const cfg = await getAiConfig();
+          const systemName = await resolveSystemName(view);
+          const artifact = await buildDiagram(cfg, view, draft, {
+            systemName,
+            png: b.png === true,
+          });
+          return json(res, 200, {
+            ok: true,
+            diagram: artifact
+              ? {
+                  spec: artifact.spec,
+                  svg: artifact.svg,
+                  pngDataUrl: artifact.png
+                    ? `data:image/png;base64,${artifact.png.toString("base64")}`
+                    : null,
+                }
+              : null,
+          });
         } catch (err) {
           return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
         }

@@ -151,11 +151,21 @@ export interface AnswerEntry {
   updatedAt: string;
   source: AnswerSource;
   selections?: QuizSelection[];
+  /** Persisted quality-gate analysis of this answer version, when available. */
+  gate?: GateResultDto | null;
 }
 
 export interface AnswerState {
   current: AnswerEntry | null;
   history: AnswerEntry[];
+}
+
+/** One deterministic rubric check on a draft. */
+export interface GateCheckDto {
+  code: string;
+  label: string;
+  ok: boolean;
+  detail: string;
 }
 
 /** Quality-gate analysis of a draft (cheap model). */
@@ -170,7 +180,56 @@ export interface GateResultDto {
   issues: string[];
   suggestions: string[];
   model: string;
+  /** Deterministic rubric checks (empty for non-template drafts). */
+  checks: GateCheckDto[];
+  /** True when a full-context debug log was written for this draft. */
+  logged?: boolean;
+  /** Hash of the analyzed draft (used to detect a stale saved analysis). */
+  draftHash?: string;
 }
+
+/** Recent weak-draft diagnostic (list view; payload omitted). */
+export interface DebugLogDto {
+  id: number;
+  contentItemId: number | null;
+  answerAttemptId: number | null;
+  reason: string;
+  filePath: string | null;
+  createdAt: string;
+}
+
+/** Full diagnostic with its captured context. */
+export interface DebugLogFullDto extends DebugLogDto {
+  payload: unknown;
+}
+
+/** One use case node in a generated UML diagram. */
+export interface DiagramUseCaseDto {
+  name: string;
+  actors: string[];
+  includes: string[];
+  extends: string[];
+}
+
+/** A generated UML use-case diagram (spec + rendered SVG). */
+export interface DiagramDto {
+  system: string;
+  actors: string[];
+  useCases: DiagramUseCaseDto[];
+}
+
+export interface DiagramArtifactDto {
+  spec: DiagramDto;
+  svg: string;
+  /** PNG data URL, only when requested. */
+  pngDataUrl: string | null;
+}
+
+/** Every place the app calls a model, so each can use its own. */
+export type AiModelRole = "generation" | "detection" | "classification" | "diagram" | "gate" | "training";
+
+/** Role -> OpenAI model id. */
+export type AiModels = Record<AiModelRole, string>;
 
 export interface AiStyle {
   persona: string;
@@ -191,8 +250,23 @@ export interface AiActivitySections {
   observacoes: boolean;
 }
 
+export type AbilityId = "uml_diagram";
+
+/** Registry metadata for one AI ability/tool. */
+export interface AbilityMeta {
+  id: AbilityId;
+  label: string;
+  description: string;
+  defaultOn: boolean;
+}
+
+/** Global ability switches, keyed by ability id. */
+export type AbilitySettings = Record<string, boolean>;
+
 export interface AiConfigDto {
   model: string;
+  /** Per-purpose model overrides. */
+  models: AiModels;
   configPath: string;
   max_output_tokens?: number;
   temperature?: number;
@@ -200,6 +274,10 @@ export interface AiConfigDto {
   activitySections: AiActivitySections;
   /** Auto-detect project context for answerable activities. */
   projectAutoDetect: boolean;
+  /** Global AI ability switches. */
+  abilities: AbilitySettings;
+  /** Ability registry (labels/descriptions for the UI). */
+  abilityRegistry: AbilityMeta[];
   profile: AiProfile;
 }
 

@@ -21,7 +21,7 @@ import {
   saveActivityProject,
   saveProjectProfile,
 } from "./store.js";
-import type { ActivityProject, AiConfig, Exercise, ProjectProfile } from "./types.js";
+import type { ActivityProject, AiConfig, Exercise, ProjectProfile, ProjectSource } from "./types.js";
 
 const STRONG_SIGNAL =
   /\b(seu|teu|nosso|do grupo|da equipe)\s+(projeto|sistema|site|api|app|tema)\b|\b(caso de uso|casos de uso|diagrama de caso|escopo do projeto|requisitos do projeto|projeto do grupo|tema do grupo|escolha um tema|defina o tema|preencha a tabela|preencha o quadro|preencha o modelo|preencha os campos|complete a tabela|complete o quadro|complete o modelo|siga o modelo)\b/i;
@@ -73,6 +73,21 @@ export interface AnalyzeResult {
   effective: EffectiveProfile | null;
 }
 
+/**
+ * Minimum confidence for an AUTO-detected project to be injected. A manual
+ * profile is always trusted; a low-confidence auto guess is not, so a wrong
+ * domain never silently grounds a submission.
+ */
+export const PROJECT_CONFIDENCE_MIN = 0.6;
+
+export function isProjectConfident(profile: {
+  source: ProjectSource;
+  confidence: number | null;
+}): boolean {
+  if (profile.source === "manual") return true;
+  return profile.confidence == null || profile.confidence >= PROJECT_CONFIDENCE_MIN;
+}
+
 /** The profile that will be injected: the activity's quick project or the main one. */
 export function effectiveProfileFor(
   main: ProjectProfile | null,
@@ -87,7 +102,7 @@ export function effectiveProfileFor(
       origin: "activity",
     };
   }
-  if (!main) return null;
+  if (!main || !isProjectConfident(main)) return null;
   return { theme: main.theme, atores: main.atores, requisitos: main.requisitos, origin: "main" };
 }
 

@@ -273,9 +273,79 @@ export interface ProjectSourceFile {
   createdAt: string;
 }
 
+/** Every place the app calls a model, so each can use its own. */
+export type AiModelRole = "generation" | "detection" | "classification" | "diagram" | "gate" | "training";
+
+/** Role -> OpenAI model id. */
+export type AiModels = Record<AiModelRole, string>;
+
+// ── AI abilities (tools/skills the model can use) ───────────────────────────
+
+/** A capability the AI can use on a draft. Extensible: add an id + registry entry. */
+export type AbilityId = "uml_diagram";
+
+/** Registry metadata for one ability (label/description for the UI). */
+export interface AbilityMeta {
+  id: AbilityId;
+  label: string;
+  description: string;
+  /** Whether the ability is on by default for a fresh config. */
+  defaultOn: boolean;
+}
+
+/** Global per-student ability switches, keyed by ability id. */
+export type AbilitySettings = Record<string, boolean>;
+
+/** Per-activity ability override row. */
+export interface ActivityAbility {
+  contentItemId: number;
+  ability: AbilityId;
+  enabled: boolean;
+}
+
+/** One deterministic rubric check on a draft (template/use-case aware). */
+export interface GateCheck {
+  /** Stable machine code, e.g. `fluxo_alternativo_ancorado`. */
+  code: string;
+  /** Human-facing label in Portuguese. */
+  label: string;
+  ok: boolean;
+  /** Why it failed (empty when ok). */
+  detail: string;
+}
+
+/**
+ * Quality-gate analysis of a draft (cheap model). The overall `score` is
+ * computed by the server, never taken from the model directly.
+ */
+export interface GateResult {
+  /** Weighted 0–100 confidence that the answer is ready to send. */
+  score: number;
+  /** 0–100: does the writing sound natural (not robotic/generic)? */
+  humanScore: number;
+  /** 0–100: does it answer exactly what was asked? */
+  relevanceScore: number;
+  /** 0–100: does it cover everything the task requests? */
+  completenessScore: number;
+  verdict: "ready" | "review" | "weak";
+  /** One-line assessment. */
+  summary: string;
+  issues: string[];
+  suggestions: string[];
+  model: string;
+  /** Deterministic rubric checks (empty when the draft is not a template). */
+  checks: GateCheck[];
+  /** True when a full-context debug log was written for this draft. */
+  logged?: boolean;
+  /** Hash of the draft this analysis was produced from (for staleness checks). */
+  draftHash?: string;
+}
+
 export interface AiConfig {
   provider: "openai";
   model: string;
+  /** Per-purpose model overrides (see `AiModelRole`). */
+  models: AiModels;
   temperature: number;
   max_output_tokens?: number;
   /** Auto-detect project context for answerable activities (default true). */
@@ -284,6 +354,8 @@ export interface AiConfig {
   style: AiStyle;
   /** Which activity sections are included in the user message. */
   activitySections: AiActivitySections;
+  /** Global AI abilities (tools the model can use), keyed by ability id. */
+  abilities: AbilitySettings;
   /** @deprecated legacy free-text style; replaced by `style`. */
   message_template?: string;
   /** @deprecated legacy free-text scaffolding; replaced by `activitySections`. */
@@ -320,6 +392,8 @@ export interface AnswerEntry {
   source?: AnswerSource;
   /** Quiz answer selections (empty for upload tasks). */
   selections?: QuizSelection[];
+  /** Persisted quality-gate analysis of this answer version, when available. */
+  gate?: GateResult | null;
 }
 
 export interface AnswerRecord extends AnswerEntry {

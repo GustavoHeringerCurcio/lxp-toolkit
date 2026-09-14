@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { clampScore, parseGateResult, scoreFromParts, verdictFor } from "../src/gate.js";
+import {
+  applyGateRules,
+  clampScore,
+  draftHash,
+  gateChecks,
+  parseGateResult,
+  scoreFromParts,
+  verdictFor,
+} from "../src/gate.js";
+import type { GateResult } from "../src/types.js";
+import { makeExercise } from "./helpers.js";
+
+describe("draftHash", () => {
+  it("is stable and ignores surrounding whitespace", () => {
+    expect(draftHash("  hello world  ")).toBe(draftHash("hello world"));
+    expect(draftHash("hello world")).not.toBe(draftHash("hello worlds"));
+    // Must match the web-side `hashDraft` (djb2 variant).
+    expect(draftHash("UC-01")).toBe("5:237413931");
+  });
+});
 
 describe("clampScore", () => {
   it("clamps and rounds into 0–100", () => {
@@ -70,5 +89,95 @@ describe("parseGateResult", () => {
     expect(r!.humanScore).toBe(100);
     expect(r!.relevanceScore).toBe(0);
     expect(r!.completenessScore).toBe(50);
+  });
+});
+
+const GOOD_UC = `UC-01 — Login de Usuário
+Identificador: UC-01
+Atores: Usuário
+Descrição / Objetivo: Permitir login.
+Pré-condições: cadastro prévio
+Pós-condições: usuário autenticado
+Fluxo Principal:
+1. O usuário acessa a página de login.
+2. O usuário insere e-mail e senha.
+3. O sistema verifica as credenciais.
+Fluxos Alternativos / Exceções:
+3a. Credenciais incorretas: o sistema exibe erro e solicita nova tentativa.
+Observações: acesso restrito.`;
+
+const BAD_UC = `UC-01 — Login de Usuário
+Atores: Usuário
+Descrição / Objetivo: Permitir login.
+Pós-condições: usuário registrado e autenticado.
+Fluxo Principal:
+1. O usuário acessa a página de login.
+2. O usuário insere e-mail e senha.
+3. O sistema verifica as credenciais.
+Fluxos Alternativos / Exceções:
+5a. O usuário insere credenciais incorretas: exibe erro.
+Observações: não há integração com backend.
+
+UC-02 — Cadastro
+Atores:
+Descrição / Objetivo:
+Fluxo Principal:
+1. Acessa a página.`;
+
+describe("gateChecks", () => {
+  it("passes a well-formed use-case draft", () => {
+    const checks = gateChecks(makeExercise(), GOOD_UC);
+    expect(checks.map((c) => c.code)).toEqual([
+      "uc_estrutura",
+      "fluxo_alternativo_ancorado",
+      "coerencia_pos_observacoes",
+    ]);
+    expect(checks.every((c) => c.ok)).toBe(true);
+  });
+
+  it("catches a mis-anchored alternative flow and a contradicted post-condition", () => {
+    const checks = gateChecks(makeExercise(), BAD_UC);
+    const byCode = Object.fromEntries(checks.map((c) => [c.code, c]));
+    expect(byCode.fluxo_alternativo_ancorado.ok).toBe(false);
+    expect(byCode.fluxo_alternativo_ancorado.detail).toContain("passo 5");
+    expect(byCode.coerencia_pos_observacoes.ok).toBe(false);
+    expect(byCode.uc_estrutura.ok).toBe(false);
+  });
+
+  it("returns no checks for a non-template draft", () => {
+    expect(gateChecks(makeExercise(), "Uma redação qualquer sobre ética.")).toEqual([]);
+  });
+});
+
+describe("applyGateRules", () => {
+  const base: GateResult = {
+    score: 95,
+    humanScore: 90,
+    relevanceScore: 95,
+    completenessScore: 95,
+    verdict: "ready",
+    summary: "",
+    issues: [],
+    suggestions: [],
+    model: "m",
+    checks: [],
+  };
+
+  it("keeps a ready draft with completeness > 90 and no failed checks", () => {
+    expect(applyGateRules(base).verdict).toBe("ready");
+  });
+
+  it("downgrades when completeness is <= 90", () => {
+    const r = applyGateRules({ ...base, completenessScore: 90 });
+    expect(r.verdict).toBe("review");
+    expect(r.score).toBe(79);
+  });
+
+  it("downgrades when a rubric check fails", () => {
+    const r = applyGateRules({
+      ...base,
+      checks: [{ code: "x", label: "x", ok: false, detail: "falhou" }],
+    });
+    expect(r.verdict).toBe("review");
   });
 });

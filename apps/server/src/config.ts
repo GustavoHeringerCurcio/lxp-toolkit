@@ -9,9 +9,11 @@
  */
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { assist } from "./paths.js";
+import { defaultAbilities, mergeAbilities } from "./abilities.js";
 import type {
   AiActivitySections,
   AiConfig,
+  AiModels,
   AiProfile,
   AiStyle,
   AnswerEntry,
@@ -48,14 +50,27 @@ export const DEFAULT_ACTIVITY_SECTIONS: AiActivitySections = {
   observacoes: true,
 };
 
+/** Default model per AI role: generation/diagram/training keep the main model,
+ *  the cheap auxiliary tasks use the cheapest catalog model. */
+export const DEFAULT_MODELS: AiModels = {
+  generation: "gpt-4o",
+  detection: "gpt-5-nano",
+  classification: "gpt-5-nano",
+  diagram: "gpt-4o",
+  gate: "gpt-5-nano",
+  training: "gpt-4o",
+};
+
 const DEFAULT_AI_CONFIG: AiConfig = {
   provider: "openai",
-  model: "gpt-4o",
+  model: DEFAULT_MODELS.generation,
+  models: { ...DEFAULT_MODELS },
   temperature: 0.7,
   max_output_tokens: 4000,
   projectAutoDetect: true,
   style: { ...DEFAULT_STYLE },
   activitySections: { ...DEFAULT_ACTIVITY_SECTIONS },
+  abilities: defaultAbilities(),
 };
 
 export function openaiKey(): string {
@@ -73,6 +88,7 @@ function freshDefaultConfig(): AiConfig {
     ...DEFAULT_AI_CONFIG,
     style: { ...DEFAULT_STYLE },
     activitySections: { ...DEFAULT_ACTIVITY_SECTIONS },
+    abilities: defaultAbilities(),
   };
 }
 
@@ -84,11 +100,17 @@ export function loadAiConfig(): AiConfig {
     // Structured fields are merged over the defaults; legacy free-text fields
     // (`message_template` / `activity_template`) are intentionally ignored — the
     // old scaffolding is exactly what made the model echo section markers.
+    const models = { ...DEFAULT_MODELS, ...(raw.models ?? {}) };
+    // `model` is the canonical generation field; keep the role map in sync.
+    if (raw.model) models.generation = raw.model;
     return {
       ...DEFAULT_AI_CONFIG,
       ...raw,
+      model: models.generation,
+      models,
       style: { ...DEFAULT_STYLE, ...(raw.style ?? {}) },
       activitySections: { ...DEFAULT_ACTIVITY_SECTIONS, ...(raw.activitySections ?? {}) },
+      abilities: mergeAbilities(raw.abilities),
     };
   } catch {
     return freshDefaultConfig();

@@ -74,7 +74,9 @@ export function parseUseCases(text: string, templateLabels: string[] = []): UseC
     const field = line.match(/^([^:\n]{1,80}?):\s*(.*)$/);
     if (field) {
       const key = normalizeLabel(field[1]);
-      const isStep = /^\s*\d+[.)]/.test(field[1]);
+      // A numbered step, including an alternative-flow anchor ("3a. ..."),
+      // must never be mistaken for a "Campo: valor" line.
+      const isStep = /^\s*\d+\s*[a-z]?\s*[.)]/i.test(field[1]);
       if (!isStep && (known.size === 0 || known.has(key))) {
         current.fields[key] = field[2].trim();
         lastField = key;
@@ -121,7 +123,13 @@ export function buildTemplateFillContract(fields: string[] = [], today?: string)
       : " Use os campos do modelo apresentado no enunciado, na ordem em que aparecem.") +
     (today ? ` No campo "Data", use a data de hoje: ${today}.` : "") +
     " Em campos com vários passos (ex.: fluxos), liste cada passo em uma linha numerada." +
-    " Preencha todos os campos e não invente campos novos. Responda em texto simples, sem tabela Markdown."
+    " Preencha todos os campos e não invente campos novos. Responda em texto simples, sem tabela Markdown." +
+    " Regras de qualidade obrigatórias:" +
+    " cada item deve ter um ator real, um objetivo concreto e um fluxo principal com pelo menos 2 passos;" +
+    ' em fluxos alternativos/exceções, cada exceção deve começar com o número do passo do fluxo principal que falhou (ex.: "3a." para uma falha no passo 3);' +
+    " as pós-condições não podem contradizer as observações, regras de negócio ou requisitos;" +
+    " use os mesmos atores e a mesma terminologia em todos os itens;" +
+    " baseie todo o conteúdo no contexto do projeto fornecido — nunca troque por outro domínio inventado."
   );
 }
 

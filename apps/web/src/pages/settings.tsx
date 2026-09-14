@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  Bug,
   Check,
   Building2,
   Eye,
@@ -10,6 +11,7 @@ import {
   Monitor,
   Moon,
   Palette,
+  Puzzle,
   RotateCcw,
   Save,
   SlidersHorizontal,
@@ -22,6 +24,7 @@ import { useAppData } from "@/lib/app-state";
 import { BackLink } from "@/components/app-sidebar";
 import { OrganizationSection } from "@/components/organization-section";
 import { ProjectSourceSection } from "@/components/project-source-section";
+import { DebugLogsSection } from "@/components/debug-logs-section";
 import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_STYLE, renderStylePreview } from "@/lib/prompt-preview";
 import {
   ESTIMATED_GENERATION_TOKENS,
@@ -34,7 +37,7 @@ import { useT } from "@/lib/i18n";
 import { useTheme, type Theme } from "@/lib/theme";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { cn } from "@/lib/utils";
-import type { AiActivitySections, AiProfile, AiStyle } from "@/types";
+import type { AbilitySettings, AiActivitySections, AiModels, AiProfile, AiStyle } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -43,6 +46,24 @@ import { Textarea } from "@/components/ui/textarea";
 type SettingsTab = "personal" | "ai" | "advanced" | "organizacao";
 
 const TABS: SettingsTab[] = ["personal", "ai", "advanced", "organizacao"];
+
+const DEFAULT_MODELS: AiModels = {
+  generation: "gpt-4o",
+  detection: "gpt-5-nano",
+  classification: "gpt-5-nano",
+  diagram: "gpt-4o",
+  gate: "gpt-5-nano",
+  training: "gpt-4o",
+};
+
+const MODEL_ROLES: { role: keyof AiModels; labelKey: string; hintKey: string }[] = [
+  { role: "generation", labelKey: "settings.models.generation", hintKey: "settings.models.generationHint" },
+  { role: "detection", labelKey: "settings.models.detection", hintKey: "settings.models.detectionHint" },
+  { role: "classification", labelKey: "settings.models.classification", hintKey: "settings.models.classificationHint" },
+  { role: "diagram", labelKey: "settings.models.diagram", hintKey: "settings.models.diagramHint" },
+  { role: "gate", labelKey: "settings.models.gate", hintKey: "settings.models.gateHint" },
+  { role: "training", labelKey: "settings.models.training", hintKey: "settings.models.trainingHint" },
+];
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -158,12 +179,13 @@ export function SettingsPage() {
   const [tab, setTab] = useLocalStorage<SettingsTab>("lxp.settings.tab", "ai");
   const [style, setStyle] = useState<AiStyle>(DEFAULT_STYLE);
   const [sections, setSections] = useState<AiActivitySections>(DEFAULT_ACTIVITY_SECTIONS);
-  const [model, setModel] = useState("");
+  const [models, setModels] = useState<AiModels>(DEFAULT_MODELS);
   const [temperature, setTemperature] = useState("");
   const [maxTokens, setMaxTokens] = useState("");
   const [nome, setNome] = useState("");
   const [matricula, setMatricula] = useState("");
   const [projectAutoDetect, setProjectAutoDetect] = useState(true);
+  const [abilities, setAbilities] = useState<AbilitySettings>({});
   const [showPreview, setShowPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -173,29 +195,39 @@ export function SettingsPage() {
     if (!cfg) return;
     setStyle({ ...DEFAULT_STYLE, ...cfg.style });
     setSections({ ...DEFAULT_ACTIVITY_SECTIONS, ...cfg.activitySections });
-    setModel(cfg.model);
+    setModels({
+      ...DEFAULT_MODELS,
+      ...(cfg.models ?? {}),
+      generation: cfg.models?.generation ?? cfg.model,
+    });
     setTemperature(String(cfg.temperature ?? ""));
     setMaxTokens(String(cfg.max_output_tokens ?? ""));
     setNome(cfg.profile?.nome ?? "");
     setMatricula(cfg.profile?.matricula ?? "");
     setProjectAutoDetect(cfg.projectAutoDetect !== false);
+    setAbilities({ ...cfg.abilities });
   }, [cfg]);
 
+  const model = models.generation;
   const selectedModel = findModel(model);
   const generationCost = estimateGenerationCostUsd(model);
-  const modelGroups = useMemo(() => {
-    const groups = groupModels();
-    if (model && !selectedModel) {
-      return [
-        {
-          group: t("settings.modelCustom"),
-          models: [{ id: model, label: model, group: "custom", input: 0, output: 0 }],
-        },
-        ...groups,
-      ];
-    }
-    return groups;
-  }, [model, selectedModel, t]);
+  const baseGroups = useMemo(() => groupModels(), []);
+  const groupsWithCustom = (value: string) =>
+    value && !findModel(value)
+      ? [
+          {
+            group: t("settings.modelCustom"),
+            models: [{ id: value, label: value, group: "custom", input: 0, output: 0 }],
+          },
+          ...baseGroups,
+        ]
+      : baseGroups;
+
+  const patchModel = (role: keyof AiModels, value: string) => {
+    setModels((prev) => ({ ...prev, [role]: value }));
+    setMsg(null);
+    setErr(null);
+  };
 
   const patchStyle = (patch: Partial<AiStyle>) => {
     setStyle((prev) => ({ ...prev, ...patch }));
@@ -226,23 +258,28 @@ export function SettingsPage() {
       if (Number.isNaN(temp)) throw new Error(t("settings.invalidTemperature"));
       if (Number.isNaN(maxTok) || maxTok <= 0) throw new Error(t("settings.invalidMaxTokens"));
       const nextModel = model.trim() || cfg?.model || "gpt-4o";
+      const nextModels = { ...models, generation: nextModel };
       const profile: AiProfile = { nome: nome.trim(), matricula: matricula.trim() };
       await saveAiConfig({
         model: nextModel,
+        models: nextModels,
         temperature: temp,
         max_output_tokens: maxTok,
         style,
         activitySections: sections,
         projectAutoDetect,
+        abilities,
       });
       await saveProfile(profile);
       patchConfig({
         model: nextModel,
+        models: nextModels,
         temperature: temp,
         max_output_tokens: maxTok,
         style,
         activitySections: sections,
         projectAutoDetect,
+        abilities,
         profile,
       });
       setMsg(t("settings.saved"));
@@ -492,38 +529,56 @@ export function SettingsPage() {
               }}
             />
           </Card>
+
+          <Card icon={<Puzzle className="size-4 text-brand" aria-hidden />} title={t("settings.abilities")}>
+            <p className="text-xs text-muted-foreground">{t("settings.abilitiesIntro")}</p>
+            {(cfg?.abilityRegistry ?? []).map((ability) => (
+              <Toggle
+                key={ability.id}
+                label={ability.label}
+                hint={ability.description}
+                checked={abilities[ability.id] === true}
+                onChange={(v) => {
+                  setAbilities((prev) => ({ ...prev, [ability.id]: v }));
+                  setMsg(null);
+                  setErr(null);
+                }}
+              />
+            ))}
+          </Card>
         </>
       )}
 
       {tab === "advanced" && (
         <>
+          <Card icon={<SlidersHorizontal className="size-4 text-brand" aria-hidden />} title={t("settings.models.title")}>
+            <p className="text-xs text-muted-foreground">{t("settings.models.intro")}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {MODEL_ROLES.map(({ role, labelKey, hintKey }) => (
+                <Field key={role} label={t(labelKey)} hint={t(hintKey)}>
+                  <Select
+                    value={models[role]}
+                    aria-label={t(labelKey)}
+                    onChange={(ev) => patchModel(role, ev.target.value)}
+                  >
+                    {groupsWithCustom(models[role]).map((g) => (
+                      <optgroup key={g.group} label={g.group}>
+                        {g.models.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label}
+                            {m.recommended ? ` · ${t("settings.modelRecommended")}` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </Select>
+                </Field>
+              ))}
+            </div>
+          </Card>
+
           <Card icon={<SlidersHorizontal className="size-4 text-brand" aria-hidden />} title={t("settings.generation")}>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field
-                label={t("settings.model")}
-                hint={!selectedModel && model ? t("settings.modelUnknown") : undefined}
-              >
-                <Select
-                  value={model}
-                  aria-label={t("settings.model")}
-                  onChange={(ev) => {
-                    setModel(ev.target.value);
-                    setMsg(null);
-                    setErr(null);
-                  }}
-                >
-                  {modelGroups.map((g) => (
-                    <optgroup key={g.group} label={g.group}>
-                      {g.models.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.label}
-                          {m.recommended ? ` · ${t("settings.modelRecommended")}` : ""}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </Select>
-              </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t("settings.temperature")}>
                 <Input
                   type="number"
@@ -572,6 +627,10 @@ export function SettingsPage() {
             {cfg?.configPath && (
               <p className="text-[11px] text-muted-foreground">{t("settings.configPath", { path: cfg.configPath })}</p>
             )}
+          </Card>
+
+          <Card icon={<Bug className="size-4 text-brand" aria-hidden />} title={t("debug.title")}>
+            <DebugLogsSection />
           </Card>
 
           {showPreview && (

@@ -7,15 +7,20 @@
  */
 import { query, withTransaction } from "./db.js";
 import { linkedinAvatarUrl } from "./linkedin.js";
-import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_STYLE, loadAiConfig, loadProfile } from "./config.js";
+import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_MODELS, DEFAULT_STYLE, loadAiConfig, loadProfile } from "./config.js";
+import { mergeAbilities } from "./abilities.js";
 import type {
+  ActivityAbility,
   ActivityProject,
   AiConfig,
+  AiModels,
   AiProfile,
+  AbilityId,
   AnswerRecord,
   AnswerSource,
   Answers,
   ExerciseStatus,
+  GateResult,
   Overrides,
   OverridesEntry,
   ProfessorLink,
@@ -151,6 +156,7 @@ interface AttemptRow {
   source: string;
   content: string;
   is_current: boolean;
+  gate_json: unknown;
 }
 
 interface SelectionRow {
@@ -170,11 +176,16 @@ function toSelections(rows: SelectionRow[]): QuizSelection[] {
   }));
 }
 
+function toGate(value: unknown): GateResult | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as GateResult;
+}
+
 export async function getAnswers(): Promise<Answers> {
   const studentId = await getStudentId();
   const [attempts, selections] = await Promise.all([
     query<AttemptRow>(
-      `SELECT id, content_item_id, created_at, source, content, is_current
+      `SELECT id, content_item_id, created_at, source, content, is_current, gate_json
        FROM answer_attempt WHERE student_id = $1 ORDER BY created_at`,
       [studentId],
     ),
@@ -212,6 +223,7 @@ export async function getAnswers(): Promise<Answers> {
       updatedAt: iso(a.created_at),
       source: (a.source === "manual" ? "manual" : "ai") as AnswerSource,
       selections: toSelections(byAttempt.get(Number(a.id)) ?? []),
+      gate: toGate(a.gate_json),
     });
     out[key] = { ...entry(current), history: list.filter((a) => a !== current).map(entry) };
   }
@@ -229,6 +241,20 @@ export async function getCurrentAttemptId(id: number | string): Promise<number |
     [Number(id), studentId],
   );
   return rows[0] ? Number(rows[0].id) : null;
+}
+
+/**
+ * Persist the quality-gate analysis on the current answer version, so it is
+ * saved together with the draft and travels with history/restore. No-op when the
+ * item has no answer version yet.
+ */
+export async function saveAnswerGate(id: number | string, gate: GateResult | null): Promise<void> {
+  const studentId = await getStudentId();
+  await query(
+    `UPDATE answer_attempt SET gate_json = $1
+      WHERE content_item_id = $2 AND student_id = $3 AND is_current`,
+    [gate == null ? null : JSON.stringify(gate), Number(id), studentId],
+  );
 }
 
 export async function saveAnswerVersion(
@@ -556,12 +582,20 @@ interface AiConfigRow {
   style_json: unknown;
   sections_json: unknown;
   project_auto_detect: boolean | null;
+  models_json: unknown;
+  abilities_json: unknown;
+}
+
+/** Merge the stored per-role models over the defaults, with `model` as the
+ *  generation alias for backward compatibility. */
+function toAiModels(value: unknown, generation: string): AiModels {
+  return { ...DEFAULT_MODELS, ...((value as Partial<AiModels>) ?? {}), generation };
 }
 
 export async function getAiConfig(): Promise<AiConfig> {
   const studentId = await getStudentId();
   const rows = await query<AiConfigRow>(
-    "SELECT provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect FROM ai_config WHERE student_id = $1",
+    "SELECT provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect, models_json, abilities_json FROM ai_config WHERE student_id = $1",
     [studentId],
   );
   const row = rows[0];
@@ -574,6 +608,7 @@ export async function getAiConfig(): Promise<AiConfig> {
   return {
     provider: "openai",
     model: row.model,
+    models: toAiModels(row.models_json, row.model),
     temperature: row.temperature ?? 0.7,
     max_output_tokens: row.max_output_tokens ?? undefined,
     projectAutoDetect: row.project_auto_detect ?? true,
@@ -582,14 +617,16 @@ export async function getAiConfig(): Promise<AiConfig> {
       ...DEFAULT_ACTIVITY_SECTIONS,
       ...((row.sections_json as Partial<AiConfig["activitySections"]>) ?? {}),
     },
+    abilities: mergeAbilities(row.abilities_json),
   };
 }
 
 export async function saveAiConfig(cfg: AiConfig): Promise<void> {
   const studentId = await getStudentId();
+  const models = toAiModels(cfg.models, cfg.models?.generation ?? cfg.model);
   await query(
-    `INSERT INTO ai_config(student_id, provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
+    `INSERT INTO ai_config(student_id, provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect, models_json, abilities_json, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
      ON CONFLICT (student_id) DO UPDATE SET
        provider = EXCLUDED.provider,
        model = EXCLUDED.model,
@@ -598,18 +635,71 @@ export async function saveAiConfig(cfg: AiConfig): Promise<void> {
        style_json = EXCLUDED.style_json,
        sections_json = EXCLUDED.sections_json,
        project_auto_detect = EXCLUDED.project_auto_detect,
+       models_json = EXCLUDED.models_json,
+       abilities_json = EXCLUDED.abilities_json,
        updated_at = now()`,
     [
       studentId,
       cfg.provider,
-      cfg.model,
+      models.generation,
       cfg.temperature ?? null,
       cfg.max_output_tokens ?? null,
       JSON.stringify(cfg.style),
       JSON.stringify(cfg.activitySections),
       cfg.projectAutoDetect ?? true,
+      JSON.stringify(models),
+      JSON.stringify(mergeAbilities(cfg.abilities)),
     ],
   );
+}
+
+// ── Per-activity abilities ──────────────────────────────────────────────────
+
+interface ActivityAbilityRow {
+  ability: string;
+  enabled: boolean;
+}
+
+/** Per-activity ability overrides for one content item, keyed by ability id. */
+export async function getActivityAbilities(
+  contentItemId: number,
+): Promise<Partial<Record<AbilityId, boolean>>> {
+  const studentId = await getStudentId();
+  const rows = await query<ActivityAbilityRow>(
+    "SELECT ability, enabled FROM activity_ability WHERE content_item_id = $1 AND student_id = $2",
+    [contentItemId, studentId],
+  );
+  const out: Partial<Record<AbilityId, boolean>> = {};
+  for (const r of rows) out[r.ability as AbilityId] = r.enabled;
+  return out;
+}
+
+/** Set (or clear, with `enabled === null`) a per-activity ability override. */
+export async function setActivityAbility(
+  contentItemId: number,
+  ability: AbilityId,
+  enabled: boolean | null,
+): Promise<ActivityAbility[]> {
+  const studentId = await getStudentId();
+  if (enabled === null) {
+    await query(
+      "DELETE FROM activity_ability WHERE content_item_id = $1 AND student_id = $2 AND ability = $3",
+      [contentItemId, studentId, ability],
+    );
+  } else {
+    await query(
+      `INSERT INTO activity_ability(content_item_id, student_id, ability, enabled, updated_at)
+       VALUES ($1,$2,$3,$4, now())
+       ON CONFLICT (content_item_id, student_id, ability) DO UPDATE SET
+         enabled = EXCLUDED.enabled, updated_at = now()`,
+      [contentItemId, studentId, ability, enabled],
+    );
+  }
+  const rows = await query<ActivityAbilityRow>(
+    "SELECT ability, enabled FROM activity_ability WHERE content_item_id = $1 AND student_id = $2",
+    [contentItemId, studentId],
+  );
+  return rows.map((r) => ({ contentItemId, ability: r.ability as AbilityId, enabled: r.enabled }));
 }
 
 export interface AiRunRecord {
@@ -642,6 +732,96 @@ export async function recordAiRun(run: AiRunRecord): Promise<void> {
       run.answerAttemptId,
     ],
   );
+}
+
+// ── Debug logs (weak-draft diagnostics) ─────────────────────────────────────
+
+export interface DebugLogInput {
+  contentItemId: number | null;
+  answerAttemptId: number | null;
+  reason: string;
+  filePath: string | null;
+  payload: unknown;
+}
+
+export interface DebugLogEntry {
+  id: number;
+  contentItemId: number | null;
+  answerAttemptId: number | null;
+  reason: string;
+  filePath: string | null;
+  payload: unknown;
+  createdAt: string;
+}
+
+interface DebugLogRow {
+  id: string;
+  content_item_id: string | null;
+  answer_attempt_id: string | null;
+  reason: string;
+  file_path: string | null;
+  payload: unknown;
+  created_at: Date;
+}
+
+function toDebugLog(r: DebugLogRow): DebugLogEntry {
+  return {
+    id: Number(r.id),
+    contentItemId: r.content_item_id != null ? Number(r.content_item_id) : null,
+    answerAttemptId: r.answer_attempt_id != null ? Number(r.answer_attempt_id) : null,
+    reason: r.reason,
+    filePath: r.file_path,
+    payload: r.payload,
+    createdAt: iso(r.created_at),
+  };
+}
+
+export async function insertDebugLog(input: DebugLogInput): Promise<number> {
+  const studentId = await getStudentId();
+  const rows = await query<{ id: string }>(
+    `INSERT INTO debug_log(student_id, content_item_id, answer_attempt_id, reason, file_path, payload)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+    [
+      studentId,
+      input.contentItemId,
+      input.answerAttemptId,
+      input.reason,
+      input.filePath,
+      JSON.stringify(input.payload),
+    ],
+  );
+  return Number(rows[0]?.id ?? 0);
+}
+
+/** Recent debug logs, newest first (payload omitted for the list view). */
+export async function listDebugLogs(limit = 50): Promise<Omit<DebugLogEntry, "payload">[]> {
+  const studentId = await getStudentId();
+  const rows = await query<DebugLogRow>(
+    `SELECT id, content_item_id, answer_attempt_id, reason, file_path, NULL AS payload, created_at
+     FROM debug_log WHERE student_id = $1 ORDER BY created_at DESC LIMIT $2`,
+    [studentId, limit],
+  );
+  return rows.map((r) => {
+    const entry = toDebugLog(r);
+    return {
+      id: entry.id,
+      contentItemId: entry.contentItemId,
+      answerAttemptId: entry.answerAttemptId,
+      reason: entry.reason,
+      filePath: entry.filePath,
+      createdAt: entry.createdAt,
+    };
+  });
+}
+
+export async function getDebugLog(id: number): Promise<DebugLogEntry | null> {
+  const studentId = await getStudentId();
+  const rows = await query<DebugLogRow>(
+    `SELECT id, content_item_id, answer_attempt_id, reason, file_path, payload, created_at
+     FROM debug_log WHERE student_id = $1 AND id = $2`,
+    [studentId, id],
+  );
+  return rows[0] ? toDebugLog(rows[0]) : null;
 }
 
 // ── Project context ─────────────────────────────────────────────────────────

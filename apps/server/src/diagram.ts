@@ -262,7 +262,7 @@ export async function generateDiagramSpec(
 
   const withRelations = (s: DiagramSpec): DiagramSpec => applyRelations(s, deriveRelations(cases));
   try {
-    const { text } = await cheapJsonCompletion(cfg, sys, user, 900, false);
+    const { text } = await cheapJsonCompletion(cfg, sys, user, 900, cfg.models.diagram);
     const parsed = JSON.parse(text) as unknown;
     const spec = coerceSpec(parsed);
     if (spec) {

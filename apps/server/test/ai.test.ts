@@ -19,12 +19,23 @@ const STYLE = {
 
 const SECTIONS = { enunciado: true, arquivos: false, questoes: false, observacoes: false } as const;
 
+const MODELS = {
+  generation: "gpt-4o",
+  detection: "gpt-5-nano",
+  classification: "gpt-5-nano",
+  diagram: "gpt-4o",
+  gate: "gpt-5-nano",
+  training: "gpt-4o",
+} as const;
+
 const CFG = {
   provider: "openai",
   model: "gpt-4o",
+  models: MODELS,
   temperature: 0.7,
   style: STYLE,
   activitySections: SECTIONS,
+  abilities: {},
 } as const;
 
 const PROFILE = { nome: "Maria", matricula: "2024001" };

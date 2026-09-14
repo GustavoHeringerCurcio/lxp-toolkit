@@ -1,28 +1,17 @@
-import type { AiConfig, Exercise } from "./types.js";
+import type { AiConfig, Exercise, GateCheck, GateResult } from "./types.js";
 import { cheapJsonCompletion } from "./ai.js";
 import { stripHtml } from "./build.js";
+import { parseUseCases } from "./usecase.js";
 
 /**
- * Quality gate for a generated draft. One cheap-model JSON call that judges how
- * human the writing sounds, how well it answers the professor's question, and
- * how complete it is. The overall `score` is computed here (not by the model) so
- * a single number can never be inflated.
+ * Stable hash of the analyzed draft, used to detect a stale saved analysis.
+ * Must match the web-side `hashDraft` in `gate-panel.tsx` (same djb2 variant).
  */
-export interface GateResult {
-  /** Weighted 0–100 confidence that the answer is ready to send. */
-  score: number;
-  /** 0–100: does the writing sound natural (not robotic/generic)? */
-  humanScore: number;
-  /** 0–100: does it answer exactly what was asked? */
-  relevanceScore: number;
-  /** 0–100: does it cover everything the task requests? */
-  completenessScore: number;
-  verdict: "ready" | "review" | "weak";
-  /** One-line assessment. */
-  summary: string;
-  issues: string[];
-  suggestions: string[];
-  model: string;
+export function draftHash(text: string): string {
+  const s = text.trim();
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return `${s.length}:${h}`;
 }
 
 /** Clamp a model-provided number into an integer 0–100. */
@@ -88,7 +77,111 @@ export function parseGateResult(text: string, model: string): GateResult | null 
     issues: strArr(o.issues),
     suggestions: strArr(o.suggestions),
     model,
+    checks: [],
   };
+}
+
+// ── Deterministic rubric checks (template / use-case aware) ─────────────────
+
+/** Look up a field by normalized label, tolerating longer variants. */
+function fieldByPrefix(fields: Record<string, string>, prefix: string): string {
+  const exact = fields[prefix];
+  if (exact != null) return exact;
+  const key = Object.keys(fields).find((k) => k.startsWith(prefix));
+  return key ? fields[key] : "";
+}
+
+/** Numbers of the numbered steps in a main flow ("1. ...", "2) ..."). */
+function stepNumbers(flow: string): number[] {
+  const nums: number[] = [];
+  for (const line of flow.split("\n")) {
+    const m = line.match(/^\s*(\d+)\s*[.)]/);
+    if (m) nums.push(Number(m[1]));
+  }
+  return nums;
+}
+
+/**
+ * Deterministic checks for a "fill the professor's template" draft. Returns an
+ * empty list when the draft is not a use-case template, so non-template drafts
+ * are unaffected. These catch the exact failure modes an LLM tends to make:
+ * missing actors/goals, alternative flows that point at a non-existent step,
+ * and post-conditions contradicted by the student's own observations.
+ */
+export function gateChecks(_e: Exercise, draft: string): GateCheck[] {
+  const cases = parseUseCases(draft);
+  if (!cases.length) return [];
+  const checks: GateCheck[] = [];
+
+  const structural: string[] = [];
+  for (const c of cases) {
+    const name = c.name || c.id;
+    const missing: string[] = [];
+    if (!fieldByPrefix(c.fields, "atores").trim()) missing.push("atores");
+    if (!fieldByPrefix(c.fields, "descricao objetivo").trim()) missing.push("objetivo");
+    const steps = fieldByPrefix(c.fields, "fluxo principal")
+      .split("\n")
+      .filter((l) => l.trim()).length;
+    if (steps < 2) missing.push("fluxo principal (>= 2 passos)");
+    if (missing.length) structural.push(`${name}: falta ${missing.join(", ")}`);
+  }
+  checks.push({
+    code: "uc_estrutura",
+    label: "Estrutura de cada caso de uso (atores, objetivo, fluxo)",
+    ok: structural.length === 0,
+    detail: structural.join("; "),
+  });
+
+  const anchors: string[] = [];
+  for (const c of cases) {
+    const main = new Set(stepNumbers(fieldByPrefix(c.fields, "fluxo principal")));
+    for (const line of fieldByPrefix(c.fields, "fluxos alternativos").split("\n")) {
+      const m = line.match(/^\s*(\d+)\s*[a-z]/i);
+      if (m && !main.has(Number(m[1]))) {
+        anchors.push(`${c.name || c.id}: "${line.trim().slice(0, 60)}" aponta para o passo ${m[1]} inexistente`);
+      }
+    }
+  }
+  checks.push({
+    code: "fluxo_alternativo_ancorado",
+    label: "Fluxos alternativos ancorados no fluxo principal",
+    ok: anchors.length === 0,
+    detail: anchors.join("; "),
+  });
+
+  const contradictions: string[] = [];
+  for (const c of cases) {
+    const post = fieldByPrefix(c.fields, "pos condicoes");
+    const obs = fieldByPrefix(c.fields, "observacoes");
+    if (post.trim() && obs.trim() && /\bn[aã]o\b|\bsem\b|\bnunca\b|\bn[aã]o h[aá]\b/i.test(obs)) {
+      contradictions.push(`${c.name || c.id}: observação contradiz a pós-condição ("${obs.trim().slice(0, 80)}")`);
+    }
+  }
+  checks.push({
+    code: "coerencia_pos_observacoes",
+    label: "Pós-condição coerente com as observações",
+    ok: contradictions.length === 0,
+    detail: contradictions.join("; "),
+  });
+
+  return checks;
+}
+
+/**
+ * Apply the hard rubric rules on top of the model's scores. Completeness must
+ * be strictly above 90 to be considered ready, and any failed check downgrades
+ * "ready" to "review" (the draft is never auto-approved with known issues).
+ */
+export function applyGateRules(result: GateResult): GateResult {
+  const checks = result.checks ?? [];
+  const failed = checks.filter((c) => !c.ok);
+  let verdict = result.verdict;
+  if (result.completenessScore <= 90 && verdict === "ready") verdict = "review";
+  if (failed.length && verdict === "ready") verdict = "review";
+  let score = result.score;
+  if (verdict === "review") score = Math.min(score, 79);
+  if (verdict === "weak") score = Math.min(score, 49);
+  return { ...result, score, verdict, checks };
 }
 
 const SYSTEM =
@@ -102,8 +195,9 @@ const SYSTEM =
   "Seja honesto e exigente: notas altas só quando a resposta realmente merecer. Escreva em português.";
 
 /**
- * Analyze a draft against the activity's question with the cheapest model.
- * Best-effort: returns null on any failure or empty input.
+ * Analyze a draft against the activity's question with the configured gate
+ * model, then apply the deterministic rubric checks and hard rules. Best-effort:
+ * returns null on any failure or empty input.
  */
 export async function analyzeDraftQuality(
   cfg: AiConfig,
@@ -121,8 +215,14 @@ export async function analyzeDraftQuality(
   ].join("\n\n");
 
   try {
-    const { text, model } = await cheapJsonCompletion(cfg, SYSTEM, user, 700);
-    return parseGateResult(text, model);
+    const { text, model } = await cheapJsonCompletion(cfg, SYSTEM, user, 700, cfg.models.gate);
+    const result = parseGateResult(text, model);
+    if (!result) return null;
+    return applyGateRules({
+      ...result,
+      checks: gateChecks(e, draftText),
+      draftHash: draftHash(draftText),
+    });
   } catch {
     return null;
   }

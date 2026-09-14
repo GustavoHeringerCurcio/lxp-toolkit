@@ -79,6 +79,26 @@ describe("parseUseCases", () => {
     expect(cases[0].fields["fluxo principal"]).toContain("1. Passo: com dois pontos");
   });
 
+  it("mantém exceções ancoradas (3a.) no campo de fluxos alternativos", () => {
+    const text = [
+      "UC-01 — Login",
+      "Fluxo Principal:",
+      "1. Acessa",
+      "2. Informa credenciais",
+      "3. Sistema valida",
+      "Fluxos Alternativos / Exceções:",
+      "3a. Credenciais inválidas: exibe erro",
+      "Observações: acesso restrito",
+    ].join("\n");
+    const cases = parseUseCases(text, LABELS);
+    expect(Object.keys(cases[0].fields)).toEqual([
+      "fluxo principal",
+      "fluxos alternativos excecoes",
+      "observacoes",
+    ]);
+    expect(cases[0].fields["fluxos alternativos excecoes"]).toContain("3a. Credenciais inválidas");
+  });
+
   it("aceita cabeçalho sem cerquilha e com dois-pontos", () => {
     const cases = parseUseCases("UC-03: Fazer Login\nPrioridade: Alta", LABELS);
     expect(cases).toHaveLength(1);
@@ -115,6 +135,14 @@ describe("buildTemplateFillContract", () => {
   it("inclui a data de hoje quando fornecida", () => {
     const contract = buildTemplateFillContract(["Data"], "13/09/2026");
     expect(contract).toContain("13/09/2026");
+  });
+
+  it("declara as regras de qualidade (âncora de exceção, coerência)", () => {
+    const contract = buildTemplateFillContract(["Fluxo Principal"]);
+    expect(contract).toContain("pelo menos 2 passos");
+    expect(contract).toContain("3a");
+    expect(contract).toContain("não podem contradizer");
+    expect(contract).toContain("contexto do projeto");
   });
 });
 

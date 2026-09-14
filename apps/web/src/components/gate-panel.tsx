@@ -5,6 +5,7 @@ import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { Exercise, GateResultDto } from "@/types";
 import { Button } from "@/components/ui/button";
+import { CollapsibleCard } from "@/components/collapsible-card";
 
 /** Tiny, stable hash so identical drafts are not re-analyzed. */
 function hashDraft(s: string): string {
@@ -60,7 +61,17 @@ function BulletList({ title, items, tone }: { title: string; items: string[]; to
  * against the professor's question, rendered as a confidence bar. Advisory only
  * — it never blocks sending.
  */
-export function GatePanel({ e, draft, token }: { e: Exercise; draft: string; token: number }) {
+export function GatePanel({
+  e,
+  draft,
+  token,
+  initial,
+}: {
+  e: Exercise;
+  draft: string;
+  token: number;
+  initial?: GateResultDto | null;
+}) {
   const { t } = useT();
   const [result, setResult] = useState<GateResultDto | null>(null);
   const [loading, setLoading] = useState(false);
@@ -108,6 +119,15 @@ export function GatePanel({ e, draft, token }: { e: Exercise; draft: string; tok
     cache.current.clear();
   }, [e.id]);
 
+  // Hydrate from the saved analysis (persisted with the answer version) when it
+  // matches the current draft, so revisiting an activity costs no AI call.
+  useEffect(() => {
+    if (result || !initial) return;
+    const text = draft.trim();
+    if (text && initial.draftHash === hashDraft(text)) setResult(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial, result]);
+
   // Auto-run after each generation (the parent bumps `token`).
   useEffect(() => {
     if (token > 0) void run(draft);
@@ -118,35 +138,46 @@ export function GatePanel({ e, draft, token }: { e: Exercise; draft: string; tok
   const tone = result ? TONE[result.verdict] : TONE.review;
 
   return (
-    <section className="shrink-0 rounded-xl border border-border bg-card p-3">
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="size-4 shrink-0 text-brand" aria-hidden />
-        <h3 className="font-heading text-sm font-semibold">{t("gate.title")}</h3>
-        {result && (
-          <span
-            className={cn(
-              "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-              tone.border,
-              tone.bg,
-              tone.text,
+    <CollapsibleCard
+      id="gate"
+      icon={<ShieldCheck className="size-4 shrink-0 text-brand" aria-hidden />}
+      title={t("gate.title")}
+      className="shrink-0"
+      bodyClassName="space-y-2.5 p-3"
+      badge={
+        result && (
+          <span className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                tone.border,
+                tone.bg,
+                tone.text,
+              )}
+            >
+              {t(`gate.verdict.${result.verdict}`)}
+            </span>
+            {result.logged && (
+              <span className="rounded-full border border-soon/30 bg-soon/10 px-2 py-0.5 text-[10px] font-medium text-soon">
+                {t("gate.logged")}
+              </span>
             )}
-          >
-            {t(`gate.verdict.${result.verdict}`)}
           </span>
-        )}
+        )
+      }
+      actions={
         <Button
           variant="ghost"
           size="xs"
-          className="ml-auto"
           onClick={() => void run(draft)}
           disabled={loading || !hasDraft}
         >
           {loading ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
           {loading ? t("gate.analyzing") : result ? t("gate.reanalyze") : t("gate.analyze")}
         </Button>
-      </div>
-
-      <div className="mt-2.5 flex items-center gap-2">
+      }
+    >
+      <div className="flex items-center gap-2">
         <span className="flex h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
           <span
             className={cn("h-full transition-[width] duration-500", tone.bar)}
@@ -158,26 +189,48 @@ export function GatePanel({ e, draft, token }: { e: Exercise; draft: string; tok
         </span>
       </div>
 
-      {!hasDraft && <p className="mt-2 text-xs text-muted-foreground">{t("gate.idle")}</p>}
+      {!hasDraft && <p className="text-xs text-muted-foreground">{t("gate.idle")}</p>}
       {hasDraft && !result && !loading && !err && (
-        <p className="mt-2 text-xs text-muted-foreground">{t("gate.pending")}</p>
+        <p className="text-xs text-muted-foreground">{t("gate.pending")}</p>
       )}
       {err && (
-        <p className="mt-2 flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+        <p className="flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
           <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> {err}
         </p>
       )}
 
       {result && (
         <>
-          {result.summary && <p className="mt-2 text-xs text-muted-foreground">{result.summary}</p>}
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          {result.summary && <p className="text-xs text-muted-foreground">{result.summary}</p>}
+          <div className="grid grid-cols-3 gap-2">
             <SubScore label={t("gate.human")} value={result.humanScore} />
             <SubScore label={t("gate.relevance")} value={result.relevanceScore} />
             <SubScore label={t("gate.completeness")} value={result.completenessScore} />
           </div>
+          {result.checks.length > 0 && (
+            <div className="space-y-1 border-t border-border/60 pt-2.5">
+              <p className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                {t("gate.checks")}
+              </p>
+              <ul className="space-y-1">
+                {result.checks.map((c) => (
+                  <li key={c.code} className="flex gap-1.5 text-xs">
+                    <span className={c.ok ? "text-ok" : "text-destructive"} aria-hidden>
+                      {c.ok ? "✓" : "✗"}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="text-muted-foreground">{c.label}</span>
+                      {!c.ok && c.detail && (
+                        <span className="block text-destructive/90">{c.detail}</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {(result.issues.length > 0 || result.suggestions.length > 0) && (
-            <div className="mt-3 space-y-2 border-t border-border/60 pt-2.5">
+            <div className="space-y-2 border-t border-border/60 pt-2.5">
               {result.issues.length > 0 && (
                 <BulletList title={t("gate.issues")} items={result.issues} tone="warn" />
               )}
@@ -186,9 +239,9 @@ export function GatePanel({ e, draft, token }: { e: Exercise; draft: string; tok
               )}
             </div>
           )}
-          <p className="mt-2 text-[10px] text-muted-foreground">{t("gate.advisory")}</p>
+          <p className="text-[10px] text-muted-foreground">{t("gate.advisory")}</p>
         </>
       )}
-    </section>
+    </CollapsibleCard>
   );
 }

@@ -58,7 +58,7 @@ export async function classifyFlavor(
     .join("\n\n");
 
   try {
-    const { text, model } = await cheapJsonCompletion(cfg, SYSTEM, user, 300);
+    const { text, model } = await cheapJsonCompletion(cfg, SYSTEM, user, 300, cfg.models.classification);
     const parsed = parseFlavorClassification(text);
     return parsed ? { ...parsed, model } : null;
   } catch {
