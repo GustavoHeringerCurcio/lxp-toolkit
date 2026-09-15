@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { createSession, closeSession } from "../src/session.js";
+import { createSession, closeSession, type Session } from "../src/session.js";
+import { ApiClient } from "../src/client.js";
 import {
   collectContent,
   fetchGradebookActivities,
@@ -15,6 +16,23 @@ import { downloadPdf } from "../src/actions.js";
 import { config, logger } from "../src/config.js";
 import { codeBlock, htmlToMarkdown, tableCell } from "../src/markdown.js";
 import { ensureDir, json, resolveOut, sanitizeFilename, slugify } from "../src/util.js";
+
+/**
+ * Cookie-aware topic-detail fetcher: goes through the browser context so the
+ * `aws-waf-token` cookie is sent, which avoids the WAF throttling that the
+ * bearer-only ApiClient trips when sweeping hundreds of hidden-topic ids.
+ */
+function topicFetcher(session: Session, courseId: number) {
+  const headers: Record<string, string> = {
+    ...ApiClient.headersFor(session.auth.token, session.auth.notice),
+  };
+  return async (id: number) => {
+    const url = `https://api.plataforma.grupoa.education/v2/plataforma/content/academics-main/${courseId}/topics/${id}`;
+    const res = await session.context.request.get(url, { headers, timeout: 20_000 });
+    if (res.status() !== 200) throw new Error(`GET topic ${id} -> ${res.status()}`);
+    return res.json();
+  };
+}
 
 const KIND_LABELS: Record<string, string> = {
   pdf: "PDF exercise",
@@ -249,7 +267,14 @@ async function main(): Promise<void> {
             { id: course.courseId, name: course.courseName },
             course.items,
             gradebook,
-            { previous: previousByCourse.get(course.courseId) ?? [] },
+            {
+              previous: previousByCourse.get(course.courseId) ?? [],
+              fetchTopic: topicFetcher(session, course.courseId),
+              concurrency: 2,
+              delayMs: 120,
+              wafAbortThreshold: 40,
+              wafCooldownMs: 5_000,
+            },
           );
           harvestResults.push(result);
           course.items.push(...result.hidden);

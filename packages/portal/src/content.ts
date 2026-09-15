@@ -718,6 +718,18 @@ export interface HiddenHarvestOptions {
   extraIds?: number[];
   /** Previously harvested hidden items, reused so a re-run only scans new ids. */
   previous?: ContentItem[];
+  /**
+   * Topic-detail fetcher. Defaults to the bearer-only `ApiClient`, but callers
+   * with a live browser session should pass a cookie-aware fetcher (so the
+   * `aws-waf-token` cookie rides along) to avoid WAF throttling.
+   */
+  fetchTopic?: (id: number) => Promise<HiddenTopicDetail>;
+  /** Pause between probes in ms (default `HARVEST_DELAY_MS`). */
+  delayMs?: number;
+  /** Cumulative WAF rejections before aborting (default `WAF_ABORT_THRESHOLD`; 0 = never abort). */
+  wafAbortThreshold?: number;
+  /** Cooldown in ms after a WAF rejection before the next probe (default 0). */
+  wafCooldownMs?: number;
 }
 
 export interface HiddenHarvestResult {
@@ -754,6 +766,10 @@ export async function harvestHiddenTopics(
   const margin = options.margin ?? 15;
   const concurrency = Math.max(1, options.concurrency ?? 3);
   const maxCandidates = Math.max(1, options.maxCandidates ?? 1200);
+  const delayMs = options.delayMs ?? HARVEST_DELAY_MS;
+  const wafAbortThreshold = options.wafAbortThreshold ?? WAF_ABORT_THRESHOLD;
+  const wafCooldownMs = options.wafCooldownMs ?? 0;
+  const fetchTopic = options.fetchTopic;
   const treeIds = new Set(treeItems.map((it) => it.itemId));
   const treeTitles = new Set(treeItems.map((it) => normalizeTitle(it.itemTitle)));
 
@@ -803,20 +819,27 @@ export async function harvestHiddenTopics(
       const id = candidates[next++];
       try {
         // A probe miss (404/500) is expected and must not trigger the client's
-        // retry/backoff, or a sparse range would stall the whole run.
-        const res = await client.get<HiddenTopicDetail>(
-          `/v2/plataforma/content/academics-main/${course.id}/topics/${id}`,
-          1,
-        );
+        // retry/backoff, or a sparse range would stall the whole run. Callers
+        // with a live browser session pass a cookie-aware `fetchTopic` so the
+        // AWS WAF token rides along and throttling is far less likely.
+        const data = fetchTopic
+          ? await fetchTopic(id)
+          : (
+              await client.get<HiddenTopicDetail>(
+                `/v2/plataforma/content/academics-main/${course.id}/topics/${id}`,
+                1,
+              )
+            ).data;
         scanned++;
-        const item = hiddenItemFromTopic(course, id, res.data, maps, treeTitles, gradebookById);
+        const item = hiddenItemFromTopic(course, id, data, maps, treeTitles, gradebookById);
         if (item) hidden.push(item);
       } catch (err) {
         errors++;
         const message = String((err as Error)?.message ?? err);
         if (/-> (403|429)\b/.test(message)) {
           wafErrors++;
-          if (wafErrors >= WAF_ABORT_THRESHOLD && !throttled) {
+          if (wafCooldownMs > 0) await sleep(wafCooldownMs);
+          if (wafAbortThreshold > 0 && wafErrors >= wafAbortThreshold && !throttled) {
             throttled = true;
             logger.warn(
               { courseId: course.id, wafErrors, scanned },
@@ -826,7 +849,7 @@ export async function harvestHiddenTopics(
         }
         logger.debug({ itemId: id, err }, "hidden topic probe failed");
       }
-      await sleep(HARVEST_DELAY_MS);
+      await sleep(delayMs);
     }
   });
   await Promise.all(workers);
