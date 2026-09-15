@@ -22,6 +22,8 @@ interface RawItem {
   deadlineAt: string | null;
   hasDeadline: boolean;
   attachments: { url: string; filename: string | null; filesize: number | null }[];
+  /** `"hidden"` for God's Eye topics the portal does not list in the tree. */
+  origin?: "tree" | "hidden";
 }
 
 interface Course { courseId: number; courseName: string; items: RawItem[] }
@@ -119,10 +121,13 @@ async function main(): Promise<void> {
   const treePath = resolveOut(config.outDir, "raw", "content-tree.json");
   const parsed = JSON.parse(readFileSync(treePath, "utf-8")) as Course[];
   // Drop synthetic "gradebook-only" rows left by older scrapes (the portal never
-  // assigns negative ids), so they never resurface in the homework index.
+  // assigns negative ids) and God's Eye hidden topics, so neither resurfaces in
+  // the normal homework index (hidden content lives at the /gods-eye route).
   const courses: Course[] = parsed.map((course) => ({
     ...course,
-    items: course.items.filter((it) => it.itemId >= 0 && it.moduleId >= 0),
+    items: course.items.filter(
+      (it) => it.itemId >= 0 && it.moduleId >= 0 && it.origin !== "hidden",
+    ),
   }));
 
   const coursesIndex = courses.map(buildCourseIndex);
