@@ -260,6 +260,7 @@ async function main(): Promise<void> {
               scanned: result.scanned,
               hidden: result.hidden.length,
               errors: result.errors,
+              throttled: result.throttled,
             },
             "hidden-topic harvest complete",
           );

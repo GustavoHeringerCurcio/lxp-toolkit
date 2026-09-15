@@ -26,6 +26,9 @@ export interface ApiResponse<T = unknown> {
   data: T;
 }
 
+/** Abort a stalled portal request so a single hung socket can't freeze a run. */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export class ApiClient {
   private readonly base: string;
   private readonly headers: Record<string, string>;
@@ -70,6 +73,7 @@ export class ApiClient {
             ...this.headers,
             ...(init?.headers ?? {}),
           },
+          signal: init?.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
         if (res.ok) {
           const text = await res.text();
@@ -92,8 +96,8 @@ export class ApiClient {
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   }
 
-  get<T>(path: string): Promise<ApiResponse<T>> {
-    return this.request<T>(path, { method: "GET" });
+  get<T>(path: string, attempts = 4): Promise<ApiResponse<T>> {
+    return this.request<T>(path, { method: "GET" }, attempts);
   }
 
   post<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {

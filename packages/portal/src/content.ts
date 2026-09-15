@@ -1,5 +1,6 @@
 import type { ApiClient } from "./client.js";
 import { logger } from "./config.js";
+import { sleep } from "./util.js";
 
 export interface ContentAttachment {
   url: string;
@@ -707,10 +708,12 @@ function hiddenItemFromTopic(
 }
 
 export interface HiddenHarvestOptions {
-  /** Extra ids to scan around each dense cluster of tree ids (default 50). */
+  /** Extra ids to scan around each tree id (default 25). */
   margin?: number;
   /** Max concurrent topic-detail requests (default 6). */
   concurrency?: number;
+  /** Hard cap on candidate ids per course (default 1200). */
+  maxCandidates?: number;
   /** Extra candidate ids (e.g. calendar topic ids). */
   extraIds?: number[];
   /** Previously harvested hidden items, reused so a re-run only scans new ids. */
@@ -723,18 +726,23 @@ export interface HiddenHarvestResult {
   candidates: number;
   scanned: number;
   errors: number;
+  /** True when the sweep aborted early because the AWS WAF started throttling. */
+  throttled: boolean;
   hidden: ContentItem[];
 }
 
-/** Gaps larger than this break the id space into separate clusters. */
-const CLUSTER_GAP = 1000;
+/** Stop the sweep after this many consecutive WAF rejections (403/429). */
+const WAF_ABORT_THRESHOLD = 8;
+/** Pause between probes so a few hundred requests don't trip the WAF. */
+const HARVEST_DELAY_MS = 40;
 
 /**
  * God's Eye: the portal serves topic content by id even when the topic is not in
  * the student's published tree (`isVisible`/`isBlockedContentByConditional` are
- * not enforced on the read endpoint). This harvests those topics by scanning the
- * id gaps inside the dense clusters of tree ids (plus any extra ids), keeping
- * everything that is not already in the tree.
+ * not enforced on the read endpoint). This harvests those topics by scanning a
+ * small window around every tree id (overlapping windows fill the dense id bands
+ * without exploding on sparse outlier clusters), keeping everything that is not
+ * already in the tree.
  */
 export async function harvestHiddenTopics(
   client: ApiClient,
@@ -743,8 +751,9 @@ export async function harvestHiddenTopics(
   gradebook: GradebookActivity[] = [],
   options: HiddenHarvestOptions = {},
 ): Promise<HiddenHarvestResult> {
-  const margin = options.margin ?? 50;
-  const concurrency = Math.max(1, options.concurrency ?? 6);
+  const margin = options.margin ?? 15;
+  const concurrency = Math.max(1, options.concurrency ?? 3);
+  const maxCandidates = Math.max(1, options.maxCandidates ?? 1200);
   const treeIds = new Set(treeItems.map((it) => it.itemId));
   const treeTitles = new Set(treeItems.map((it) => normalizeTitle(it.itemTitle)));
 
@@ -764,47 +773,60 @@ export async function harvestHiddenTopics(
     hidden.push(prev);
   }
 
-  const ids = [...treeIds].filter((n) => n > 0).sort((a, b) => a - b);
   const candidateSet = new Set<number>();
-  const addRange = (start: number, end: number): void => {
-    for (let i = start - margin; i <= end + margin; i++) {
+  for (const id of treeIds) {
+    if (id <= 0) continue;
+    for (let i = id - margin; i <= id + margin; i++) {
       if (i > 0 && !treeIds.has(i) && !previousIds.has(i)) candidateSet.add(i);
     }
-  };
-  if (ids.length > 0) {
-    let clusterStart = ids[0];
-    let prev = ids[0];
-    for (let i = 1; i < ids.length; i++) {
-      if (ids[i] - prev > CLUSTER_GAP) {
-        addRange(clusterStart, prev);
-        clusterStart = ids[i];
-      }
-      prev = ids[i];
-    }
-    addRange(clusterStart, prev);
   }
   for (const id of options.extraIds ?? []) {
     if (id > 0 && !treeIds.has(id) && !previousIds.has(id)) candidateSet.add(id);
   }
 
-  const candidates = [...candidateSet];
+  let candidates = [...candidateSet].sort((a, b) => a - b);
+  if (candidates.length > maxCandidates) {
+    logger.warn(
+      { courseId: course.id, candidates: candidates.length, cap: maxCandidates },
+      "hidden harvest candidate cap reached; scanning a subset",
+    );
+    candidates = candidates.slice(0, maxCandidates);
+  }
+
   let scanned = 0;
   let errors = 0;
+  let wafErrors = 0;
+  let throttled = false;
   let next = 0;
   const workers = Array.from({ length: Math.min(concurrency, candidates.length) }, async () => {
-    while (next < candidates.length) {
+    while (next < candidates.length && !throttled) {
       const id = candidates[next++];
       try {
+        // A probe miss (404/500) is expected and must not trigger the client's
+        // retry/backoff, or a sparse range would stall the whole run.
         const res = await client.get<HiddenTopicDetail>(
           `/v2/plataforma/content/academics-main/${course.id}/topics/${id}`,
+          1,
         );
         scanned++;
         const item = hiddenItemFromTopic(course, id, res.data, maps, treeTitles, gradebookById);
         if (item) hidden.push(item);
       } catch (err) {
         errors++;
+        const message = String((err as Error)?.message ?? err);
+        if (/-> (403|429)\b/.test(message)) {
+          wafErrors++;
+          if (wafErrors >= WAF_ABORT_THRESHOLD && !throttled) {
+            throttled = true;
+            logger.warn(
+              { courseId: course.id, wafErrors, scanned },
+              "AWS WAF throttling the hidden sweep — aborting early",
+            );
+          }
+        }
         logger.debug({ itemId: id, err }, "hidden topic probe failed");
       }
+      await sleep(HARVEST_DELAY_MS);
     }
   });
   await Promise.all(workers);
@@ -815,6 +837,7 @@ export async function harvestHiddenTopics(
     candidates: candidates.length,
     scanned,
     errors,
+    throttled,
     hidden,
   };
 }
