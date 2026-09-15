@@ -16,6 +16,12 @@ storageState.json
 # Scraped user data (per-account; never commit)
 scraped/
 
+# Legacy root directories from the old layout (superseded by packages/portal,
+# apps/ and agent-docs/). Root-anchored so they never shadow nested docs/.
+/assistant/
+/docs/
+/web/
+
 # Personal assistant config (name, matrícula, per-item overrides) — any path
 **/profile.json
 **/overrides.json

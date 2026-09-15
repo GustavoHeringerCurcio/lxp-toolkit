@@ -622,8 +622,16 @@ export async function importAll(): Promise<ImportSummary> {
 
   let items = 0;
   for (const course of courses) {
+    // Ignore synthetic "gradebook-only" rows left by older scrapes: the portal
+    // never assigns negative ids, so those are the removed reconciliation items
+    // (grouped under phantom modules). This keeps re-imports of a stale
+    // content-tree.json from resurrecting them.
+    const clean: RawCourse = {
+      ...course,
+      items: course.items.filter((it) => it.itemId >= 0 && it.moduleId >= 0),
+    };
     await withTransaction(async (client) => {
-      items += await importCourse(client, course, studentId);
+      items += await importCourse(client, clean, studentId);
     });
   }
 

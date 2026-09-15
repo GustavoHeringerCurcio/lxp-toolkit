@@ -40,10 +40,9 @@ Per-user scraped output lives in the gitignored `scraped/` folder (never commit 
   `SKIP_SYNC=1` (or `SKIP_DUMP=1`). Run
   `npm run typecheck` after code changes.
 - **Full refresh = `dump` → `dump-surfaces` → `index` → `index:web`** (that's what `sync`,
-  `dev:fresh`, `web`'s `preweb`, and the web app's **"Atualizar"** button run). The dump reconciles
-  the **gradebook**: activities the portal lists under "Notas" but hasn't published in the content
-  tree are added as `origin: "gradebook"` / `topicAvailable: false` items (shown as "Ainda não
-  publicado", not answerable) so new exercises never silently disappear.
+  `dev:fresh`, `web`'s `preweb`, and the web app's **"Atualizar"** button run). The content tree is
+  the only source for the catalog; the gradebook is dumped separately for the human-readable
+  `scraped/grades-*.md` surfaces, not merged into the task list.
 - `scraped/raw/homework-index.json` (built by `npm run index`) links each open assignment to its
   section + sibling content + local files — prefer it over re-scraping. The web UI is
   `npm run dev` (serves `apps/web` via Vite + `apps/server`) or `npm run web` (built static).

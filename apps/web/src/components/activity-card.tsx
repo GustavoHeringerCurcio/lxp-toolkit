@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { saveTag } from "@/api";
 import type { Exercise, FlavorSource, UploadFlavor } from "@/types";
 import { fmtDeadline } from "@/lib/status";
-import { contentLabel, kindMeta, canAiAnswer, isPortalPending } from "@/lib/kind";
+import { contentLabel, kindMeta, canAiAnswer } from "@/lib/kind";
 import { runMark } from "@/lib/mark";
 import { useAppData } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
@@ -127,11 +127,6 @@ export function ActivityCard({ e }: { e: Exercise }) {
           <span className="flex min-w-0 items-center gap-2">
             <span className={cn("truncate text-sm font-medium", e.done && "text-muted-foreground line-through")}>{e.title}</span>
             <ActivityBadge e={e} className="shrink-0" />
-            {isPortalPending(e) && (
-              <span className="shrink-0 rounded-md border border-soon/50 bg-transparent px-2 py-0.5 text-[11px] font-semibold text-soon">
-                {t("badge.portalPending")}
-              </span>
-            )}
             {e.done && <DoneBadge className="shrink-0" />}
           </span>
           <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">

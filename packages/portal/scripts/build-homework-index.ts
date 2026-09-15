@@ -117,7 +117,13 @@ function buildCourseIndex(course: Course): {
 
 async function main(): Promise<void> {
   const treePath = resolveOut(config.outDir, "raw", "content-tree.json");
-  const courses = JSON.parse(readFileSync(treePath, "utf-8")) as Course[];
+  const parsed = JSON.parse(readFileSync(treePath, "utf-8")) as Course[];
+  // Drop synthetic "gradebook-only" rows left by older scrapes (the portal never
+  // assigns negative ids), so they never resurface in the homework index.
+  const courses: Course[] = parsed.map((course) => ({
+    ...course,
+    items: course.items.filter((it) => it.itemId >= 0 && it.moduleId >= 0),
+  }));
 
   const coursesIndex = courses.map(buildCourseIndex);
 

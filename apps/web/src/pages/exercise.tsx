@@ -348,7 +348,6 @@ function AnswerPanel({
   const canAi = canAiAnswer(e);
   const isDone = e.done || e.status === "done";
   const canSend =
-    e.topicAvailable !== false &&
     !isDone &&
     Boolean(sendCfg?.enabled) &&
     !sending &&
@@ -576,11 +575,6 @@ function AnswerPanel({
 
         {sendCfg && !sendCfg.enabled && (
           <p className="text-xs text-muted-foreground">{sendCfg.reason}</p>
-        )}
-        {e.topicAvailable === false && (
-          <p className="rounded-md border border-soon/40 bg-soon/10 px-3 py-2 text-xs text-soon">
-            {t("send.portalPending")}
-          </p>
         )}
         {e.status === "done" && (
           <p className="text-xs text-muted-foreground">{t("send.blockedDone")}</p>

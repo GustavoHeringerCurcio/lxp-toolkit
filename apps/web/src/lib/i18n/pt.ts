@@ -195,7 +195,6 @@ export const pt = {
   "badge.survey": "Pesquisa",
   "badge.surveyTitle": "Pesquisa (resposta enviada direto ao portal)",
   "badge.done": "Feito",
-  "badge.portalPending": "Ainda não publicado",
 
   // toasts
   "toast.markLoading": "Marcando como concluída…",
@@ -269,8 +268,6 @@ export const pt = {
   "send.answerSurvey": "Resposta que será enviada",
   "send.answerQuiz": "Seleção que será enviada",
   "send.blockedDone": "Esta atividade já foi concluída — envio bloqueado.",
-  "send.portalPending":
-    "O portal lista esta atividade em Notas, mas ainda não publicou o conteúdo dela na disciplina. Não há página para abrir ou enviar — tente atualizar novamente mais tarde.",
 
   // project context panel
   "project.title": "Contexto do projeto",

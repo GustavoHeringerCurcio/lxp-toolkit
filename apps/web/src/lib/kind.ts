@@ -104,18 +104,8 @@ export function kindMeta(kind: ExerciseKind): KindMeta {
 export function canAiAnswer(e: {
   kind: ExerciseKind;
   flavor: UploadFlavor;
-  topicAvailable?: boolean;
 }): boolean {
-  if (e.topicAvailable === false) return false;
   return (e.kind === "upload" || e.kind === "quiz" || e.kind === "forum") && e.flavor === "question";
-}
-
-/**
- * A gradebook-only activity: the portal lists it under "Notas" but has not
- * published it in the content tree, so there is no topic to open/answer/submit.
- */
-export function isPortalPending(e: { topicAvailable?: boolean }): boolean {
-  return e.topicAvailable === false;
 }
 
 // ── Combined activity badge (type · answerability state) ────────────────────

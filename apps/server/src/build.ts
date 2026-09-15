@@ -301,6 +301,8 @@ export function buildExercises(): Exercise[] {
   const out: Exercise[] = [];
   for (const course of courses) {
     for (const it of course.items) {
+      // Skip synthetic "gradebook-only" rows from older scrapes (negative ids).
+      if (it.itemId < 0 || it.moduleId < 0) continue;
       const kind = actionKindFor(it);
       if (!kind) continue;
       const deadlineAt = it.deadlineAt ?? null;

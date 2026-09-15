@@ -38,15 +38,17 @@ The web app's **"Atualizar"** button (`apps/server/src/refresh.ts`) runs the sam
 `sync` (minus Docker/migrations): `dump` → `dump-surfaces` → portal `index` → `index:web`, with a
 headful reCAPTCHA retry.
 
-## Gradebook reconciliation (why new exercises can be missing)
+## Content tree is the only catalog source
 
 The content tree (`/v2/.../academics-main/{courseId}/contents`) is the scraper's source. The
 portal can list a graded activity under **Notas** (`/v1/plataforma/grades/me/course/{id}`) before
-(or without) publishing it in the content tree — so it never shows up in a naive dump.
-`collectContent` now reconciles: any gradebook activity (types 8/15/29/30/37) whose title is not in
-the tree is appended as a **gradebook-only item** (`origin: "gradebook"`, `topicAvailable: false`).
-It has no openable topic, so the UI shows "Ainda não publicado" and blocks answering/submitting
-until the portal publishes the real content (the next sync replaces it).
+(or without) publishing it in the content tree, but the gradebook is **not** merged into the task
+list: it is only dumped to the human-readable `scraped/grades-*.md` surfaces. An activity appears
+in the app only once the portal publishes the real topic.
+
+> Earlier versions reconciled the gradebook into the catalog (synthetic `origin: "gradebook"`
+> items grouped under fake modules named after gradebook categories). That was removed — the
+> phantom modules (`AVD1`, `Atividades Formativas 1`, …) are cleaned up by migration `0013`.
 
 ## Architecture (packages/portal/src/)
 
