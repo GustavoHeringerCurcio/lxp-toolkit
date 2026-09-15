@@ -169,6 +169,15 @@ export interface Exercise {
   /** Forum state when `contentKind === "forum"`, else null. */
   forum: ForumInfo | null;
   ai: { status: "none" | "generating" | "done" | "error"; answer: string | null; updatedAt: string | null };
+  /** `"hidden"` = harvested by God's Eye; the portal does not list it in the tree. */
+  origin?: "tree" | "hidden";
+  /** Gradebook activity id (`context.gradeBookId`) when the topic is graded. */
+  gradebookId?: number | null;
+  /** Topic-detail visibility flags (hidden harvest provenance). */
+  isVisible?: boolean;
+  isFuture?: boolean;
+  /** Hidden harvest only: another tree item carries the same normalized title. */
+  duplicate?: boolean;
 }
 
 /**

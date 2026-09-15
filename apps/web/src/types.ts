@@ -139,6 +139,15 @@ export interface Exercise {
   aiRequest: AiRequest;
   hasAiOverride: boolean;
   aiRequestJson: string;
+  /** `"hidden"` = harvested by God's Eye; the portal does not list it in the tree. */
+  origin?: "tree" | "hidden";
+  /** Gradebook activity id (`context.gradeBookId`) when the topic is graded. */
+  gradebookId?: number | null;
+  /** Topic-detail visibility flags (hidden harvest provenance). */
+  isVisible?: boolean;
+  isFuture?: boolean;
+  /** Hidden harvest only: another tree item carries the same normalized title. */
+  duplicate?: boolean;
 }
 
 export interface ExercisesPayload {

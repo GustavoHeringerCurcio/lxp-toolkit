@@ -26,6 +26,8 @@ interface RawItemLike {
   html: string | null;
   content: Record<string, unknown> | null;
   attachments: { url: string; filename: string | null; filesize: number | null }[];
+  origin?: "tree" | "hidden";
+  duplicate?: boolean;
 }
 
 interface ViewRow {
@@ -49,6 +51,10 @@ interface ViewRow {
   professor_name: string | null;
   done: boolean | null;
   status: string | null;
+  origin: string | null;
+  gradebook_id: string | null;
+  is_visible: boolean | null;
+  is_future: boolean | null;
 }
 
 interface QuestionRow {
@@ -182,6 +188,11 @@ export async function buildProjection(): Promise<Exercise[]> {
       questions: itemQuestions,
       forum: kind === "forum" ? parseForumInfo(raw.content) : null,
       ai: { status: "none", answer: null, updatedAt: null },
+      origin: row.origin === "hidden" ? "hidden" : "tree",
+      gradebookId: row.gradebook_id != null ? Number(row.gradebook_id) : null,
+      isVisible: row.is_visible ?? undefined,
+      isFuture: row.is_future ?? undefined,
+      duplicate: raw.origin === "hidden" ? raw.duplicate === true : undefined,
     });
   }
   return out;
@@ -192,7 +203,7 @@ export async function buildProjection(): Promise<Exercise[]> {
  * update invalidates the cached `exercises.json` on the next server boot even
  * when the underlying catalog rows are unchanged.
  */
-const PROJECTION_VERSION = "6";
+const PROJECTION_VERSION = "7";
 
 /** Stable hash of the catalog + state snapshots the projection depends on. */
 export async function getCatalogVersion(): Promise<string> {

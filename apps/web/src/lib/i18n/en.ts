@@ -18,6 +18,24 @@ export const en: Dict = {
   "nav.groupSystem": "System",
   "nav.groupProfessors": "Professors",
   "nav.backToTasks": "back to tasks",
+  "nav.godsEye": "God's Eye",
+
+  // God's Eye — hidden & upcoming activities
+  "godsEye.title": "God's Eye",
+  "godsEye.subtitle": "Activities the portal hides from the trail but still serves through the API.",
+  "godsEye.hiddenSection": "Unpublished",
+  "godsEye.upcomingSection": "Upcoming deadlines",
+  "godsEye.empty": "Nothing here. Run a refresh to sweep hidden content.",
+  "godsEye.readOnly": "read-only — submitting may fail",
+  "godsEye.questions": "{{count}} question(s)",
+  "godsEye.duplicate": "older version",
+  "godsEye.showDuplicates": "show older versions",
+  "godsEye.noDeadline": "no deadline",
+  "godsEye.dueIn": "due in {{days}}d",
+  "godsEye.overdue": "overdue",
+  "godsEye.module": "Module",
+  "godsEye.count": "{{count}} item(s)",
+  "godsEye.instructions": "Prompt",
 
   // header
   "header.searchTitle": "Search (Ctrl+K)",

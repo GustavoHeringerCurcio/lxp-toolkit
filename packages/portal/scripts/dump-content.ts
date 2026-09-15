@@ -1,12 +1,15 @@
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createSession, closeSession } from "../src/session.js";
 import {
   collectContent,
+  fetchGradebookActivities,
+  harvestHiddenTopics,
   parseForumInfo,
   parseQuizQuestions,
   type ContentCourse,
   type ContentItem,
+  type HiddenHarvestResult,
 } from "../src/content.js";
 import { downloadPdf } from "../src/actions.js";
 import { config, logger } from "../src/config.js";
@@ -157,15 +160,16 @@ function renderItemMarkdown(item: ContentItem): string {
 }
 
 function renderCourseReadme(course: ContentCourse): string {
+  const items = course.items.filter((i) => i.origin !== "hidden");
   const lines: string[] = [];
   lines.push(`# ${course.courseName}`);
   lines.push("");
   lines.push(`- **Course ID:** \`${course.courseId}\``);
-  lines.push(`- **Total items:** ${course.items.length}`);
+  lines.push(`- **Total items:** ${items.length}`);
   lines.push("");
 
   const byKind = new Map<string, { total: number; undone: number }>();
-  for (const item of course.items) {
+  for (const item of items) {
     const e = byKind.get(item.kind) ?? { total: 0, undone: 0 };
     e.total++;
     if (!item.done) e.undone++;
@@ -181,7 +185,7 @@ function renderCourseReadme(course: ContentCourse): string {
   }
   lines.push("");
 
-  const undone = course.items.filter((i) => !i.done);
+  const undone = course.items.filter((i) => !i.done && i.origin !== "hidden");
   if (undone.length > 0) {
     lines.push("## Undone items");
     lines.push("");
@@ -193,7 +197,7 @@ function renderCourseReadme(course: ContentCourse): string {
 
   lines.push("## All items");
   lines.push("");
-  for (const item of course.items) {
+  for (const item of items) {
     lines.push(`- [${item.done ? "x" : " "}] [${item.itemTitle}](./${itemSlug(item)}.md) — ${kindLabel(item.kind)}`);
   }
   lines.push("");
@@ -215,6 +219,62 @@ async function main(): Promise<void> {
     ensureDir(coursesDir);
     ensureDir(rawDir);
 
+    // ── God's Eye: harvest topics the portal serves by id but hides from the
+    // content tree. Appended with `origin:"hidden"` so the web app can surface
+    // them in a dedicated route without polluting the normal task lists.
+    const harvestResults: HiddenHarvestResult[] = [];
+    if (process.env.SKIP_HARVEST === "1") {
+      logger.warn("SKIP_HARVEST=1 — pulando a varredura de conteúdo oculto.");
+    } else {
+      const hiddenIndexPath = path.join(rawDir, "hidden-index.json");
+      let previousByCourse = new Map<number, ContentItem[]>();
+      if (existsSync(hiddenIndexPath)) {
+        try {
+          const prev = JSON.parse(readFileSync(hiddenIndexPath, "utf-8")) as {
+            courses?: HiddenHarvestResult[];
+          };
+          previousByCourse = new Map(
+            (prev.courses ?? []).map((c) => [c.courseId, c.hidden ?? []]),
+          );
+        } catch (err) {
+          logger.warn({ err }, "failed to read previous hidden-index.json");
+        }
+      }
+
+      for (const course of courses) {
+        try {
+          const gradebook = await fetchGradebookActivities(session.client, course.courseId);
+          const result = await harvestHiddenTopics(
+            session.client,
+            { id: course.courseId, name: course.courseName },
+            course.items,
+            gradebook,
+            { previous: previousByCourse.get(course.courseId) ?? [] },
+          );
+          harvestResults.push(result);
+          course.items.push(...result.hidden);
+          logger.info(
+            {
+              course: course.courseName,
+              candidates: result.candidates,
+              scanned: result.scanned,
+              hidden: result.hidden.length,
+              errors: result.errors,
+            },
+            "hidden-topic harvest complete",
+          );
+        } catch (err) {
+          logger.warn({ courseId: course.courseId, err }, "hidden-topic harvest failed");
+        }
+      }
+
+      writeFileSync(
+        hiddenIndexPath,
+        json({ generatedAt: new Date().toISOString(), courses: harvestResults }),
+        "utf-8",
+      );
+    }
+
     const totalItems = courses.reduce((n, c) => n + c.items.length, 0);
     let writtenFiles = 0;
 
@@ -225,6 +285,9 @@ async function main(): Promise<void> {
       ensureDir(filesDir);
 
       for (const item of course.items) {
+        // Hidden (God's Eye) topics are not part of the published tree; keep the
+        // per-course markdown dump limited to what the portal actually shows.
+        if (item.origin === "hidden") continue;
         const file = path.join(courseDir, `${itemSlug(item)}.md`);
         writeFileSync(file, renderItemMarkdown(item), "utf-8");
         writtenFiles++;

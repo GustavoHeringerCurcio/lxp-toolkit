@@ -17,7 +17,7 @@ cp packages/portal/.env.example packages/portal/.env    # then fill LXP_USERNAME
 | Script | File | What it does |
 |---|---|---|
 | `login` | `packages/portal/scripts/login.ts` | interactive login; saves a session to `data/storageState.json` (legacy; scripts re-login each run anyway) |
-| `dump` | `packages/portal/scripts/dump-content.ts` | scrape all your course content (quizzes, uploads, links, **forum threads**) + download attachments → `scraped/courses/**` + `scraped/raw/content-tree.json` |
+| `dump` | `packages/portal/scripts/dump-content.ts` | scrape all your course content (quizzes, uploads, links, **forum threads**) + download attachments → `scraped/courses/**` + `scraped/raw/content-tree.json`; also harvests hidden topics → `scraped/raw/hidden-index.json` (`SKIP_HARVEST=1` to skip) |
 | `dump-surfaces` | `packages/portal/scripts/dump-surfaces.ts` | scrape grades, calendar, notices, messages, achievements, communities, LTI → `scraped/*.md` + `scraped/raw/surfaces.json` |
 | `crawl-routes` | `packages/portal/scripts/crawl-routes.ts` | capture SPA pages via client-side nav → `scraped/routes/**` + `scraped/portal-map.md` |
 | `capture-api` | `packages/portal/scripts/capture-api.ts` | record network traffic → `scraped/api-captured.md` + `scraped/raw/api-calls.json` |
@@ -49,6 +49,20 @@ in the app only once the portal publishes the real topic.
 > Earlier versions reconciled the gradebook into the catalog (synthetic `origin: "gradebook"`
 > items grouped under fake modules named after gradebook categories). That was removed — the
 > phantom modules (`AVD1`, `Atividades Formativas 1`, …) are cleaned up by migration `0013`.
+
+## God's Eye — hidden topics
+
+The topic-detail read endpoint does **not** enforce visibility: it returns content for a topic id
+even when the topic is absent from the student's tree. `npm run dump` therefore runs
+`content.ts::harvestHiddenTopics` after the tree walk: it scans the id gaps inside the dense
+clusters of tree ids (plus a margin) and keeps every 200 that is not already in the tree, appending
+it with `origin:"hidden"`, `gradebookId` (from `context.gradeBookId`) and the `isVisible`/`isFuture`
+flags. Results are cached in `scraped/raw/hidden-index.json`; a re-run only scans new ids and drops
+harvested items that the portal later publishes. Skip the sweep with `SKIP_HARVEST=1`.
+
+Hidden items flow through import/projection (migration `0014_content_visibility.sql` adds
+`origin`/`gradebook_id`/`is_visible`/`is_future` to `content_item`) but are **excluded from the
+normal task lists** and surfaced read-only at the web route `/gods-eye`.
 
 ## Architecture (packages/portal/src/)
 

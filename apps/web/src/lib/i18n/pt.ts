@@ -22,6 +22,24 @@ export const pt = {
   "nav.groupSystem": "Sistema",
   "nav.groupProfessors": "Professores",
   "nav.backToTasks": "voltar para tarefas",
+  "nav.godsEye": "Olho de Deus",
+
+  // God's Eye — hidden & upcoming activities
+  "godsEye.title": "Olho de Deus",
+  "godsEye.subtitle": "Atividades que o portal não mostra na trilha, mas ainda serve pela API.",
+  "godsEye.hiddenSection": "Não publicados",
+  "godsEye.upcomingSection": "Próximos prazos",
+  "godsEye.empty": "Nada por aqui. Rode uma atualização para varrer o conteúdo oculto.",
+  "godsEye.readOnly": "somente leitura — o envio pode falhar",
+  "godsEye.questions": "{{count}} questão(ões)",
+  "godsEye.duplicate": "versão antiga",
+  "godsEye.showDuplicates": "mostrar versões antigas",
+  "godsEye.noDeadline": "sem prazo",
+  "godsEye.dueIn": "vence em {{days}}d",
+  "godsEye.overdue": "vencido",
+  "godsEye.module": "Módulo",
+  "godsEye.count": "{{count}} item(ns)",
+  "godsEye.instructions": "Enunciado",
 
   // header
   "header.searchTitle": "Buscar (Ctrl+K)",

@@ -6,6 +6,8 @@ export type Scope = "open" | "expired" | "done" | "all";
 
 interface AppDataValue {
   items: Exercise[];
+  /** God's Eye: harvested topics the portal does not list in the tree. */
+  hiddenItems: Exercise[];
   cfg: AiConfigDto | null;
   professorLinks: ProfessorLink[];
   loading: boolean;
@@ -31,6 +33,7 @@ const ScopeContext = createContext<ScopeValue | null>(null);
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Exercise[]>([]);
+  const [hiddenItems, setHiddenItems] = useState<Exercise[]>([]);
   const [cfg, setCfg] = useState<AiConfigDto | null>(null);
   const [professorLinks, setProfessorLinks] = useState<ProfessorLink[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +51,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
         fetchConfig(),
         fetchProfessorLinks(),
       ]);
-      setItems(p.exercises);
+      setItems(p.exercises.filter((e) => e.origin !== "hidden"));
+      setHiddenItems(p.exercises.filter((e) => e.origin === "hidden"));
       setCfg(c);
       setProfessorLinks(links);
     } catch (x) {
@@ -65,7 +69,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
         fetchConfig(),
         fetchProfessorLinks(),
       ]);
-      setItems(p.exercises);
+      setItems(p.exercises.filter((e) => e.origin !== "hidden"));
+      setHiddenItems(p.exercises.filter((e) => e.origin === "hidden"));
       setCfg(c);
       setProfessorLinks(links);
     } catch (x) {
@@ -86,8 +91,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, []);
 
   const dataValue = useMemo<AppDataValue>(
-    () => ({ items, cfg, professorLinks, loading, error, reload, refresh, patchExercise, patchConfig }),
-    [items, cfg, professorLinks, loading, error, reload, refresh, patchExercise, patchConfig],
+    () => ({ items, hiddenItems, cfg, professorLinks, loading, error, reload, refresh, patchExercise, patchConfig }),
+    [items, hiddenItems, cfg, professorLinks, loading, error, reload, refresh, patchExercise, patchConfig],
   );
 
   const scopeValue = useMemo<ScopeValue>(

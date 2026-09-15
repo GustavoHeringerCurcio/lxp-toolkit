@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   ChartColumn,
   ChevronLeft,
+  Eye,
   GraduationCap,
   ListChecks,
   Palette,
@@ -42,6 +43,7 @@ const TRAINING_NAV = [
 ] as const;
 
 const SYSTEM_NAV = [
+  { to: "/gods-eye", key: "nav.godsEye", icon: Eye },
   { to: "/ajustes", key: "nav.settings", icon: SlidersHorizontal },
   { to: "/design", key: "nav.design", icon: Palette },
 ] as const;

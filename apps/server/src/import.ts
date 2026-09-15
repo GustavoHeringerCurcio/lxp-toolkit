@@ -53,6 +53,11 @@ interface RawItem {
   content: Record<string, unknown> | null;
   context: Record<string, unknown> | null;
   studentGrade: unknown;
+  /** `"hidden"` for God's Eye topics the portal does not list in the tree. */
+  origin?: "tree" | "hidden";
+  gradebookId?: number | null;
+  isVisible?: boolean;
+  isFuture?: boolean;
 }
 
 interface RawCourse {
@@ -249,8 +254,8 @@ async function importCourse(client: PoolClient, course: RawCourse, studentId: nu
       `INSERT INTO content_item(
          id, course_id, module_id, section_id, enrollment_id, topic_type_id, category_type_id,
          progress_type_id, kind, title, is_record_progress, has_deadline, deadline_at, expired,
-         html, content_hash, raw_json, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, now())
+         html, content_hash, raw_json, origin, gradebook_id, is_visible, is_future, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21, now())
        ON CONFLICT (id) DO UPDATE SET
          course_id = EXCLUDED.course_id,
          module_id = EXCLUDED.module_id,
@@ -268,6 +273,10 @@ async function importCourse(client: PoolClient, course: RawCourse, studentId: nu
          html = EXCLUDED.html,
          content_hash = EXCLUDED.content_hash,
          raw_json = EXCLUDED.raw_json,
+         origin = EXCLUDED.origin,
+         gradebook_id = EXCLUDED.gradebook_id,
+         is_visible = EXCLUDED.is_visible,
+         is_future = EXCLUDED.is_future,
          updated_at = now()`,
       [
         item.itemId,
@@ -287,6 +296,10 @@ async function importCourse(client: PoolClient, course: RawCourse, studentId: nu
         item.html,
         contentHash(item),
         JSON.stringify(item),
+        item.origin === "hidden" ? "hidden" : "tree",
+        item.gradebookId ?? null,
+        item.isVisible ?? null,
+        item.isFuture ?? null,
       ],
     );
 

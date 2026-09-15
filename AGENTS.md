@@ -43,6 +43,12 @@ Per-user scraped output lives in the gitignored `scraped/` folder (never commit 
   `dev:fresh`, `web`'s `preweb`, and the web app's **"Atualizar"** button run). The content tree is
   the only source for the catalog; the gradebook is dumped separately for the human-readable
   `scraped/grades-*.md` surfaces, not merged into the task list.
+- **God's Eye (hidden topics):** the portal's topic-detail endpoint serves content by id even when
+  the topic is absent from the student's content tree. `npm run dump` harvests those topics
+  (`content.ts::harvestHiddenTopics`, cached in `scraped/raw/hidden-index.json`) and appends them
+  with `origin:"hidden"`. They flow through import/projection but are kept **out of the normal
+  lists** and surfaced read-only at the web route `/gods-eye`. Skip the sweep with
+  `SKIP_HARVEST=1`; the columns live in migration `0014_content_visibility.sql`.
 - `scraped/raw/homework-index.json` (built by `npm run index`) links each open assignment to its
   section + sibling content + local files — prefer it over re-scraping. The web UI is
   `npm run dev` (serves `apps/web` via Vite + `apps/server`) or `npm run web` (built static).

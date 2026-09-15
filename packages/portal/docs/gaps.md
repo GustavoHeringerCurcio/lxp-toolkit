@@ -4,6 +4,18 @@
 questions, file-upload instructions, links), grades, notices, messages, achievements, calendar,
 communities, and LTI tools. Only the **write** side (mutating the academic record) remains unknown.
 
+## 0. Hidden topics (SOLVED — read side)
+
+The topic-detail endpoint (`GET /v2/.../topics/{topicId}`) does **not** enforce visibility: it
+serves content for topics absent from the student's tree. Confirmed live 2026-09-14 by sweeping the
+id gaps around the tree ids: 78/137 probed ids returned 200 with full content, including hidden
+quizzes with questions (`89612094`, `89612095`, `89612106`, `89612117`) and tasks linked to
+gradebook activities via `context.gradeBookId` (e.g. gradebook `5487158` → topic `89612059`).
+`harvestHiddenTopics` (`src/content.ts`) now harvests these into `origin:"hidden"` items, cached in
+`scraped/raw/hidden-index.json`; the app surfaces them read-only at `/gods-eye`. Gradebook ids are
+**not** topic ids (all 404); the bridge is the `gradeBookId` field on the topic context. Calendar
+appointments carry the real topic id (`entityType:"topic"`, `id` == topicId) but added little.
+
 ## 1. Quiz submit (SOLVED)
 
 **Status:** ✅ solved (2026-09-11, verified against the live SPA by aborting the network call).
