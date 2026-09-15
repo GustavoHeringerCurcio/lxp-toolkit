@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activityBadge, BADGE_TONE_CLS } from "./kind";
+import { activityBadge, BADGE_TONE_CLS, canAiAnswer, isPortalPending } from "./kind";
 import type { Anomaly, ContentKind, ExerciseKind } from "@/types";
 
 function info(
@@ -66,5 +66,30 @@ describe("activityBadge", () => {
     const b = info("upload", "file_upload", []);
     expect(b.tone).toBe("none");
     expect(BADGE_TONE_CLS[b.tone]).not.toContain("late");
+  });
+});
+
+describe("canAiAnswer / isPortalPending", () => {
+  it("responde tarefas, quizzes e fóruns com pergunta", () => {
+    expect(canAiAnswer({ kind: "upload", flavor: "question" })).toBe(true);
+    expect(canAiAnswer({ kind: "quiz", flavor: "question" })).toBe(true);
+    expect(canAiAnswer({ kind: "forum", flavor: "question" })).toBe(true);
+  });
+
+  it("não responde itens ghost/print nem leituras", () => {
+    expect(canAiAnswer({ kind: "upload", flavor: "ghost" })).toBe(false);
+    expect(canAiAnswer({ kind: "upload", flavor: "print" })).toBe(false);
+    expect(canAiAnswer({ kind: "mark", flavor: "question" })).toBe(false);
+  });
+
+  it("bloqueia a IA para atividade só do boletim (topicAvailable=false)", () => {
+    expect(canAiAnswer({ kind: "upload", flavor: "question", topicAvailable: false })).toBe(false);
+    expect(isPortalPending({ topicAvailable: false })).toBe(true);
+  });
+
+  it("itens normais e itens legados (sem o campo) não são pendentes", () => {
+    expect(isPortalPending({ topicAvailable: true })).toBe(false);
+    expect(isPortalPending({})).toBe(false);
+    expect(canAiAnswer({ kind: "quiz", flavor: "question", topicAvailable: true })).toBe(true);
   });
 });

@@ -34,6 +34,23 @@ export const warn = (msg) => console.log(`${c.yellow("!")} ${msg}`);
 export const bad = (msg) => console.log(`${c.red("✗")} ${msg}`);
 export const step = (msg) => console.log(`\n${c.bold(c.cyan("▸"))} ${c.bold(msg)}`);
 
+const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
+
+/**
+ * Draw a dim rounded box around already-colored lines. Width is measured on the
+ * visible text (ANSI codes ignored) so colors never break the border alignment.
+ */
+export function frame(lines) {
+  if (lines.length === 0) return "";
+  const width = Math.max(...lines.map((l) => stripAnsi(l).length));
+  const pad = (s) => s + " ".repeat(width - stripAnsi(s).length);
+  const bar = c.dim("─".repeat(width + 2));
+  const out = [`${c.dim("╭")}${bar}${c.dim("╮")}`];
+  for (const line of lines) out.push(`${c.dim("│")} ${pad(line)} ${c.dim("│")}`);
+  out.push(`${c.dim("╰")}${bar}${c.dim("╯")}`);
+  return out.join("\n");
+}
+
 function quoteWin(arg) {
   return /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg;
 }

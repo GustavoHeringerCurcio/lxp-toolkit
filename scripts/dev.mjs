@@ -18,7 +18,7 @@
 // No extra dependency: both children are spawned with Node built-ins, logs go
 // straight to this terminal, and Ctrl+C tears down the whole process tree.
 import { spawn } from "node:child_process";
-import { ROOT, c, log, warn, step, run } from "../setup/shared.mjs";
+import { ROOT, c, log, warn, step, run, frame } from "../setup/shared.mjs";
 
 const isWin = process.platform === "win32";
 
@@ -67,11 +67,19 @@ const children = [
   start("web", "npm", ["run", "dev", "-w", "@lxp-toolkit/web"], c.green),
 ];
 
-log(`
-  ${c.bold("lxp-toolkit · dev")}
-  ${c.cyan("api")}  → http://localhost:4174
-  ${c.green("web")}  → ${c.bold("http://localhost:5174")}  ${c.dim("(abra esta; HMR ativo)")}
-`);
+log(
+  "\n" +
+    frame([
+      `${c.bold("lxp-toolkit")} ${c.dim("·")} ${c.cyan("dev")}`,
+      "",
+      `${c.green("●")} ${c.bold("web")}   ${c.bold("http://localhost:5174")}   ${c.dim("abra esta · HMR")}`,
+      `${c.cyan("●")} ${c.bold("api")}   ${c.dim("http://localhost:4174")}`,
+      "",
+      `${c.dim("edite apps/web/src/** e a página recarrega sozinha")}`,
+      `${c.dim("Ctrl+C encerra api + web")}`,
+    ]) +
+    "\n",
+);
 
 let shuttingDown = false;
 function shutdown(code = 0) {
