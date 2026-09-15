@@ -1,5 +1,10 @@
 # API endpoints — `https://api.plataforma.grupoa.education`
 
+> **This file is the curated, in-use subset.** For the **complete** surface (131 unique endpoints,
+> 232 manifest entries, all domains + a feature backlog) see **`08-endpoint-catalog.md`** and the
+> machine-readable **`endpoint-catalog.json`**. The platform publishes its own action→endpoint
+> manifest in `GET /v2/safea-client/users/me` (`features[]`); regenerate with `npm run catalog`.
+
 All requests carry the headers from `02-auth.md`. Query params shown are real examples; `page`,
 `perPage`/`limit` are interchangeable pagination params the SPA uses inconsistently.
 
@@ -80,8 +85,27 @@ All requests carry the headers from `02-auth.md`. Query params shown are real ex
 - `https://bucket.safea.grupoa.education/...` (logos/banners)
 - `https://libs.grupoa.education/pdfreader/web/viewer.html?file=…` (PDF viewer)
 
-## Known unknowns (write side)
+## High-value endpoints discovered but not yet consumed
 
-File-upload submit endpoint. Forum write is reconstructed from the SPA store (see the
-`content/topic/...` rows above) and verified by thread re-read after posting.
-Quiz submit is **solved** (see the `enrollment/{id}/quiz/...` rows above).
+Found via the `features[]` manifest (`08-endpoint-catalog.md`). Read-side unless noted:
+
+| Area | Endpoint |
+|---|---|
+| Professor feedback | `GET /v1/plataforma/content/main-content/:contentId/corrections/:topicId/enrollment/:enrollmentId`; `GET /v2/…/topics/:topicId/corrections/counts` |
+| Essay answers | `GET /v1/plataforma/content/enrollment/:enrollmentId/discursive/:topicId` |
+| References | `GET /v2/…/topics/:topicId/references` |
+| Class recordings | `GET /v2/…/topics/:topicId/webconference/records` (+ `/records/:recordId/url`); `GET /v1/plataforma/content/webconference/collab/:contextId/records` |
+| SCORM / H5P | `GET /v2/…/topics/:topicId/scorm/:scormId/launch-link`; `GET /v2/…/topics/:topicId/h5p/uuid` |
+| Surveys | `GET /v1/plataforma/academic/surveys/me` (write: `POST …/surveys/me/:surveyUserId`) |
+| Notices (me) | `GET /v1/plataforma/academic/notices/me`; `GET …/notices-board/me/highlight`; `PUT …/notices-board/status` |
+| Grades v2 | `GET /v2/plataforma/grades/courses/:courseId/me` |
+| Groups | `GET /v1/plataforma/academic/academics-main/:courseId/group-sets` |
+| Enrollment history | `GET /v1/plataforma/academic/academics-main/enrollments` |
+| Reminders (write) | `POST/PUT/DELETE /v1/plataforma/academic/calendar/appointment[/:id]` |
+| LTI launch | `GET /v1/plataforma/content/lti/launch`; `POST /v2/plataforma/content/academics-main/lti/client` |
+
+## Known unknowns / write side
+
+File-upload submit (`POST /v2/…/topics/:topicId/tasks`), forum post/reply, quiz answer/finish,
+discursive answer and "mark as completed" are all **mapped** now (see `08-endpoint-catalog.md` §4.1).
+They mutate the academic record and stay behind the explicit send flow (`docs/gaps.md`).

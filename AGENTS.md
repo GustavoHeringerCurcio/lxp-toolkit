@@ -33,7 +33,8 @@ Per-user scraped output lives in the gitignored `scraped/` folder (never commit 
 - Commands (run from the repo root; they delegate to the workspaces): `npm run setup`
   (interactive onboarding: deps + browser + env files + database), `npm run doctor` (health check),
   `npm run db:up`, `npm run db:migrate`, `npm run dump`, `npm run dump-surfaces`,
-  `npm run crawl-routes`, `npm run capture-api`, `npm run agent`, `npm run homework`,
+  `npm run crawl-routes`, `npm run capture-api`, `npm run catalog` (regenerate the endpoint
+  catalog from a captured `users/me` manifest), `npm run agent`, `npm run homework`,
   `npm run exercises`, `npm run index`, `npm run index:web`, `npm run sync`, `npm run dev`,
   `npm run dev:fresh`, `npm run web`. `npm run dev` (Vite HMR) is fast (no scrape);
   `npm run dev:fresh` runs `sync` first; `npm run web` (built) refreshes via `preweb`. Skip with

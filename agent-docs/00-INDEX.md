@@ -13,8 +13,11 @@ anything portal-related.
 5. **`05-data-schemas.md`** — the JSON shapes you'll parse. (5 min)
 6. **`06-tooling.md`** — the scripts that already do the work + gotchas. (3 min)
 7. **`07-scraped-data.md`** — where already-scraped data lives (read on demand). (2 min)
+8. **`08-endpoint-catalog.md`** — the platform's full self-published endpoint surface + feature
+   backlog. Read before designing any new feature. (5 min)
 
 If the task is narrow (e.g. "why did grades come back empty"), read the one relevant file only.
+Before building a feature, also open `08-endpoint-catalog.md` + `endpoint-catalog.json`.
 
 ## Map of the repo
 

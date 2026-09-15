@@ -1,8 +1,15 @@
 # Gap analysis — write side & unknowns
 
-**Status update:** the entire **read** surface is now scraped — content tree (145 items incl. quiz
-questions, file-upload instructions, links), grades, notices, messages, achievements, calendar,
-communities, and LTI tools. Only the **write** side (mutating the academic record) remains unknown.
+**Status update (2026-09-15):** the platform publishes its own endpoint manifest — `GET
+/v2/safea-client/users/me` returns `features[]` (232 entries → **131 unique endpoints**). See
+`agent-docs/08-endpoint-catalog.md` + `endpoint-catalog.json` (regenerate with `npm run catalog`).
+That catalog replaces "we scraped everything" with a real map: we consume ~15 of 131, and the
+remaining read-side surface (corrections/feedback, recordings, references, SCORM/H5P, surveys,
+groups, enrollment history, grades v2, …) is documented there as a feature backlog.
+
+Originally scraped: content tree (145 items incl. quiz questions, file-upload instructions, links),
+grades, notices, messages, achievements, calendar, communities, and LTI tools. The **write** side
+(mutating the academic record) is now mapped too, but stays unautomated by policy.
 
 ## 0. Hidden topics (SOLVED — read side)
 
@@ -43,15 +50,17 @@ Implemented in `packages/portal/scripts/submit-task.ts::submitQuizViaStore` (`ac
 - Quiz `topicTypeId`s: 37 ("Exercícios"), 15 ("Questionário"), 29/30 (pre/post-test).
 - `content.hasRetries`, `numberRetries`, `hasCompletedAllAttempts` gate retries.
 
-## 2. File upload submit (HIGH priority)
+## 2. File upload submit (MAPPED — implemented via the send flow)
 
-**Status:** ❌ unknown
+**Status:** ✅ endpoint mapped (`2026-09-15`, from the `features[]` manifest).
+
+**Endpoint:** `POST /v2/plataforma/content/academics-main/{courseId}/topics/{topicId}/tasks`
+(alias `api-content-v2-post-topic-task`). The S3 pre-sign for the attachment comes from
+`GET /v1/plataforma/content/upload`.
 
 **Known:** task items (`topicTypeId` 8), `content.hasFileUpload: true`, `content.maxFilesLimit`,
-`content.attempts[]`.
-
-**Missing:** the multipart upload endpoint (`POST .../topics/{topicId}/upload` or `/attempts`).
-AWS WAF (`aws-waf-token` cookie) may be required for writes.
+`content.attempts[]`. Driven by `apps/server/src/send.ts` / `submit-task.ts` (text/`.txt`/`.pdf`
+attachments). AWS WAF (`aws-waf-token` cookie) may be required for writes → use the browser flow.
 
 ## 3. "Mark as completed" progress (SOLVED)
 

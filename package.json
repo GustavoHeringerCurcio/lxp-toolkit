@@ -18,6 +18,7 @@
     "dump": "npm run dump -w @lxp-toolkit/portal",
     "dump-surfaces": "npm run dump-surfaces -w @lxp-toolkit/portal",
     "capture-api": "npm run capture-api -w @lxp-toolkit/portal",
+    "catalog": "node scripts/endpoint-catalog.mjs",
     "crawl-routes": "npm run crawl-routes -w @lxp-toolkit/portal",
     "submit-task": "npm run submit-task -w @lxp-toolkit/portal",
     "agent": "npm run agent -w @lxp-toolkit/portal",

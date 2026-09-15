@@ -21,6 +21,7 @@ cp packages/portal/.env.example packages/portal/.env    # then fill LXP_USERNAME
 | `dump-surfaces` | `packages/portal/scripts/dump-surfaces.ts` | scrape grades, calendar, notices, messages, achievements, communities, LTI → `scraped/*.md` + `scraped/raw/surfaces.json` |
 | `crawl-routes` | `packages/portal/scripts/crawl-routes.ts` | capture SPA pages via client-side nav → `scraped/routes/**` + `scraped/portal-map.md` |
 | `capture-api` | `packages/portal/scripts/capture-api.ts` | record network traffic → `scraped/api-captured.md` + `scraped/raw/api-calls.json` |
+| `catalog` | `scripts/endpoint-catalog.mjs` | normalize the platform's `features[]` manifest from a captured `users/me` response → `agent-docs/endpoint-catalog.json` (the full endpoint surface; see `08-endpoint-catalog.md`) |
 | `capture-forum` | `packages/portal/scripts/capture-forum.ts` | headful forum capture that finishes by itself (no Enter): polls until a write request is seen → `scraped/forum-captured.md` + `scraped/raw/api-calls-forum.json` |
 | `capture-forum-write` | `packages/portal/scripts/capture-forum-write.ts` | forum write-discovery: dumps the thread via the read action, spy-wraps all forum Vuex actions, waits for a manual UI post → `scraped/raw/forum-write-spy.json` + `api-calls-forum-write.json` |
 | `agent` | `packages/portal/scripts/agent.ts` | list actionable items; `--read`/`--complete` auto-completes undone readings **and** all "Mark as completed" content (pdf/link/rich); `--dry-run` previews |
