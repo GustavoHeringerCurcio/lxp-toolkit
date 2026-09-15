@@ -3,8 +3,11 @@
 // Runs the whole pipeline so a fresh start always has fresh content:
 //   1. start Postgres (Docker, idempotent) and wait until it accepts connections
 //   2. apply migrations
-//   3. scrape the portal (`npm run dump`) — retries once headful on reCAPTCHA
-//   4. rebuild the index (`npm run index:web`) → apps/server/data/exercises.json
+//   3. scrape the portal content (`npm run dump`) — retries once headful on reCAPTCHA
+//   4. scrape the other surfaces (`npm run dump-surfaces`): grades, calendar,
+//      notices, messages, achievements, LTI
+//   5. rebuild the portal homework index (`npm run index`)
+//   6. rebuild the UI index (`npm run index:web`) → apps/server/data/exercises.json
 //
 // Hard-fail by design: any step that errors stops the run with an actionable
 // message, so `npm run dev` / `npm run web` never serve stale content silently.
@@ -96,7 +99,33 @@ if (process.env.SKIP_DUMP === "1") {
   ok("Conteúdo atualizado.");
 }
 
-// 4. Rebuild the index -----------------------------------------------------
+// 4. Scrape the other surfaces (grades, calendar, notices, messages, …) ------
+if (process.env.SKIP_DUMP === "1") {
+  warn("SKIP_DUMP=1 — pulando os outros painéis do portal.");
+} else {
+  step("Buscando notas, calendário e avisos");
+  let surfaces = await run("npm", ["run", "dump-surfaces"], { tee: true });
+  if (surfaces.code !== 0 && /reCAPTCHA|CaptchaRequiredError/i.test(surfaces.output)) {
+    warn("O portal pediu reCAPTCHA — abrindo o navegador para você resolver…");
+    surfaces = await run("npm", ["run", "dump-surfaces"], { tee: true, env: { HEADFUL: "true" } });
+  }
+  if (surfaces.code !== 0) {
+    await fail(
+      "O scrape dos outros painéis falhou.",
+      "Confira suas credenciais (packages/portal/.env) ou rode `HEADFUL=true npm run dump-surfaces`.\n" +
+        "Para iniciar sem atualizar, use SKIP_SYNC=1.",
+    );
+  }
+  ok("Painéis atualizados.");
+}
+
+// 5. Rebuild the portal homework index ------------------------------------
+step("Montando o índice de tarefas do portal");
+const hw = await run("npm", ["run", "index"], { tee: true });
+if (hw.code !== 0) await fail("O índice de tarefas do portal falhou.", hw.output);
+ok("Índice do portal atualizado.");
+
+// 6. Rebuild the UI index --------------------------------------------------
 step("Montando a lista de atividades");
 const index = await run("npm", ["run", "index:web"], { tee: true });
 if (index.code !== 0) await fail("O index falhou.", index.output);

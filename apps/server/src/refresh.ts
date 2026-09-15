@@ -100,10 +100,30 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
     state.log = "";
     state.startedAt = new Date().toISOString();
     state.finishedAt = null;
+    // The full scrape: portal content + the other surfaces (grades, calendar,
+    // notices, messages, achievements, LTI), then the two local indexes.
+    const scrapeSteps: [string[], string][] = [
+      [["run", "dump"], "Buscando conteúdo novo no portal"],
+      [["run", "dump-surfaces"], "Buscando notas, calendário e avisos"],
+    ];
+    const indexSteps: [string[], string][] = [
+      [["run", "index"], "Montando o índice de tarefas do portal"],
+      [["run", "index:web"], "Montando a lista de atividades"],
+    ];
+    const runScrape = async (extraEnv: NodeJS.ProcessEnv = {}): Promise<void> => {
+      for (const [args, label] of scrapeSteps) {
+        await runStep(args, config.repoRoot, label, extraEnv);
+      }
+    };
+    const runIndexes = async (): Promise<void> => {
+      for (const [args, label] of indexSteps) {
+        await runStep(args, config.repoRoot, label);
+      }
+    };
     let headfulRetryUsed = false;
     try {
-      await runStep(["run", "dump"], config.repoRoot, "Buscando conteúdo novo no portal");
-      await runStep(["run", "index"], config.assistantDir, "Montando a lista de atividades");
+      await runScrape();
+      await runIndexes();
       state.step = "Concluído";
     } catch (err) {
       // If the portal demanded a reCAPTCHA, retry the scrape once headful so the
@@ -112,10 +132,8 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
         headfulRetryUsed = true;
         appendLog("\nreCAPTCHA detectado — abrindo o navegador para você resolver…\n");
         try {
-          await runStep(["run", "dump"], config.repoRoot, "Aguardando você resolver o reCAPTCHA", {
-            HEADFUL: "true",
-          });
-          await runStep(["run", "index"], config.assistantDir, "Montando a lista de atividades");
+          await runScrape({ HEADFUL: "true" });
+          await runIndexes();
           state.step = "Concluído";
         } catch (err2) {
           state.error = friendlyError(err2);

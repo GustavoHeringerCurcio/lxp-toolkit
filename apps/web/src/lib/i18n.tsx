@@ -66,6 +66,8 @@ function readStored(): Lang {
  */
 const SERVER_STEP_KEYS: Record<string, string> = {
   "Buscando conteúdo novo no portal": "server.step.fetching",
+  "Buscando notas, calendário e avisos": "server.step.surfaces",
+  "Montando o índice de tarefas do portal": "server.step.portalIndex",
   "Montando a lista de atividades": "server.step.building",
   Concluído: "server.step.done",
   Falhou: "server.step.failed",

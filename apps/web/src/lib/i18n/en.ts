@@ -191,6 +191,7 @@ export const en: Dict = {
   "badge.survey": "Survey",
   "badge.surveyTitle": "Survey (answer sent straight to the portal)",
   "badge.done": "Done",
+  "badge.portalPending": "Not published yet",
 
   // toasts
   "toast.markLoading": "Marking as completed…",
@@ -264,6 +265,8 @@ export const en: Dict = {
   "send.answerSurvey": "Answer to be submitted",
   "send.answerQuiz": "Selection to be submitted",
   "send.blockedDone": "This activity is already completed — submission blocked.",
+  "send.portalPending":
+    "The portal lists this activity under Grades but has not published it in the course content yet. There is no page to open or submit — try refreshing again later.",
 
   // project context panel
   "project.title": "Project context",
@@ -620,6 +623,8 @@ export const en: Dict = {
 
   // server-provided refresh steps (translated client-side)
   "server.step.fetching": "Fetching new portal content",
+  "server.step.surfaces": "Fetching grades, calendar and notices",
+  "server.step.portalIndex": "Building the portal homework index",
   "server.step.building": "Building the activity list",
   "server.step.done": "Completed",
   "server.step.failed": "Failed",

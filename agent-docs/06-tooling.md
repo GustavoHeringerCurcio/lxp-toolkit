@@ -28,11 +28,25 @@ cp packages/portal/.env.example packages/portal/.env    # then fill LXP_USERNAME
 | `homework` | `packages/portal/scripts/homework.ts` | friendly terminal board of open homework (grouped by section, sorted by due date); `--fresh`, `--json` |
 | `exercises` | `packages/portal/scripts/exercises.ts` | read-only: `npm run exercises -- <itemId>` prints a quiz's questions or an upload's info |
 | `submit-task` | `packages/portal/scripts/submit-task.ts` | gated browser runner (spawned by the server's `/api/send`): fresh login → SPA-nav to the task → deliver the answer. Uploads support `text` (typed into the portal's rich-text reply editor), `txt` and `pdf` attachments; quizzes select options; **forums** publish via the enrollment-scoped post endpoint (verified by re-reading the thread) with an SPA-composer fallback. |
-| `sync` | `scripts/sync.mjs` | Full refresh: Postgres up → migrations → `dump` → `index:web`. Hard-fails on any step; `SKIP_SYNC=1` (skip all) / `SKIP_DUMP=1` (local index only) to bypass. |
+| `sync` | `scripts/sync.mjs` | Full refresh: Postgres up → migrations → `dump` → `dump-surfaces` → `index` (portal) → `index:web`. Hard-fails on any step; `SKIP_SYNC=1` (skip all) / `SKIP_DUMP=1` (local index only) to bypass. |
 | `dev` | `scripts/dev.mjs` | Fast local dev: API (`tsx server/server.ts`) + Vite HMR together → <http://localhost:5174>. No scrape. |
 | `dev:fresh` | `scripts/dev.mjs --sync` | Runs `sync` first, then the dev servers. |
 | `web` | `apps/server` | Runs `sync` via `preweb` → builds `apps/web` → serves static → <http://localhost:4174>. |
 | `typecheck` | — | `tsc --noEmit` (run after any code change) |
+
+The web app's **"Atualizar"** button (`apps/server/src/refresh.ts`) runs the same pipeline as
+`sync` (minus Docker/migrations): `dump` → `dump-surfaces` → portal `index` → `index:web`, with a
+headful reCAPTCHA retry.
+
+## Gradebook reconciliation (why new exercises can be missing)
+
+The content tree (`/v2/.../academics-main/{courseId}/contents`) is the scraper's source. The
+portal can list a graded activity under **Notas** (`/v1/plataforma/grades/me/course/{id}`) before
+(or without) publishing it in the content tree — so it never shows up in a naive dump.
+`collectContent` now reconciles: any gradebook activity (types 8/15/29/30/37) whose title is not in
+the tree is appended as a **gradebook-only item** (`origin: "gradebook"`, `topicAvailable: false`).
+It has no openable topic, so the UI shows "Ainda não publicado" and blocks answering/submitting
+until the portal publishes the real content (the next sync replaces it).
 
 ## Architecture (packages/portal/src/)
 

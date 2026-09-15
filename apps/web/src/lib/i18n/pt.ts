@@ -195,6 +195,7 @@ export const pt = {
   "badge.survey": "Pesquisa",
   "badge.surveyTitle": "Pesquisa (resposta enviada direto ao portal)",
   "badge.done": "Feito",
+  "badge.portalPending": "Ainda não publicado",
 
   // toasts
   "toast.markLoading": "Marcando como concluída…",
@@ -268,6 +269,8 @@ export const pt = {
   "send.answerSurvey": "Resposta que será enviada",
   "send.answerQuiz": "Seleção que será enviada",
   "send.blockedDone": "Esta atividade já foi concluída — envio bloqueado.",
+  "send.portalPending":
+    "O portal lista esta atividade em Notas, mas ainda não publicou o conteúdo dela na disciplina. Não há página para abrir ou enviar — tente atualizar novamente mais tarde.",
 
   // project context panel
   "project.title": "Contexto do projeto",
@@ -625,6 +628,8 @@ export const pt = {
 
   // server-provided refresh steps (translated client-side)
   "server.step.fetching": "Buscando conteúdo novo no portal",
+  "server.step.surfaces": "Buscando notas, calendário e avisos",
+  "server.step.portalIndex": "Montando o índice de tarefas do portal",
   "server.step.building": "Montando a lista de atividades",
   "server.step.done": "Concluído",
   "server.step.failed": "Falhou",

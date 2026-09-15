@@ -1,5 +1,5 @@
 import type { ApiClient } from "./client.js";
-import { logger } from "./config.js";
+import { config, logger } from "./config.js";
 
 export interface ContentAttachment {
   url: string;
@@ -91,6 +91,28 @@ export interface ContentItem {
   content: Record<string, unknown> | null;
   context: Record<string, unknown> | null;
   links: LinkItem[];
+  /**
+   * Where the item came from. `"gradebook"` marks an activity that the portal
+   * exposes under "Notas" but has not (yet) published in the content tree; the
+   * portal has no openable topic for it, so it cannot be answered/submitted.
+   */
+  origin?: "tree" | "gradebook";
+  /** False when the portal has no topic to open for this item (gradebook-only). */
+  topicAvailable?: boolean;
+}
+
+/** One graded activity as exposed by the course gradebook. */
+export interface GradebookActivity {
+  id: number;
+  name: string;
+  categoryId: number;
+  categoryName: string;
+  topicTypeId: number | null;
+  categoryTypeId: number | null;
+  /** UTC ISO timestamp from the portal (`2026-09-24T02:30:00.000Z`). */
+  deadlineAt: string | null;
+  isSubmited: boolean;
+  isDeadlineExpired: boolean;
 }
 
 export interface ContentCourse {
@@ -358,6 +380,145 @@ interface ContentTreeNode {
   deadlineAt?: string | null;
 }
 
+/** Gradebook activity types that correspond to answerable/submittable content. */
+const ACTIONABLE_GRADE_TYPES = new Set([8, 15, 29, 30, 37]);
+
+/** Accent/case/whitespace-insensitive title key, for matching gradebook ↔ tree. */
+function normalizeTitle(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** Render a portal UTC ISO timestamp as a local wall-clock `YYYY-MM-DD HH:MM:SS`. */
+function formatPortalDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: config.tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+}
+
+interface RawGradeNode {
+  id?: number;
+  name?: string;
+  topicTypeId?: number | null;
+  categoryTypeId?: number | null;
+  deadlineAt?: string | null;
+  isSubmited?: boolean;
+  isDeadlineExpired?: boolean;
+  children?: RawGradeNode[];
+}
+
+/**
+ * Flatten the course gradebook (`/v1/plataforma/grades/me/course/{id}`) into its
+ * graded activities. The portal can list an activity here before publishing it
+ * in the content tree — that is exactly how new exercises "go missing".
+ */
+export async function fetchGradebookActivities(
+  client: ApiClient,
+  courseId: number,
+): Promise<GradebookActivity[]> {
+  const res = await client.get<{ structure?: RawGradeNode[] }>(
+    `/v1/plataforma/grades/me/course/${courseId}`,
+  );
+  const out: GradebookActivity[] = [];
+  const walk = (node: RawGradeNode, categoryId: number, categoryName: string): void => {
+    const children = node.children ?? [];
+    const isCategory = children.length > 0 && node.topicTypeId == null;
+    const nextId = isCategory ? node.id ?? categoryId : categoryId;
+    const nextName = isCategory ? node.name ?? categoryName : categoryName;
+    if (children.length === 0) {
+      if (node.name && node.id != null && node.topicTypeId != null) {
+        out.push({
+          id: node.id,
+          name: node.name,
+          categoryId: nextId,
+          categoryName: nextName,
+          topicTypeId: node.topicTypeId,
+          categoryTypeId: node.categoryTypeId ?? null,
+          deadlineAt: node.deadlineAt ?? null,
+          isSubmited: node.isSubmited === true,
+          isDeadlineExpired: node.isDeadlineExpired === true,
+        });
+      }
+      return;
+    }
+    for (const child of children) walk(child, nextId, nextName);
+  };
+  for (const node of res.data.structure ?? []) walk(node, 0, node.name ?? "Atividades");
+  return out;
+}
+
+/**
+ * Surface graded activities the content tree is missing as synthetic items.
+ * They carry `origin: "gradebook"` + `topicAvailable: false` so the UI can show
+ * them (and block answering/submitting) instead of silently dropping them.
+ */
+export function reconcileGradebook(
+  course: { id: number; name: string },
+  items: ContentItem[],
+  activities: GradebookActivity[],
+): number {
+  const titles = new Set(items.map((it) => normalizeTitle(it.itemTitle)));
+  const enrollmentId =
+    items.map((it) => Number(it.context?.enrollmentId)).find((n) => Number.isFinite(n) && n > 0) ?? null;
+  let added = 0;
+  for (const activity of activities) {
+    const topicTypeId = activity.topicTypeId;
+    if (topicTypeId == null || !ACTIONABLE_GRADE_TYPES.has(topicTypeId)) continue;
+    if (titles.has(normalizeTitle(activity.name))) continue;
+    const deadlineAt = formatPortalDate(activity.deadlineAt);
+    const moduleId = activity.categoryId > 0 ? -activity.categoryId : -course.id;
+    items.push({
+      courseId: course.id,
+      courseName: course.name,
+      moduleId,
+      moduleTitle: activity.categoryName || "Atividades no portal",
+      sectionId: null,
+      sectionTitle: activity.categoryName || null,
+      itemId: -activity.id,
+      itemTitle: activity.name,
+      topicTypeId,
+      categoryTypeId: activity.categoryTypeId,
+      kind: classify(topicTypeId, 1, false),
+      progressTypeId: 1,
+      isRecordProgress: false,
+      done: activity.isSubmited,
+      viewed: false,
+      expired: activity.isDeadlineExpired,
+      hasDeadline: Boolean(deadlineAt),
+      deadlineAt,
+      hasCompletedAllAttempts: null,
+      grade: null,
+      studentGrade: null,
+      attachments: [],
+      html: null,
+      content: null,
+      context: enrollmentId != null ? { enrollmentId } : null,
+      links: [],
+      origin: "gradebook",
+      topicAvailable: false,
+    });
+    titles.add(normalizeTitle(activity.name));
+    added++;
+  }
+  return added;
+}
+
 /** Walk the content tree and collect every leaf item across all courses. */
 export async function collectContent(
   client: ApiClient,
@@ -476,7 +637,19 @@ export async function collectContent(
       const hasPdf = attachments.some((a) => a.url.toLowerCase().endsWith(".pdf"));
       const kind = classify(leaf.topicTypeId, leaf.progressTypeId, hasPdf);
       const done = isDone(leaf);
-      return { ...leaf, kind, done, attachments, html, content, context, links, studentGrade };
+      return {
+        ...leaf,
+        kind,
+        done,
+        attachments,
+        html,
+        content,
+        context,
+        links,
+        studentGrade,
+        origin: "tree" as const,
+        topicAvailable: true,
+      };
     });
 
     // Forum threads: the topic detail carries counts but the posts live at an
@@ -508,6 +681,21 @@ export async function collectContent(
       } catch (err) {
         logger.warn({ itemId: forum.itemId, err }, "failed to fetch forum posts");
       }
+    }
+
+    // The portal can list an activity under "Notas" before publishing it in the
+    // content tree. Reconcile so those never silently disappear from the dump.
+    try {
+      const gradebook = await fetchGradebookActivities(client, course.id);
+      const added = reconcileGradebook({ id: course.id, name: course.name }, items, gradebook);
+      if (added > 0) {
+        logger.warn(
+          { courseId: course.id, added },
+          "gradebook activities missing from the content tree — added as gradebook-only items",
+        );
+      }
+    } catch (err) {
+      logger.warn({ courseId: course.id, err }, "failed to reconcile gradebook");
     }
 
     result.push({ courseId: course.id, courseName: course.name, items });

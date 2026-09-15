@@ -144,6 +144,14 @@ export interface Exercise {
   contentKind: ContentKind;
   /** Whether the portal records progress for this item (drives "mark as completed"). */
   isRecordProgress: boolean;
+  /**
+   * Where the item came from. `"gradebook"` means the portal lists it under
+   * "Notas" but has not published it in the content tree; there is no openable
+   * topic, so it cannot be answered or submitted.
+   */
+  origin?: "tree" | "gradebook";
+  /** False when the portal has no topic to open (gradebook-only activity). */
+  topicAvailable?: boolean;
   courseId: number;
   courseName: string;
   moduleId: number;

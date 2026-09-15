@@ -26,6 +26,8 @@ interface RawItemLike {
   html: string | null;
   content: Record<string, unknown> | null;
   attachments: { url: string; filename: string | null; filesize: number | null }[];
+  origin?: "tree" | "gradebook";
+  topicAvailable?: boolean;
 }
 
 interface ViewRow {
@@ -160,6 +162,8 @@ export async function buildProjection(): Promise<Exercise[]> {
         isSurveyItem(row.title, `${raw.html ?? ""} ${String(raw.content?.instructions ?? "")}`),
       contentKind,
       isRecordProgress: row.is_record_progress === true,
+      origin: raw.origin ?? "tree",
+      topicAvailable: raw.topicAvailable !== false,
       courseId,
       courseName: row.course_name,
       moduleId: Number(row.module_id),
