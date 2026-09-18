@@ -1,0 +1,41 @@
+node_modules
+**/node_modules
+
+# Build output
+dist
+**/dist
+web/dist
+
+# Runtime / personal data (mounted as volumes instead)
+scraped
+data
+**/data
+**/profile.json
+**/overrides.json
+**/answers.json
+**/submissions.json
+**/storageState.json
+
+# Secrets
+.env
+**/.env
+**/.env.local
+**/.env.bak
+deploy/.env.prod
+
+# Dev / VCS / tooling
+.git
+.gitignore
+.githooks
+.github
+.opencode
+.playwright-mcp
+playwright-report
+test-results
+blob-report
+docs
+agent-docs
+assistant
+*.log
+logs
+.DS_Store

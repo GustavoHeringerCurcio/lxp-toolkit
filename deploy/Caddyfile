@@ -1,0 +1,13 @@
+# Reverse proxy + automatic TLS for the backend.
+#
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Replace api.example.com with your domain (A/AAAA record → VM public IP) and
+# open ports 80 + 443 in the Oracle VCN security list.
+api.example.com {
+	reverse_proxy 127.0.0.1:4174 {
+		# Do not buffer: the AI endpoints stream Server-Sent Events.
+		flush_interval -1
+	}
+}

@@ -3,6 +3,7 @@ import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from
 import { createServer } from "node:http";
 import path from "node:path";
 import { ASSISTANT_DIR, assist, dataDir, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
+import { isAuthorized, toolkitToken } from "../src/auth.js";
 import { createRefreshController } from "../src/refresh.js";
 import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import { healthCheck, query, runMigrations } from "../src/db.js";
@@ -562,6 +563,30 @@ const server = createServer(async (req, res) => {
   const method = req.method ?? "GET";
 
   try {
+    // Optional CORS (only when a browser calls the backend directly, bypassing
+    // the Vercel proxy). The proxy itself is same-origin, so this stays off.
+    const allowOrigin = process.env.ALLOWED_ORIGIN?.trim();
+    if (allowOrigin && url.startsWith("/api/")) {
+      res.setHeader("access-control-allow-origin", allowOrigin);
+      res.setHeader("access-control-allow-headers", "authorization, content-type, x-toolkit-token");
+      res.setHeader("access-control-allow-methods", "GET, POST, DELETE, OPTIONS");
+      if (method === "OPTIONS") {
+        res.writeHead(204);
+        return res.end();
+      }
+    }
+
+    // Unauthenticated liveness probe (Vercel proxy + uptime checks + cron).
+    if (url === "/api/health") {
+      return json(res, 200, { ok: true, time: new Date().toISOString() });
+    }
+
+    // When TOOLKIT_TOKEN is configured, the API and the scraped files are
+    // private: every request must carry the shared secret. Unset = local mode.
+    if ((url.startsWith("/api/") || url.startsWith("/scraped/")) && !isAuthorized(req)) {
+      return json(res, 401, { error: "não autorizado" });
+    }
+
     if (url === "/api/exercises") {
       return json(res, 200, { generatedAt: new Date().toISOString(), exercises: await allViews() });
     }
@@ -1445,11 +1470,14 @@ async function bootstrap(): Promise<void> {
   } catch (err) {
     console.warn(`   text: could not extract material (${err instanceof Error ? err.message : String(err)})`);
   }
-  server.listen(PORT, () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n📝 LXP Toolkit → http://localhost:${PORT}`);
     console.log(`   data: ${dataDir()}`);
     console.log(`   ai config: Postgres · ai_config`);
-    console.log(`   openai key: …${openaiKeyLast4()} (fonte: ${openaiKeySource()})\n`);
+    console.log(`   openai key: …${openaiKeyLast4()} (fonte: ${openaiKeySource()})`);
+    console.log(
+      `   auth: ${toolkitToken() ? "TOOLKIT_TOKEN ativo (API privada)" : "sem TOOLKIT_TOKEN (modo local)"}\n`,
+    );
   });
 }
 

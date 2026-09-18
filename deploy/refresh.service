@@ -1,0 +1,13 @@
+[Unit]
+Description=LXP Toolkit content refresh (scrape portal + rebuild indexes)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Contains TOOLKIT_TOKEN=... (and must match the backend env).
+EnvironmentFile=/etc/lxp-toolkit.env
+# The backend binds 127.0.0.1:4174 on the host (see docker-compose.prod.yml).
+# /api/refresh returns immediately; the scrape runs in the background and its
+# progress is visible in the app via /api/refresh/status.
+ExecStart=/usr/bin/curl -fsS --max-time 3600 -X POST -H "Authorization: Bearer ${TOOLKIT_TOKEN}" http://127.0.0.1:4174/api/refresh

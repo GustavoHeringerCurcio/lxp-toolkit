@@ -1,0 +1,65 @@
+# Production stack for the Oracle Cloud Always Free VM.
+#
+#   docker compose -f docker-compose.prod.yml --env-file deploy/.env.prod up -d --build
+#
+# Runtime secrets (LXP login, OPENAI_API_KEY, TOOLKIT_TOKEN, DATABASE_URL) live
+# in apps/server/.env and packages/portal/.env on the VM. Values under
+# `environment:` override those files so container networking wins.
+name: lxp-toolkit
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: lxp-toolkit-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lxp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lxp}
+      POSTGRES_DB: lxp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lxp -d lxp"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - lxp
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lxp-toolkit-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - apps/server/.env
+      - packages/portal/.env
+    environment:
+      # Container-internal DB, and the mounted volume the portal writes and the
+      # server reads (both use DATA_DIR/OUT_DIR = /data/scraped).
+      DATABASE_URL: postgres://lxp:${POSTGRES_PASSWORD:-lxp}@db:5432/lxp
+      DATA_DIR: /data/scraped
+      OUT_DIR: /data/scraped
+      PORT: "4174"
+      TOOLKIT_TOKEN: ${TOOLKIT_TOKEN:-}
+    volumes:
+      - scraped:/data/scraped
+      - serverdata:/app/apps/server/data
+    ports:
+      # Bound to loopback: Caddy (or an SSH tunnel) terminates TLS in front.
+      - "127.0.0.1:4174:4174"
+    networks:
+      - lxp
+
+volumes:
+  pgdata:
+  scraped:
+  serverdata:
+
+networks:
+  lxp:
+    driver: bridge

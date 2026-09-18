@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily LXP Toolkit content refresh
+
+[Timer]
+# 06:00 server time — run `timedatectl set-timezone America/Sao_Paulo` first.
+OnCalendar=*-*-* 06:00:00
+# Fire shortly after boot if the machine was off at 06:00.
+Persistent=true
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target
