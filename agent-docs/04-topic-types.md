@@ -26,7 +26,7 @@ groups them into coarse buckets.
 | **37** | **Exercícios** | exercise | 8 | **quiz** |
 | 49 | Saiba mais | know_more | 4 | other |
 
-The table above is **not exhaustive** — full 53-entry list in `scraped/raw/topic-types.json`.
+The table above is **not exhaustive** — full 56-entry list in `scraped/raw/topic-types.json`.
 Notable tenant-specific junk entries exist (typos like `TESTE`, `Projeto_MKT_RTX`) — the platform
 is "vibecoded".
 

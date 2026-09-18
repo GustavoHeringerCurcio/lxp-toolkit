@@ -27,39 +27,51 @@
   `{ browser, context, page, client, auth }`.
 - `src/auth.ts` / `src/client.ts` — login e cliente autenticado da API LXP.
 - `scripts/dump-content.ts` (`npm run dump`) — raspa o conteúdo do curso para `scraped/`.
-- `scripts/submit-task.ts` — runner de envio. Recebe `--req <json>` e `--result <json>`.
-  Hoje só trata `action: "upload"`: navega via `$nuxt.$router.push`, anexa o arquivo
-  montado a partir do texto, clica em enviar e detecta o sucesso.
+- `scripts/submit-task.ts` — runner de envio. Recebe `--req <json>` e `--result <json>` e
+  navega via `$nuxt.$router.push`. Ações: `upload` (texto digitado, `.txt` ou `.pdf` anexado),
+  `quiz` (marca as alternativas; `survey: true` para pesquisas) e `forum` (publica o post via
+  endpoint por matrícula, com fallback pelo compositor da SPA).
 
 ### apps/server + apps/web (produto)
 
 - `src/db.ts` + `db/migrations/` — Postgres (fonte da verdade): pool, transações e
   migrações versionadas (`schema_migrations`). O banco é **obrigatório** (sem fallback JSON);
   suba com `docker compose up -d db` e aplique com `npm run db:migrate`.
-- `src/import.ts` — importa `scraped/raw/content-tree.json` para o Postgres (idempotente) e faz
-  **reconciliação** do estado legado (`answers.json`, `submissions.json`, `overrides.json`,
-  `ai-config.json`) por chave natural (sem duplicar em re-execuções).
+- `src/import.ts` — importa `scraped/raw/content-tree.json` (incluindo tópicos ocultos,
+  `origin: "hidden"`) para o Postgres (idempotente) e faz **reconciliação** do estado legado
+  (`answers.json`, `submissions.json`, `overrides.json`, `ai-config.json`) por chave natural
+  (sem duplicar em re-execuções).
 - `src/store.ts` — **camada de escrita/leitura em runtime**: respostas, overrides, envios,
-  perfil, config de IA e `ai_run` vão direto para o Postgres. É a única fonte de verdade da
-  atividade do aluno.
+  perfil, config de IA, anotações e `ai_run` vão direto para o Postgres. É a única fonte de
+  verdade da atividade do aluno.
 - `src/professor.ts` — resolve o sufixo do título do módulo ("… - Profa. Débora Amorim") para o
   `safeaUserId` estável de `context.teachers[]` e grava `module_professor` (fonte, confiança).
+- `src/organizations.ts` — cruza o diretório commitado (`config/organizations.json`) com os
+  professores locais para resolver fotos; a imagem é carregada no navegador, não no servidor.
+- `src/project-context.ts` — detecta o projeto principal da disciplina e a relevância por
+  atividade (modelo barato, cacheado em `project_profile` / `activity_project`).
 - `src/project.ts` — projeta a view `v_exercise_current` para `data/exercises.json` (cache da UI)
   e calcula o `catalogVersion` que invalida o cache.
-- `src/load.ts` — orquestra `migrate → import → project` (`npm run index`).
-- `src/view.ts` — enriquece cada atividade com resposta salva, override e as instruções
-  extras de IA.
-- `src/prompt.ts` — compila as mensagens `system` (regras estruturadas) e `user`
-  (conteúdo da atividade) enviadas ao modelo.
-- `src/ai.ts` — chama a OpenAI (`chat.completions`, streaming) e devolve texto + proveniência
-  (modelo, tokens, prompt) para gravar em `ai_run`.
+- `src/load.ts` — orquestra `migrate → import → project` (`npm run index:web`).
+- `src/view.ts` — enriquece cada atividade com resposta salva, override, foto de professor e as
+  instruções extras de IA.
+- `src/prompt.ts` — compila as mensagens `system` (regras estruturadas + habilidades + projeto) e
+  `user` (conteúdo da atividade) enviadas ao modelo.
+- `src/ai.ts` — chama a OpenAI (streaming) e devolve texto + proveniência (modelo, tokens,
+  prompt) para gravar em `ai_run`.
+- `src/classify.ts` / `src/build.ts` — detecção de "flavor" e revisão preguiçosa por IA das
+  tarefas ambíguas.
+- `src/gate.ts` — quality gate do rascunho antes do envio.
+- `src/training.ts` / `src/training-store.ts` — modo treino: monta o pacote de conhecimento a
+  partir do Postgres e persiste sessões/questões/respostas.
+- `src/diagram.ts` / `src/diagram-tool.ts` — geração de diagramas.
 - `src/config.ts` — **legado**: só lê os JSON antigos para a importação e serve os testes.
 - `src/send.ts` — grava o request JSON, dá `spawn` no `submit-task.ts` do pacote do
   portal, acompanha o resultado e persiste o envio em `submission`. É a única ponte entre o
   app e a escrita no portal.
-- `server/server.ts` — API HTTP (exercícios, respostas, geração com streaming, envio,
-  preview de arquivos) e serve o build do web na porta 4174.
-- `../web/` — interface React (painel, atividade, ajustes).
+- `server/server.ts` — API HTTP (exercícios, respostas, geração com streaming, treino, envio,
+  preview de arquivos, god's eye) e serve o build do web na porta 4174.
+- `../web/` — interface React (painel, atividade, treino, ajustes, god's eye).
 
 ## Dados
 
@@ -73,6 +85,10 @@ Postgres é a **fonte da verdade** (local, por usuário, `DATABASE_URL` gitignor
   (tentativas imutáveis; a atual é a `is_current`), `answer_selection`, `submission`,
   `submission_payload`, `item_annotation`.
 - **IA** — `ai_config`, `ai_run`.
+- **Treino** — `training_quiz`, `training_question`, `training_answer`.
+- **Visibilidade (God's Eye)** — `content_item` ganha `origin`/`gradebook_id`/`is_visible`/
+  `is_future` (migração `0014`); itens ocultos ficam fora das listas normais e aparecem em
+  `/gods-eye`.
 - **Leitura** — view `v_exercise_current` (alimenta a projeção `/api/exercises`).
 
 Os JSON antigos **não são mais escritos** pelo app — servem apenas para a importação única:

@@ -3,7 +3,8 @@
 A resposta é gerada por **duas mensagens** montadas em `src/prompt.ts` (`buildMessages`):
 
 1. **`system`** — as regras de escrita, compiladas a partir do `style` estruturado
-   (`buildStylePrompt`), mais as instruções extras da atividade.
+   (`buildStylePrompt`), mais as instruções extras da atividade, o bloco de **habilidades**
+   (`abilities`) e o bloco de **projeto** da disciplina, quando houver.
 2. **`user`** — o conteúdo da atividade (`buildActivityPrompt`), com os placeholders preenchidos.
 
 Não existe um esqueleto editável cheio de marcadores `=== … ===`. O conteúdo é montado pelo
@@ -78,11 +79,12 @@ Observações do aluno:
 
 ## Como editar
 
-- **Global:** `config/ai-config.json` (`style` e `activitySections`) ou a tela **IA Ajustes**.
-- **Por atividade:** `config/overrides.json` (campo `aiRequest`) ou o painel
-  "O que a IA recebe" na tela da atividade. Aceita texto livre; JSON legado ainda é lido.
-- Os mesmos textos têm cópia em `src/config.ts` (`DEFAULT_STYLE`,
-  `DEFAULT_ACTIVITY_SECTIONS`) e em `web/src/lib/prompt-preview.ts`. Ao mudar um, mude o
+- **Global:** `apps/server/config/ai-config.json` (`style`, `activitySections`, `abilities` e
+  modelos por papel) ou a tela **IA Ajustes**. O runtime grava no Postgres (`ai_config`).
+- **Por atividade:** o painel "O que a IA recebe" na tela da atividade (`ai_request` no banco);
+  o antigo `config/overrides.json` é lido apenas na importação.
+- Os mesmos textos têm cópia em `apps/server/src/config.ts` (`DEFAULT_STYLE`,
+  `DEFAULT_ACTIVITY_SECTIONS`) e em `apps/web/src/lib/prompt-preview.ts`. Ao mudar um, mude o
   outro para não divergir.
 
 ## Regras de ouro

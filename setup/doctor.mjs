@@ -32,18 +32,26 @@ add(
 const depsOk = existsSync(path.join(ROOT, "node_modules")) && existsSync(path.join(ROOT, "node_modules", "@lxp-toolkit"));
 add("Dependencies installed", depsOk ? "ok" : "fail", depsOk ? "" : "run: npm install");
 
-// 3. Playwright Chromium browser
+// 3. Playwright Chromium browser — actually launch it, so missing Linux system
+// libraries are caught here instead of during the first scrape.
 let pwStatus = "fail";
 let pwDetail = "run: npx playwright install chromium";
 try {
   const { chromium } = await import("playwright");
   const exe = chromium.executablePath();
-  if (existsSync(exe)) {
+  if (!existsSync(exe)) {
+    pwDetail = "browser missing — run: npx playwright install chromium";
+  } else {
+    const browser = await chromium.launch({ headless: true });
+    await browser.close();
     pwStatus = "ok";
     pwDetail = "";
   }
-} catch {
-  pwDetail = "playwright not installed — run: npm install";
+} catch (err) {
+  const msg = String(err?.message ?? err);
+  pwDetail = /executable doesn't exist|please run|install/i.test(msg)
+    ? "browser missing — run: npx playwright install chromium"
+    : "browser failed to launch — run: npx playwright install --with-deps chromium";
 }
 add("Playwright Chromium", pwStatus, pwDetail);
 
@@ -56,11 +64,15 @@ add(
   credsOk ? "" : "missing LXP_USERNAME/LXP_PASSWORD — run: npm run setup",
 );
 
-// 5. OpenAI key
+// 5. OpenAI key (optional — only AI generation needs it)
 const server = readEnvFile(SERVER_ENV);
 const key = server?.OPENAI_API_KEY ?? "";
 const keyOk = key.length > 0 && key !== "sk-...";
-add("OpenAI API key (.env)", keyOk ? "ok" : "fail", keyOk ? "" : "missing OPENAI_API_KEY — run: npm run setup");
+add(
+  "OpenAI API key (optional)",
+  keyOk ? "ok" : "warn",
+  keyOk ? "" : "not set — AI generation disabled (add OPENAI_API_KEY to apps/server/.env)",
+);
 
 // 5b. OpenAI key source: `.env` is authoritative (paths.ts loads it with
 // `override: true`), so a differing shell env var no longer shadows it.
@@ -104,6 +116,19 @@ if (dbUrl) {
 }
 add("Postgres (required)", dbStatus, dbDetail);
 
+// 5d. Docker — what provides the bundled Postgres container.
+const dockerCli = await commandExists("docker", ["--version"]);
+const dockerDaemon = dockerCli && (await commandExists("docker", ["info"]));
+add(
+  "Docker (bundled Postgres)",
+  dockerDaemon ? "ok" : "warn",
+  dockerDaemon
+    ? ""
+    : dockerCli
+      ? "installed but the daemon isn't responding — start Docker"
+      : "not found — install Docker Desktop or Docker Engine + Compose v2",
+);
+
 // 6. Scraped content
 add(
   "Scraped content",
@@ -113,7 +138,9 @@ add(
 
 // 7. LibreOffice (optional — PDF/Office features)
 const sofficeBin = server?.SOFFICE_BIN?.trim();
-const soffice = sofficeBin ? existsSync(sofficeBin) : await commandExists("soffice");
+const soffice = sofficeBin
+  ? existsSync(sofficeBin) || (await commandExists(sofficeBin))
+  : await commandExists("soffice");
 add(
   "LibreOffice (optional)",
   soffice ? "ok" : "warn",
@@ -132,6 +159,15 @@ const portFree = await new Promise((resolve) => {
   srv.listen(4174, "127.0.0.1");
 });
 add("Port 4174 free", portFree ? "ok" : "warn", portFree ? "" : "in use — stop the other process or set PORT in apps/server/.env");
+
+// 8b. Port 5174 free (Vite dev server used by `npm run dev`)
+const devPortFree = await new Promise((resolve) => {
+  const srv = net.createServer();
+  srv.once("error", () => resolve(false));
+  srv.once("listening", () => srv.close(() => resolve(true)));
+  srv.listen(5174, "127.0.0.1");
+});
+add("Port 5174 free (dev)", devPortFree ? "ok" : "warn", devPortFree ? "" : "in use — stop the other process before `npm run dev`");
 
 // 9. Git hooks (PII guard)
 const hooks = await run("git", ["config", "--get", "core.hooksPath"], { capture: true });

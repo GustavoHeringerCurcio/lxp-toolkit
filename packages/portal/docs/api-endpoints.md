@@ -27,7 +27,7 @@ x-notice-show-modal: false
 |---|---|---|
 | GET | `/v1/plataforma/users/roles/me` | ✅ `{ safeaRole:"student", isStudent:true, ltiRole:"urn:lti:role:ims/lis/Learner", ... }` |
 | GET | `/v1/plataforma/settings/institution/configuration` | ✅ institution settings |
-| GET | `/v1/plataforma/settings/institution/configuration/topic-types` | ✅ 53-entry topic-type map (docs/topic-types.md) |
+| GET | `/v1/plataforma/settings/institution/configuration/topic-types` | ✅ 56-entry topic-type map (docs/topic-types.md) |
 | GET | `/v1/plataforma/academic/terms` | ✅ localized labels |
 | GET | `/v1/plataforma/academic/permission` | ✅ permission matrix |
 | GET | `/v2/integrate-module/support-settings?isActive=true` | ✅ support widget |

@@ -1446,7 +1446,7 @@ async function bootstrap(): Promise<void> {
     console.warn(`   text: could not extract material (${err instanceof Error ? err.message : String(err)})`);
   }
   server.listen(PORT, () => {
-    console.log(`\n📝 Pauta (LXP ToolKit) → http://localhost:${PORT}`);
+    console.log(`\n📝 LXP Toolkit → http://localhost:${PORT}`);
     console.log(`   data: ${dataDir()}`);
     console.log(`   ai config: Postgres · ai_config`);
     console.log(`   openai key: …${openaiKeyLast4()} (fonte: ${openaiKeySource()})\n`);

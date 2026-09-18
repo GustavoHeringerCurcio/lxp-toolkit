@@ -12,7 +12,9 @@ cp packages/portal/.env.example packages/portal/.env    # then fill LXP_USERNAME
 `LOG_LEVEL`, `HEADFUL`, `OUT_DIR`. The API base defaults to
 `https://api.plataforma.grupoa.education`; `OUT_DIR` defaults to `scraped` (gitignored).
 
-## Scripts (`npm run <name>`)
+## Scripts
+
+Everything below is a `npm run <name>` unless the row says `npx tsx`.
 
 | Script | File | What it does |
 |---|---|---|
@@ -22,8 +24,10 @@ cp packages/portal/.env.example packages/portal/.env    # then fill LXP_USERNAME
 | `crawl-routes` | `packages/portal/scripts/crawl-routes.ts` | capture SPA pages via client-side nav → `scraped/routes/**` + `scraped/portal-map.md` |
 | `capture-api` | `packages/portal/scripts/capture-api.ts` | record network traffic → `scraped/api-captured.md` + `scraped/raw/api-calls.json` |
 | `catalog` | `scripts/endpoint-catalog.mjs` | normalize the platform's `features[]` manifest from a captured `users/me` response → `agent-docs/endpoint-catalog.json` (the full endpoint surface; see `08-endpoint-catalog.md`) |
-| `capture-forum` | `packages/portal/scripts/capture-forum.ts` | headful forum capture that finishes by itself (no Enter): polls until a write request is seen → `scraped/forum-captured.md` + `scraped/raw/api-calls-forum.json` |
-| `capture-forum-write` | `packages/portal/scripts/capture-forum-write.ts` | forum write-discovery: dumps the thread via the read action, spy-wraps all forum Vuex actions, waits for a manual UI post → `scraped/raw/forum-write-spy.json` + `api-calls-forum-write.json` |
+| `npx tsx …/capture-forum.ts` | `packages/portal/scripts/capture-forum.ts` | headful forum capture that finishes by itself (no Enter): polls until a write request is seen → `scraped/forum-captured.md` + `scraped/raw/api-calls-forum.json` |
+| `npx tsx …/capture-forum-write.ts` | `packages/portal/scripts/capture-forum-write.ts` | forum write-discovery: dumps the thread via the read action, spy-wraps all forum Vuex actions, waits for a manual UI post → `scraped/raw/forum-write-spy.json` + `api-calls-forum-write.json` |
+| `npx tsx …/discover-exams.ts` | `packages/portal/scripts/discover-exams.ts` | sweep topic ids to discover exam/assessment topics → `scraped/raw/exam-scan.json` |
+| `npx tsx …/fetch-exams.ts` | `packages/portal/scripts/fetch-exams.ts` | fetch the full content of the topics discovered by `discover-exams.ts` → `scraped/raw/exams.json` |
 | `agent` | `packages/portal/scripts/agent.ts` | list actionable items; `--read`/`--complete` auto-completes undone readings **and** all "Mark as completed" content (pdf/link/rich); `--dry-run` previews |
 | `index` | `packages/portal/scripts/build-homework-index.ts` | build `scraped/raw/homework-index.json` (topic-linked: upload ↔ section ↔ sibling content ↔ local files) |
 | `homework` | `packages/portal/scripts/homework.ts` | friendly terminal board of open homework (grouped by section, sorted by due date); `--fresh`, `--json` |
@@ -75,9 +79,28 @@ normal task lists** and surfaced read-only at the web route `/gods-eye`.
 | `session.ts` | `createSession()` — launch Chromium, always fresh-login, return `{browser,context,page,client,auth}` |
 | `network.ts` | `NetworkRecorder` — capture API traffic (redacts auth/cookie headers) |
 | `content.ts` | `fetchCourses`, `collectContent` (tree walk), `classify`, parse helpers |
-| `exercises.ts` | read helpers (`fetchQuiz`, `fetchUploadTask`) + safe write-side stubs (`submitAnswer`, `uploadFile`) that throw until the submit endpoint is captured |
+| `exercises.ts` | read helpers (`fetchTopic`, `fetchQuiz`, `fetchUploadTask`) + write-side stubs (`submitAnswer`, `uploadFile`) that intentionally throw — real writes go through `scripts/submit-task.ts` (the SPA store path), not native fetch |
 | `actions.ts` | `markRead` (progress POST), `downloadPdf` |
 | `markdown.ts`, `util.ts` | html→md, slugify, sanitize, io helpers |
+
+## Architecture (apps/server/src/)
+
+| File | Role |
+|---|---|
+| `db.ts`, `migrate.ts` | Postgres pool + versioned SQL migrations (`db/migrations/`) |
+| `import.ts` | content tree → Postgres (idempotent); one-time reconciliation of legacy JSON |
+| `store.ts` | runtime read/write layer (answers, submissions, overrides, profile, `ai_config`, `ai_run`) |
+| `load.ts`, `project.ts` | `migrate → import → project` → `data/exercises.json` cache + `catalogVersion` |
+| `view.ts` | enriches each activity (saved answer, override, professor photo, extra AI instructions) |
+| `professor.ts`, `organizations.ts` | stable professor identity + photo directory matching |
+| `project-context.ts` | per-course project + per-activity relevance detection (cached) |
+| `prompt.ts`, `ai.ts` | compile `system` + `user` messages; stream OpenAI + provenance in `ai_run` |
+| `classify.ts`, `build.ts` | flavor detection + lazy AI review of ambiguous uploads |
+| `gate.ts` | quality gate over a draft before sending |
+| `training.ts`, `training-store.ts` | training packs + persisted quiz sessions |
+| `diagram.ts`, `diagram-tool.ts` | diagram generation |
+| `send.ts` | spawns the portal `submit-task.ts` runner; persists `submission` |
+| `config.ts` | **legacy** JSON reader used only by `import.ts` and tests |
 
 ## Prefer the offline index
 

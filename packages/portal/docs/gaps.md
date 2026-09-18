@@ -9,7 +9,8 @@ groups, enrollment history, grades v2, …) is documented there as a feature bac
 
 Originally scraped: content tree (145 items incl. quiz questions, file-upload instructions, links),
 grades, notices, messages, achievements, calendar, communities, and LTI tools. The **write** side
-(mutating the academic record) is now mapped too, but stays unautomated by policy.
+(mutating the academic record) is now mapped and implemented, but always stays behind the app's
+explicit confirmation dialog — nothing auto-submits.
 
 ## 0. Hidden topics (SOLVED — read side)
 
@@ -122,11 +123,14 @@ GET reads work without the AWS WAF token, but `aws-waf-token` cookie + `awswaf_s
 present. Writes (POST/PUT) may require the WAF challenge solved in-browser. Recommend driving all
 writes through Playwright (in-page) rather than native `fetch`.
 
-## How to close gap 2 (file upload)
+## Re-capturing a write flow
+
+If a write selector or body shape ever needs to be re-verified, capture the SPA traffic while
+performing the action manually:
 
 ```bash
-npm run capture-api -- --url https://unifoa2.grupoa.education/plataforma/course/5254272/content/89612190 --headful
-# → upload one file, then press Enter to dump the captured API calls
+npm run capture-api -- --url https://unifoa2.grupoa.education/plataforma/course/<courseId>/content/<topicId> --headful
+# → perform the action, then press Enter to dump the captured API calls
 ```
 
 > ⚠ These actions submit real work to the student's academic record. Run only with explicit intent.

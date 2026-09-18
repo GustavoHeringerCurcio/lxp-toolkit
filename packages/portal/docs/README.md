@@ -28,16 +28,20 @@ Each user scrapes **their own** account into `scraped/` (gitignored — never co
 - **Routes** (`scraped/routes/*.md`) — SPA routes captured via client-side navigation.
 - **Surfaces** (`scraped/*.md`) — grades, calendar, notices, messages, achievements, communities,
   LTI tools, each as readable markdown + raw JSON.
-- **Raw JSON** (`scraped/raw/`) — `content-tree.json`, `routes.json`, `api-calls.json`,
-  `surfaces.json`, `topic-types.json`, `example-quiz-topic.json`, `example-upload-topic.json`,
-  `deep-api.json`, `deep-routes.json`, `homework-index.json`.
+- **Raw JSON** (`scraped/raw/`) — `content-tree.json`, `hidden-index.json`, `routes.json`,
+  `api-calls.json`, `surfaces.json`, `topic-types.json`, `example-quiz-topic.json`,
+  `example-upload-topic.json`, `deep-api.json`, `deep-routes.json`, `homework-index.json`.
+- **Hidden topics** (`scraped/raw/hidden-index.json`) — the topic-detail endpoint serves content
+  by id even when the topic is absent from the student's tree. `npm run dump` harvests those
+  (`origin: "hidden"`); the app surfaces them read-only at `/gods-eye`.
 
 ## Friendly dashboards
 
 - **Terminal board:** `npm run homework` → open assignments/quizzes grouped by section, sorted by
   due date (`npm run homework -- --fresh` rebuilds the index first).
-- **LXP Homework** (automation + AI product, lives in `apps/`): web app with an ordered
-  exercise list, green/red badges and **gpt-4o-mini answers in pt-BR**. See `apps/server/README.md`.
+- **LXP Toolkit** (the main product, lives in `apps/`): a web app with a deadline-ordered task
+  board, an AI answer workbench (drafts in pt-BR, with version history), quiz practice and a
+  gated send flow. See `apps/server/README.md`.
 
 ## Facts worth remembering
 
@@ -53,14 +57,24 @@ Each user scrapes **their own** account into `scraped/` (gitignored — never co
 ## Commands
 
 ```bash
-npm run dump           # scrape your course content (incl. quizzes/uploads/links) + download files
+npm run dump           # scrape your course content (incl. quizzes/uploads/links) + hidden topics + files
 npm run dump-surfaces  # scrape your grades, calendar, notices, messages, achievements, communities, LTI
 npm run crawl-routes   # crawl SPA routes (client-side) → scraped/routes/** + scraped/portal-map.md
 npm run capture-api    # record network → scraped/api-captured.md
+npm run catalog        # normalize the platform's features[] manifest → agent-docs/endpoint-catalog.json
 npm run agent          # list / auto-complete readings (quiz/upload pending — see gaps.md)
 npm run index          # build scraped/raw/homework-index.json (topic-linked homework index)
 npm run homework       # friendly terminal board of open homework
 npm run exercises -- <itemId>   # read a quiz's questions or an upload's info from the API
+```
+
+Additional one-off runners (not wired as `npm run` scripts — invoke with `npx tsx`):
+
+```bash
+npx tsx packages/portal/scripts/discover-exams.ts   # find exam topics by id sweep
+npx tsx packages/portal/scripts/fetch-exams.ts      # fetch the discovered exam topics
+npx tsx packages/portal/scripts/capture-forum.ts    # headful forum capture
+npx tsx packages/portal/scripts/capture-forum-write.ts  # forum write discovery
 ```
 
 ## Topics to learn

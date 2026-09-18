@@ -40,7 +40,7 @@ node -e 'const c=require("./scraped/raw/content-tree.json");c[0].items.filter(i=
 
 ## Reference JSON
 
-- `scraped/raw/topic-types.json` — authoritative 53-entry topic-type mapping.
+- `scraped/raw/topic-types.json` — authoritative 56-entry topic-type mapping.
 - `scraped/raw/example-quiz-topic.json`, `scraped/raw/example-upload-topic.json` — example API payloads.
 
 ## When to re-scrape instead

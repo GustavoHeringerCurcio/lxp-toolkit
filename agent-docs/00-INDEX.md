@@ -26,16 +26,18 @@ agent-docs/                 ← THIS knowledge base (read this first)
 packages/portal/            ← CORE 1: reverse-engineering toolkit
 ├── src/                    ← TypeScript source (config, client, auth, session, network, content, actions, exercises)
 ├── scripts/                ← runnable entry points (login, dump, dump-surfaces, crawl-routes, capture-api,
-│                              agent, index, homework, exercises, submit-task)
+│                              catalog, agent, index, homework, exercises, submit-task, capture-forum,
+│                              discover-exams, fetch-exams)
 └── docs/                   ← human reverse-engineering notes (committed): auth.md, api-endpoints.md, …
 scraped/                    ← YOUR scraped data (gitignored; never commit)
 ├── courses/{courseId}-{slug}/   ← per-item .md dumps + downloaded files/
-├── raw/                    ← content-tree.json, homework-index.json, surfaces.json, topic-types.json …
+├── raw/                    ← content-tree.json, hidden-index.json, homework-index.json,
+│                              surfaces.json, topic-types.json …
 ├── routes/                 ← SPA route DOM captures
 └── grades-*.md, calendar.md, notices.md, messages.md, achievements.md, lti-tools.md …
 apps/                       ← CORE 2: the LXP Toolkit web app (main product)
-├── web/                    ← React UI
-└── server/                 ← backend API + AI (serves the web build)
+├── web/                    ← React UI (Agora, Tarefas, Atividade, Treino, God's Eye, Ajustes)
+└── server/                 ← backend API + AI + Postgres (serves the web build)
 ```
 
 ## Golden rules (always true)

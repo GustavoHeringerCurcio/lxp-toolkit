@@ -16,6 +16,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+    networks:
+      - lxp
+
+networks:
+  lxp:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.99.0.0/16
 
 volumes:
   lxp_pgdata:
