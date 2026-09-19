@@ -16,6 +16,24 @@ knowledge base in `agent-docs/` — start with `00-INDEX.md`.** `agent-docs/` is
 context an agent needs; `packages/portal/docs/` holds the human reverse-engineering notes.
 Per-user scraped output lives in the gitignored `scraped/` folder (never commit it).
 
+## Where to read (by task)
+
+| Task | Read first |
+|---|---|
+| Portal auth / API / scraping | `agent-docs/00-INDEX.md` → `01`–`08` |
+| App internals (`apps/server`/`apps/web`), DB, AI, send | `agent-docs/09-app-architecture.md` |
+| Hosting / topology / limits / secrets | `agent-docs/10-deployment.md` (+ `HOSTING.md` for humans) |
+| Day-2 ops: commands, backup, upgrade, debug | `agent-docs/11-operations.md` |
+| Design system / components | `apps/web/DESIGN.md` |
+| Prompt rules sent to the model | `apps/server/docs/PROMPT.md` |
+
+**Cloud deploy is split (hybrid).** The static UI + a thin proxy (`api/proxy/[...path].ts`,
+`vercel.json`) run on Vercel; the API, Playwright scraper, LibreOffice and Postgres run on a VM
+(`Dockerfile` + `docker-compose.prod.yml`, Oracle Cloud Always Free). The browser only resolves
+`*.vercel.app`; the proxy injects `TOOLKIT_TOKEN` server-side so the secret never ships to the
+client. `/api/*` and `/scraped/**` are gated by `apps/server/src/auth.ts`; `/api/health` is public.
+Full detail: `agent-docs/10-deployment.md`.
+
 ## Quick facts
 
 - The LXP bearer token is single-use/single-page-session → always fresh-login; navigate the SPA
@@ -53,3 +71,7 @@ Per-user scraped output lives in the gitignored `scraped/` folder (never commit 
 - `scraped/raw/homework-index.json` (built by `npm run index`) links each open assignment to its
   section + sibling content + local files — prefer it over re-scraping. The web UI is
   `npm run dev` (serves `apps/web` via Vite + `apps/server`) or `npm run web` (built static).
+- **Verify changes with `npm run typecheck` and `npm test`** (server + web + portal suites). The
+  auth gate is covered by `apps/server/test/auth.test.ts`; `npm run doctor` checks the machine.
+- **Never commit** `.env`, `scraped/`, `data/`, or `deploy/.env.prod` — all gitignored, all
+  personal/secret.

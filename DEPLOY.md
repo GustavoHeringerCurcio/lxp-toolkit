@@ -1,5 +1,9 @@
 # Deploying LXP Toolkit — Vercel frontend + Oracle Cloud backend
 
+> Looking for a friendlier, click-by-click walkthrough (in Portuguese)? See
+> [`HOSTING.md`](./HOSTING.md). This file is the terse technical reference.
+> No domain? Use [`sslip.io`](https://sslip.io): point Caddy at `<PUBLIC_IP>.sslip.io`.
+
 Split deployment so the app is reachable from a phone / the college network while
 the heavy work (Playwright scrape, LibreOffice, Postgres) runs on a free VM:
 
@@ -142,7 +146,9 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:4174/api/exercises   #
 
 ## 5. TLS (Caddy)
 
-Point a DNS **A record** for `api.<your-domain>` at the VM's public IP, then:
+No domain? `sslip.io` maps `<PUBLIC_IP>.sslip.io` to the VM automatically — set the Caddyfile host
+to `129.80.12.34.sslip.io` and use that as `BACKEND_URL`. Otherwise, point a DNS **A record** for
+`api.<your-domain>` at the VM's public IP, then:
 
 ```bash
 sudo apt-get install -y caddy

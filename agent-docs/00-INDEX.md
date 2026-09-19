@@ -16,6 +16,15 @@ anything portal-related.
 8. **`08-endpoint-catalog.md`** — the platform's full self-published endpoint surface + feature
    backlog. Read before designing any new feature. (5 min)
 
+Working on the **app** (`apps/server` + `apps/web`) or the **deployment**? Read these instead:
+
+9. **`09-app-architecture.md`** — the product: API routes, data pipeline, Postgres schema, AI
+   chain, send bridge, refresh controller, frontend, env vars. (6 min)
+10. **`10-deployment.md`** — hybrid Vercel + Oracle topology, auth/secret model, container,
+    volumes, cron, TLS, failure modes. (5 min)
+11. **`11-operations.md`** — day-2 runbook: commands, backup/restore, upgrade, rotate token,
+    debug proxy/SSE. (4 min)
+
 If the task is narrow (e.g. "why did grades come back empty"), read the one relevant file only.
 Before building a feature, also open `08-endpoint-catalog.md` + `endpoint-catalog.json`.
 
@@ -38,6 +47,11 @@ scraped/                    ← YOUR scraped data (gitignored; never commit)
 apps/                       ← CORE 2: the LXP Toolkit web app (main product)
 ├── web/                    ← React UI (Agora, Tarefas, Atividade, Treino, God's Eye, Ajustes)
 └── server/                 ← backend API + AI + Postgres (serves the web build)
+deploy/                     ← Caddyfile, systemd refresh units, .env.prod.example
+Dockerfile                  ← backend image (Node + Chromium + LibreOffice)
+docker-compose.prod.yml     ← backend + Postgres stack (Oracle VM)
+vercel.json + api/proxy/    ← frontend build + serverless proxy (production)
+DEPLOY.md / HOSTING.md      ← deploy reference / friendly pt-BR walkthrough
 ```
 
 ## Golden rules (always true)
@@ -47,3 +61,6 @@ apps/                       ← CORE 2: the LXP Toolkit web app (main product)
 - API base: `https://api.plataforma.grupoa.education`
 - `unifoa.lyceum.com.br` is **only** the SSO login gateway. It is not a scrape target.
 - Course content is fetched via JSON endpoints; the SPA (Nuxt 3) is just a client.
+- **Cloud deploy is split:** the UI + a thin proxy run on Vercel; the API, Playwright scraper,
+  LibreOffice and Postgres run on a VM (Docker). The proxy adds `TOOLKIT_TOKEN` server-side, so the
+  browser never holds the secret. See `10-deployment.md`.

@@ -283,7 +283,12 @@ file first. A quality gate flags drafts that look off before you send.
 
 | Doc | Contents |
 |---|---|
+| [`HOSTING.md`](HOSTING.md) | **Hospedagem passo a passo (pt-BR)** — Vercel + Oracle Cloud, do zero. |
+| [`DEPLOY.md`](DEPLOY.md) | Referência técnica de deploy (Vercel + VM, TLS, cron, seed). |
 | [`agent-docs/00-INDEX.md`](agent-docs/00-INDEX.md) | The machine-readable knowledge base — start here for portal work. |
+| [`agent-docs/09-app-architecture.md`](agent-docs/09-app-architecture.md) | App internals: API, pipeline, schema, AI, send. |
+| [`agent-docs/10-deployment.md`](agent-docs/10-deployment.md) | Topology, auth model, container, limits. |
+| [`agent-docs/11-operations.md`](agent-docs/11-operations.md) | Day-2 runbook: backup, upgrade, debug. |
 | [`packages/portal/docs/README.md`](packages/portal/docs/README.md) | Reverse-engineering index. |
 | [`packages/portal/docs/auth.md`](packages/portal/docs/auth.md) | SSO flow, token lifecycle, headers. |
 | [`packages/portal/docs/api-endpoints.md`](packages/portal/docs/api-endpoints.md) | Every endpoint discovered. |
