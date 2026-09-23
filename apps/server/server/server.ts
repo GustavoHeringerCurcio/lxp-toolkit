@@ -57,7 +57,12 @@ import {
   getTrainingStats,
   type TrainingAnswerInput,
 } from "../src/training-store.js";
-import { generateResumo, normalizeSummarySize, summarizeItems } from "../src/summary.js";
+import {
+  generateResumo,
+  normalizeSummaryMarkdown,
+  normalizeSummarySize,
+  summarizeItems,
+} from "../src/summary.js";
 import { getStudySummary, saveStudySummary } from "../src/summary-store.js";
 import {
   deleteExam,
@@ -847,7 +852,9 @@ const server = createServer(async (req, res) => {
     // Render a Resumo (markdown) to PDF for download/preview.
     if (url === "/api/summary/pdf" && method === "POST") {
       const b = await readBody(req);
-      const markdown = String(b.markdown ?? "");
+      // Older summaries may be wrapped in a ```markdown fence — strip it so the
+      // PDF renders the same way the UI does.
+      const markdown = normalizeSummaryMarkdown(String(b.markdown ?? ""));
       const title = String(b.title ?? "Resumo").trim() || "Resumo";
       const download = b.download === true;
       if (!markdown.trim()) return json(res, 400, { error: "markdown obrigatório" });

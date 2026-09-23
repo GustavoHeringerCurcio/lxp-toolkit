@@ -42,8 +42,8 @@ describe("Markdown", () => {
     expect(container.textContent).toContain("[mal](javascript:alert(1))");
   });
 
-  it("renderiza blocos de código cercados", () => {
-    const { container } = render(<Markdown content={"```ts\nconst x = 1;\n```"} />);
+  it("renderiza blocos de código no meio do conteúdo", () => {
+    const { container } = render(<Markdown content={"Antes:\n```ts\nconst x = 1;\n```\nDepois."} />);
     const code = container.querySelector("pre code");
     expect(code?.textContent).toContain("const x = 1;");
   });
@@ -55,5 +55,28 @@ describe("Markdown", () => {
 
   it("retorna vazio para conteúdo em branco", () => {
     expect(parseMarkdown("")).toHaveLength(0);
+  });
+
+  it("desembrulha a cerca ```markdown que envolve a resposta inteira", () => {
+    const { container } = render(
+      <Markdown content={"```markdown\n## Visão geral\n\n- um\n```"} />,
+    );
+    // Rendered as heading + list, never as a raw code block.
+    expect(container.querySelector("pre")).toBeNull();
+    expect(container.querySelector("ul li")?.textContent).toBe("um");
+    expect(container.textContent).toContain("Visão geral");
+  });
+
+  it("agrupa itens separados por linha em branco numa única lista", () => {
+    const { container } = render(<Markdown content={"- um\n\n- dois\n\n- três"} />);
+    expect(container.querySelectorAll("ul")).toHaveLength(1);
+    expect(container.querySelectorAll("ul li")).toHaveLength(3);
+  });
+
+  it("mantém blocos de código reais quando há mais de uma cerca", () => {
+    const { container } = render(
+      <Markdown content={"texto\n```sql\nSELECT 1;\n```\nfim"} />,
+    );
+    expect(container.querySelector("pre code")?.textContent).toContain("SELECT 1;");
   });
 });

@@ -75,9 +75,25 @@ const HEADING_CLASS: Record<number, string> = {
   6: "font-heading text-sm font-semibold",
 };
 
+/**
+ * The model sometimes wraps the whole answer in a ```markdown fence (more often
+ * on the longer sizes). Rendering that as a code block is what makes a big
+ * Resumo look like raw markdown, so unwrap a single outer fence first.
+ */
+export function stripOuterFence(content: string): string {
+  const text = content.replace(/\r\n/g, "\n").trim();
+  if (!text.startsWith("```")) return content;
+  const lines = text.split("\n");
+  if (!/^```[a-zA-Z0-9_-]*$/.test(lines[0].trim())) return content;
+  if (lines[lines.length - 1].trim() !== "```") return content;
+  const inner = lines.slice(1, -1).join("\n");
+  if (inner.includes("```")) return content; // real multi-block content — keep
+  return inner;
+}
+
 /** Parse the summary markdown into React elements. */
 export function parseMarkdown(content: string): ReactNode[] {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const lines = stripOuterFence(content).replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
   let i = 0;
   let key = 0;
@@ -146,11 +162,23 @@ export function parseMarkdown(content: string): ReactNode[] {
       continue;
     }
 
-    // Unordered list
+    // Unordered list (tolerate blank lines between items — the model emits them)
     if (/^\s*[-*+]\s+/.test(line)) {
       const items: string[] = [];
-      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-        items.push(lines[i++].replace(/^\s*[-*+]\s+/, ""));
+      while (i < lines.length) {
+        if (/^\s*[-*+]\s+/.test(lines[i])) {
+          items.push(lines[i++].replace(/^\s*[-*+]\s+/, ""));
+          continue;
+        }
+        if (/^\s*$/.test(lines[i])) {
+          let j = i + 1;
+          while (j < lines.length && /^\s*$/.test(lines[j])) j++;
+          if (j < lines.length && /^\s*[-*+]\s+/.test(lines[j])) {
+            i = j;
+            continue;
+          }
+        }
+        break;
       }
       blocks.push(
         <ul key={nextKey()} className="list-disc space-y-1 pl-5">
@@ -162,11 +190,23 @@ export function parseMarkdown(content: string): ReactNode[] {
       continue;
     }
 
-    // Ordered list
+    // Ordered list (same blank-line tolerance)
     if (/^\s*\d+[.)]\s+/.test(line)) {
       const items: string[] = [];
-      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
-        items.push(lines[i++].replace(/^\s*\d+[.)]\s+/, ""));
+      while (i < lines.length) {
+        if (/^\s*\d+[.)]\s+/.test(lines[i])) {
+          items.push(lines[i++].replace(/^\s*\d+[.)]\s+/, ""));
+          continue;
+        }
+        if (/^\s*$/.test(lines[i])) {
+          let j = i + 1;
+          while (j < lines.length && /^\s*$/.test(lines[j])) j++;
+          if (j < lines.length && /^\s*\d+[.)]\s+/.test(lines[j])) {
+            i = j;
+            continue;
+          }
+        }
+        break;
       }
       blocks.push(
         <ol key={nextKey()} className="list-decimal space-y-1 pl-5">

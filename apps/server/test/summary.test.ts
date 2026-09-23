@@ -6,6 +6,7 @@ import {
   buildPartialMessages,
   chunkItems,
   isSinglePass,
+  normalizeSummaryMarkdown,
   normalizeSummarySize,
   SIZE_PROFILES,
   SUMMARY_SIZES,
@@ -130,6 +131,20 @@ describe("summary · tamanhos", () => {
       questions: 1,
       hidden: true,
     });
+  });
+
+  it("remove a cerca de código que envolve a resposta inteira", () => {
+    const fenced = '```markdown\n## Visão geral\n\n- um\n\n- dois\n```';
+    expect(normalizeSummaryMarkdown(fenced)).toBe("## Visão geral\n\n- um\n\n- dois");
+    // Without a language tag too.
+    expect(normalizeSummaryMarkdown("```\n# Título\n```")).toBe("# Título");
+    // Real content is untouched.
+    expect(normalizeSummaryMarkdown("## Direto\n- um")).toBe("## Direto\n- um");
+    // Multiple fences = legitimate code blocks; keep verbatim.
+    const multi = "texto\n```sql\nSELECT 1;\n```\nfim";
+    expect(normalizeSummaryMarkdown(multi)).toBe(multi);
+    // Unterminated fence; keep verbatim.
+    expect(normalizeSummaryMarkdown("```markdown\nincompleto")).toBe("```markdown\nincompleto");
   });
 });
 

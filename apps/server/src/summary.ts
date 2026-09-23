@@ -81,6 +81,22 @@ export function normalizeSummarySize(value: unknown): SummarySize {
   return isSummarySize(value) ? value : "medium";
 }
 
+/**
+ * Some models wrap the whole answer in a ```markdown fence (mostly on the
+ * longer sizes). Strip a single outer fence so the saved markdown renders
+ * normally in the UI and in the PDF.
+ */
+export function normalizeSummaryMarkdown(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("```")) return trimmed;
+  const lines = trimmed.split("\n");
+  if (!/^```[a-zA-Z0-9_-]*$/.test(lines[0].trim())) return trimmed;
+  if (lines[lines.length - 1].trim() !== "```") return trimmed;
+  const inner = lines.slice(1, -1).join("\n");
+  if (inner.includes("```")) return trimmed; // real multi-block content — keep
+  return inner.trim();
+}
+
 // ── Context chunking (pure) ─────────────────────────────────────────────────
 
 export interface SummaryChunk {
@@ -229,7 +245,8 @@ export function buildFinalSummaryMessages(
     `(para cada uma: a pergunta, a resposta correta em uma linha e o porquê em uma linha; ` +
     `inclua cerca de ${profile.questions} questões)\n` +
     `## Pegadinhas\n\n` +
-    `Seja específico e fiel ao material. Não repita as instruções nem escreva introdução ou despedida.`;
+    `Seja específico e fiel ao material. Não repita as instruções nem escreva introdução ou despedida. ` +
+    `Escreva o markdown direto, sem cercas de código (nada de \`\`\`).`;
   return [
     { role: "system", content: system },
     { role: "user", content: user },
@@ -390,7 +407,7 @@ export async function generateResumo(
   );
   provenances.push(provenance);
 
-  const content = text.trim();
+  const content = normalizeSummaryMarkdown(text);
   if (!content) throw new Error("A IA não retornou o resumo.");
   return {
     content,
