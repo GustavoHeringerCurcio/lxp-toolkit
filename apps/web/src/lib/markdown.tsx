@@ -91,9 +91,73 @@ export function stripOuterFence(content: string): string {
   return inner;
 }
 
+/** Drop leaked portal question ids ("Q36049942:", often inside bold). */
+export function stripQuestionIds(content: string): string {
+  return content
+    .replace(/\*{0,2}\s*Q\d{4,}\b\s*[:.]?\s*\*{0,2}\s*/g, "")
+    .replace(/\*{4,}/g, "");
+}
+
+interface RawListItem {
+  indent: number;
+  ordered: boolean;
+  text: string;
+}
+
+interface ListItemNode {
+  text: string;
+  children: ListNode | null;
+}
+
+interface ListNode {
+  ordered: boolean;
+  items: ListItemNode[];
+}
+
+const LIST_RE = /^(\s*)([-*+•+]|\d+[.)])\s+(.*)$/;
+
+function parseListTree(raw: RawListItem[], start: number, indent: number): { node: ListNode; next: number } {
+  const ordered = raw[start].ordered;
+  const node: ListNode = { ordered, items: [] };
+  let i = start;
+  while (i < raw.length) {
+    const cur = raw[i];
+    if (cur.indent < indent) break;
+    if (cur.indent === indent && cur.ordered !== ordered) break;
+    if (cur.indent > indent) break;
+    const item: ListItemNode = { text: cur.text, children: null };
+    node.items.push(item);
+    i++;
+    if (i < raw.length && raw[i].indent > indent) {
+      const child = parseListTree(raw, i, raw[i].indent);
+      item.children = child.node;
+      i = child.next;
+    }
+  }
+  return { node, next: i };
+}
+
+function renderList(node: ListNode, keyPrefix: string): ReactNode {
+  const items = node.items.map((item, i) => (
+    <li key={i}>
+      {renderInline(item.text, `${keyPrefix}-${i}`)}
+      {item.children && renderList(item.children, `${keyPrefix}-${i}c`)}
+    </li>
+  ));
+  return node.ordered ? (
+    <ol key={keyPrefix} className="list-decimal space-y-1 pl-5">
+      {items}
+    </ol>
+  ) : (
+    <ul key={keyPrefix} className="list-disc space-y-1 pl-5">
+      {items}
+    </ul>
+  );
+}
+
 /** Parse the summary markdown into React elements. */
 export function parseMarkdown(content: string): ReactNode[] {
-  const lines = stripOuterFence(content).replace(/\r\n/g, "\n").split("\n");
+  const lines = stripQuestionIds(stripOuterFence(content)).replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
   let i = 0;
   let key = 0;
@@ -162,59 +226,37 @@ export function parseMarkdown(content: string): ReactNode[] {
       continue;
     }
 
-    // Unordered list (tolerate blank lines between items — the model emits them)
-    if (/^\s*[-*+]\s+/.test(line)) {
-      const items: string[] = [];
+    // List (unordered/ordered, nested by indentation; tolerate blank lines).
+    if (LIST_RE.test(line)) {
+      const raw: RawListItem[] = [];
       while (i < lines.length) {
-        if (/^\s*[-*+]\s+/.test(lines[i])) {
-          items.push(lines[i++].replace(/^\s*[-*+]\s+/, ""));
+        const lm = LIST_RE.exec(lines[i]);
+        if (lm) {
+          raw.push({
+            indent: Math.floor(lm[1].replace(/\t/g, "  ").length / 2),
+            ordered: /\d/.test(lm[2]),
+            text: lm[3].trim(),
+          });
+          i++;
           continue;
         }
         if (/^\s*$/.test(lines[i])) {
           let j = i + 1;
           while (j < lines.length && /^\s*$/.test(lines[j])) j++;
-          if (j < lines.length && /^\s*[-*+]\s+/.test(lines[j])) {
+          if (j < lines.length && LIST_RE.test(lines[j])) {
             i = j;
             continue;
           }
         }
         break;
       }
-      blocks.push(
-        <ul key={nextKey()} className="list-disc space-y-1 pl-5">
-          {items.map((item, idx) => (
-            <li key={idx}>{renderInline(item, nextKey())}</li>
-          ))}
-        </ul>,
-      );
-      continue;
-    }
-
-    // Ordered list (same blank-line tolerance)
-    if (/^\s*\d+[.)]\s+/.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length) {
-        if (/^\s*\d+[.)]\s+/.test(lines[i])) {
-          items.push(lines[i++].replace(/^\s*\d+[.)]\s+/, ""));
-          continue;
-        }
-        if (/^\s*$/.test(lines[i])) {
-          let j = i + 1;
-          while (j < lines.length && /^\s*$/.test(lines[j])) j++;
-          if (j < lines.length && /^\s*\d+[.)]\s+/.test(lines[j])) {
-            i = j;
-            continue;
-          }
-        }
-        break;
+      let idx = 0;
+      while (idx < raw.length) {
+        const { node, next } = parseListTree(raw, idx, raw[idx].indent);
+        blocks.push(renderList(node, nextKey()));
+        if (next <= idx) break; // safety against a malformed list
+        idx = next;
       }
-      blocks.push(
-        <ol key={nextKey()} className="list-decimal space-y-1 pl-5">
-          {items.map((item, idx) => (
-            <li key={idx}>{renderInline(item, nextKey())}</li>
-          ))}
-        </ol>,
-      );
       continue;
     }
 

@@ -79,4 +79,23 @@ describe("Markdown", () => {
     );
     expect(container.querySelector("pre code")?.textContent).toContain("SELECT 1;");
   });
+
+  it("remove IDs de questões vazados do texto", () => {
+    const { container } = render(
+      <Markdown content={"Questões prováveis\n\n1. **Q36049942:** Requisitos não funcionais dizem respeito a qualidade."} />,
+    );
+    expect(container.textContent).not.toContain("36049942");
+    expect(container.textContent).not.toContain("****");
+    expect(container.textContent).toContain("Requisitos não funcionais");
+  });
+
+  it("aninha listas por indentação", () => {
+    const md = "- Requisitos de Software:\n  - Funcionais: o que\n  - Não funcionais: como\n- Qualidade:";
+    const { container } = render(<Markdown content={md} />);
+    const outer = container.querySelector("ul");
+    expect(outer?.children.length).toBe(2); // dois itens de topo
+    const nested = outer?.querySelector("ul");
+    expect(nested).not.toBeNull();
+    expect(nested?.querySelectorAll("li").length).toBe(2);
+  });
 });

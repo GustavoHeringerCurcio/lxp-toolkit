@@ -5,6 +5,7 @@ import {
   buildItemBlock,
   buildPartialMessages,
   chunkItems,
+  formatQuestion,
   isSinglePass,
   normalizeSummaryMarkdown,
   normalizeSummarySize,
@@ -13,7 +14,7 @@ import {
   summarizeItems,
 } from "../src/summary.js";
 import { getStudySummary, saveStudySummary } from "../src/summary-store.js";
-import type { ContextItem, SubjectContext } from "../src/training.js";
+import type { ContextItem, ContextQuestion, SubjectContext } from "../src/training.js";
 
 // ── Pure chunking + prompts (always run) ────────────────────────────────────
 
@@ -57,7 +58,7 @@ describe("summary · chunking e prompts", () => {
     const block = buildItemBlock(ctx);
     expect(block).toContain("Item 1");
     expect(block).toContain("Conteúdo da apostila.");
-    expect(block).toContain("Q7. O que é uma PK?");
+    expect(block).toContain("Questão 1. O que é uma PK?");
     expect(block).toContain("a) chave");
     expect(block).toContain("aula.pdf");
   });
@@ -145,6 +146,44 @@ describe("summary · tamanhos", () => {
     expect(normalizeSummaryMarkdown(multi)).toBe(multi);
     // Unterminated fence; keep verbatim.
     expect(normalizeSummaryMarkdown("```markdown\nincompleto")).toBe("```markdown\nincompleto");
+  });
+});
+
+describe("summary · questões legíveis", () => {
+  const portal: ContextQuestion = {
+    id: 36049942,
+    text: "Requisitos não funcionais dizem respeito a critérios de qualidade?",
+    options: ["Sim", "Não"],
+    itemId: 1,
+    itemTitle: "T",
+  };
+
+  it("não expõe os IDs do portal no material nem no banco de questões", () => {
+    const formatted = formatQuestion(portal, 0);
+    expect(formatted).toContain("Questão 1.");
+    expect(formatted).not.toContain("36049942");
+
+    const block = buildItemBlock({ ...item(1, "AER"), questions: [portal] });
+    expect(block).not.toContain("36049942");
+    expect(block).toContain("Questão 1.");
+    expect(block).toContain("a) Sim");
+
+    const ctx = ctxFixture();
+    ctx.questions = [portal];
+    const user = buildFinalSummaryMessages(ctx, "m").find((m) => m.role === "user")?.content ?? "";
+    expect(user).not.toMatch(/\bQ\d{4,}\b/);
+    expect(user).toContain("Questão 1.");
+    expect(user).toContain("**Resposta:**");
+  });
+
+  it("remove IDs de questões vazados no texto gerado", () => {
+    const raw =
+      "## Questões prováveis\n\n1. **Q36049942:** Requisitos não funcionais dizem respeito a qualidade.\nQ36049937: Outra pergunta.";
+    const out = normalizeSummaryMarkdown(raw);
+    expect(out).not.toMatch(/\bQ\d{4,}\b/);
+    expect(out).not.toContain("****");
+    expect(out).toContain("1. Requisitos não funcionais");
+    expect(out).toContain("Outra pergunta");
   });
 });
 

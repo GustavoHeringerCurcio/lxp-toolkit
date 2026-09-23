@@ -359,10 +359,10 @@ export async function buildSubjectContext(
     if (material) parts.push(material.slice(0, MAX_ITEM_CHARS));
     if (questions.length) {
       const lines = ["Questões do quiz:"];
-      for (const q of questions) {
-        lines.push(`  Q${q.id}. ${q.text}`);
-        q.options.forEach((opt, i) => lines.push(`     ${String.fromCharCode(97 + i)}) ${opt}`));
-      }
+      questions.forEach((q, i) => {
+        lines.push(`  Questão ${i + 1}. ${q.text}`);
+        q.options.forEach((opt, j) => lines.push(`     ${String.fromCharCode(97 + j)}) ${opt}`));
+      });
       parts.push(lines.join("\n"));
     }
     if (item.fileNames.length) parts.push(`Arquivos: ${item.fileNames.join(", ")}`);

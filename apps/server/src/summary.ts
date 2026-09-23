@@ -82,19 +82,32 @@ export function normalizeSummarySize(value: unknown): SummarySize {
 }
 
 /**
+ * Portal question ids ("Q36049942:") mean nothing to a student and still leak
+ * into generated text (often inside bold, e.g. `**Q36049942:**`), so drop them
+ * along with any wrapping emphasis. The 4+ digit threshold avoids normal prose.
+ */
+export function stripQuestionIds(text: string): string {
+  return text
+    .replace(/\*{0,2}\s*Q\d{4,}\b\s*[:.]?\s*\*{0,2}\s*/g, "")
+    .replace(/\*{4,}/g, "");
+}
+
+/**
  * Some models wrap the whole answer in a ```markdown fence (mostly on the
  * longer sizes). Strip a single outer fence so the saved markdown renders
- * normally in the UI and in the PDF.
+ * normally in the UI and in the PDF, and drop leaked portal question ids.
  */
 export function normalizeSummaryMarkdown(text: string): string {
   const trimmed = text.trim();
-  if (!trimmed.startsWith("```")) return trimmed;
-  const lines = trimmed.split("\n");
-  if (!/^```[a-zA-Z0-9_-]*$/.test(lines[0].trim())) return trimmed;
-  if (lines[lines.length - 1].trim() !== "```") return trimmed;
-  const inner = lines.slice(1, -1).join("\n");
-  if (inner.includes("```")) return trimmed; // real multi-block content — keep
-  return inner.trim();
+  let unwrapped = trimmed;
+  if (trimmed.startsWith("```")) {
+    const lines = trimmed.split("\n");
+    if (/^```[a-zA-Z0-9_-]*$/.test(lines[0].trim()) && lines[lines.length - 1].trim() === "```") {
+      const inner = lines.slice(1, -1).join("\n");
+      if (!inner.includes("```")) unwrapped = inner; // real multi-block content — keep
+    }
+  }
+  return stripQuestionIds(unwrapped).trim();
 }
 
 // ── Context chunking (pure) ─────────────────────────────────────────────────
@@ -104,6 +117,17 @@ export interface SummaryChunk {
   label: string;
   text: string;
   itemCount: number;
+}
+
+/**
+ * Format one question for the AI without exposing portal IDs: the model echoes
+ * them verbatim into the Resumo ("Q36049942: …"), which is unreadable for the
+ * student. Neutral sequential numbering keeps the bank referable instead.
+ */
+export function formatQuestion(q: ContextQuestion, index: number): string {
+  const lines = [`Questão ${index + 1}. ${q.text}`];
+  q.options.forEach((opt, i) => lines.push(`   ${String.fromCharCode(97 + i)}) ${opt}`));
+  return lines.join("\n");
 }
 
 /** Render one content item as a material block (material capped per item). */
@@ -116,10 +140,7 @@ export function buildItemBlock(item: ContextItem, maxItemChars = MAX_ITEM_CHARS)
   if (item.material) parts.push(item.material.slice(0, maxItemChars));
   if (item.questions.length) {
     const lines = ["Questões do quiz:"];
-    for (const q of item.questions) {
-      lines.push(`  Q${q.id}. ${q.text}`);
-      q.options.forEach((opt, i) => lines.push(`     ${String.fromCharCode(97 + i)}) ${opt}`));
-    }
+    item.questions.forEach((q, i) => lines.push(formatQuestion(q, i)));
     parts.push(lines.join("\n"));
   }
   if (item.fileNames.length) parts.push(`Arquivos: ${item.fileNames.join(", ")}`);
@@ -211,10 +232,7 @@ export function buildPartialMessages(ctx: SubjectContext, chunk: SummaryChunk): 
 
 function questionsBlock(questions: ContextQuestion[]): string {
   if (questions.length === 0) return "";
-  const lines = questions.slice(0, MAX_QUESTIONS_IN_PROMPT).map((q) => {
-    const opts = q.options.map((o, i) => `   ${String.fromCharCode(97 + i)}) ${o}`).join("\n");
-    return `Q${q.id}. ${q.text}${opts ? `\n${opts}` : ""}`;
-  });
+  const lines = questions.slice(0, MAX_QUESTIONS_IN_PROMPT).map((q, i) => formatQuestion(q, i));
   return (
     `Banco de questões já visto no curso (use como referência do estilo e dos temas):\n` +
     `${lines.join("\n")}\n\n`
@@ -242,8 +260,14 @@ export function buildFinalSummaryMessages(
     `## Tópicos-chave\n` +
     `## Conceitos que mais caem\n` +
     `## Questões prováveis\n` +
-    `(para cada uma: a pergunta, a resposta correta em uma linha e o porquê em uma linha; ` +
-    `inclua cerca de ${profile.questions} questões)\n` +
+    `(para cada uma, escreva para um aluno estudar:\n` +
+    `- o enunciado completo;\n` +
+    `- \`**Resposta:**\` seguido do TEXTO da alternativa correta, nunca só a letra;\n` +
+    `- \`**Por quê:**\` seguido de uma linha de justificativa.\n` +
+    `Se a questão for de sequência (V/F) ou de associação, reproduza os itens e escreva a ` +
+    `sequência/associação correta por extenso. NUNCA escreva códigos internos das questões ` +
+    `(a letra "Q" seguida de números) nem respostas de uma letra só como "(e)". ` +
+    `Inclua cerca de ${profile.questions} questões.)\n` +
     `## Pegadinhas\n\n` +
     `Seja específico e fiel ao material. Não repita as instruções nem escreva introdução ou despedida. ` +
     `Escreva o markdown direto, sem cercas de código (nada de \`\`\`).`;
