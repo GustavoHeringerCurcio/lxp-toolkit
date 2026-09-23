@@ -57,6 +57,8 @@ import {
   getTrainingStats,
   type TrainingAnswerInput,
 } from "../src/training-store.js";
+import { generateResumo } from "../src/summary.js";
+import { getStudySummary, saveStudySummary } from "../src/summary-store.js";
 import { enrich, type ExerciseView } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
 import { classifyFlavor } from "../src/classify.js";
@@ -791,6 +793,83 @@ const server = createServer(async (req, res) => {
           answerAttemptId: null,
         }).catch(() => undefined);
         sendEvent({ type: "done", answer: result.text });
+        res.end();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        sendEvent({ type: "error", error: message });
+        res.end();
+      }
+      return;
+    }
+
+    // resumo ("study summary")
+    if (url === "/api/summary" && method === "GET") {
+      const params = new URL(req.url ?? "/", "http://local").searchParams;
+      const courseId = Number(params.get("courseId"));
+      if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
+      const moduleParam = params.get("moduleId");
+      const summary = await getStudySummary(courseId, moduleParam ? Number(moduleParam) : null);
+      return json(res, 200, { summary });
+    }
+    if (url === "/api/summary" && method === "POST") {
+      const b = await readBody(req);
+      const courseId = Number(b.courseId);
+      if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
+      const moduleId = b.moduleId != null && b.moduleId !== "" ? Number(b.moduleId) : null;
+
+      res.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache",
+        connection: "keep-alive",
+      });
+      const sendEvent = (payload: unknown) => res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      const flushEvent = () => {
+        const r = res as import("node:http").ServerResponse & { flush?: () => void };
+        if (typeof r.flush === "function") {
+          try {
+            r.flush?.();
+          } catch {
+            /* ignore */
+          }
+        }
+      };
+      sendEvent({ type: "start" });
+      const startedAt = Date.now();
+      try {
+        const ctx = await buildSubjectContext(courseId, moduleId);
+        const generated = await generateResumo(ctx, {
+          onStep: (step) => {
+            sendEvent({ type: "step", ...step });
+            flushEvent();
+          },
+          onDelta: (delta) => {
+            sendEvent({ type: "delta", delta });
+            flushEvent();
+          },
+        });
+        for (const p of generated.provenances) {
+          await recordAiRun({
+            contentItemId: null,
+            prompt: p.prompt,
+            promptHash: p.promptHash,
+            completion: generated.content,
+            model: p.model,
+            tokensIn: p.tokensIn,
+            tokensOut: p.tokensOut,
+            latencyMs: Date.now() - startedAt,
+            answerAttemptId: null,
+          }).catch(() => undefined);
+        }
+        const summary = await saveStudySummary({
+          courseId,
+          moduleId,
+          subjectLabel: subjectLabel(ctx),
+          content: generated.content,
+          model: generated.model,
+          promptHash: generated.promptHash,
+          itemCount: generated.itemCount,
+        });
+        sendEvent({ type: "done", summary });
         res.end();
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

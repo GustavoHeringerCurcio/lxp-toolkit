@@ -90,6 +90,7 @@ One `createServer` handler with string-matched routes. Request order at the top:
 | Notes / AI request | `POST /api/note`, `POST /api/ai-request` |
 | Diagram | `POST /api/diagram` |
 | Training | `GET /api/training/subjects`, `GET /api/training/stats`, `POST /api/training/quiz`, `POST /api/training/quiz/:id/complete`, `POST /api/training/study` (SSE) |
+| Resumo | `GET /api/summary?courseId=&moduleId=`, `POST /api/summary` (SSE) |
 | Send | `GET /api/send/config`, `GET /api/send/preview`, `GET /api/send/:id`, `POST /api/send`, `POST /api/send/upload`, `POST /api/send/artifact` |
 | Debug | `GET /api/debug-logs`, `GET /api/debug-log/:id` |
 | Refresh | `POST /api/refresh`, `GET /api/refresh/status` |
@@ -145,6 +146,7 @@ never written by the app.
 | `0012_debug_log` | `debug_log` (gate failures, full context) |
 | `0013_remove_gradebook_only_items` | cleans phantom gradebook-only items |
 | `0014_content_visibility` | `content_item.origin/gradebook_id/is_visible/is_future` (God's Eye) |
+| `0015_study_summary` | `study_summary` (saved Resumo per course/module scope) |
 
 Key read model: `v_exercise_current` feeds `/api/exercises` via `view.ts::enrich`.
 
@@ -196,6 +198,8 @@ Rules to preserve:
 | `ai.ts` | Calls OpenAI with streaming; returns text + provenance (model, tokens, prompt hash). Also `cheapJsonCompletion` for detection. |
 | `classify.ts` | Lazy AI review of ambiguous uploads. |
 | `gate.ts` | `analyzeDraftQuality` — advisory quality gate over a draft. |
+| `training.ts` | Builds the per-subject knowledge pack (catalog + bank + `content_text`) and generates practice quizzes / streamed study guides. |
+| `summary.ts` | `Resumo`: chunk-aware map-reduce summary of a subject (streamed), persisted via `summary-store.ts`. |
 | `project-context.ts` | Project detection/merge for the prompt. |
 | `template.ts` / `docx.ts` / `usecase.ts` | Template `.docx` detection, use-case parsing, filled-document rendering. |
 | `diagram.ts` / `diagram-tool.ts` | UML diagram spec + rasterization. |
@@ -254,7 +258,7 @@ dump → dump-surfaces → index → index:web
 
 - React 18 + Vite 5 + Tailwind v4; design system in `apps/web/DESIGN.md` ("Folio").
 - Routes: `/` (Agora), `/tarefas`, `/progresso`, `/tarefa/:id`, `/treino/quiz`, `/treino/estudo`,
-  `/gods-eye`, `/ajustes`, `/design`.
+  `/treino/resumo`, `/gods-eye`, `/ajustes`, `/design`.
 - All API calls go through `src/api.ts::req()` (relative `/api/...`), so the same build works
   behind the Vite proxy (dev), the Node server (prod), and the Vercel proxy (cloud). `src/lib/files.ts`
   builds file preview URLs (`/api/preview?url=…` for Office, direct CDN URL for PDFs).

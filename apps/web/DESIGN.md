@@ -141,6 +141,7 @@ Self-hosted via `@fontsource-variable/*` (no runtime Google Fonts):
 | Nav — Design | `Palette` |
 | Nav — Treino de quiz | `GraduationCap` |
 | Nav — Perguntar à IA | `Sparkles` |
+| Nav — Resumo | `NotebookText` |
 | Command palette | `Command` |
 | Theme toggle | `Sun` / `Moon` |
 | Activity type — quiz | `ListChecks` (monochrome chip) |
@@ -184,6 +185,7 @@ same neutral treatment.
 | `/tarefa/:id` | **Atividade** | reading column (prose width) + sticky workbench; focus mode; version timeline; send-confirmation modal |
 | `/treino/quiz` | **Treino de quiz** | gamified practice quiz (AI-generated or portal-sourced), one question at a time with feedback, score + readiness verdict + history |
 | `/treino/estudo` | **Perguntar à IA** | free-text study Q&A scoped to the selected subject; streamed markdown |
+| `/treino/resumo` | **Resumo** | saved AI study summary of a subject (PDFs + readings + quiz bank): key topics + likely exam questions, streamed and regenerable |
 | `/ajustes` | **Ajustes** | hub with pill tabs (Pessoal · IA · Avançado · Organização): profile + appearance, IA voice/format/rules/content, generation params + preview, institution + professor directory |
 | `/design` | **Design** | living style guide: tokens, type ramp, components, states |
 

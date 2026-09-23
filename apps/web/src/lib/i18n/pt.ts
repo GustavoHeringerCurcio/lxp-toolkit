@@ -137,6 +137,7 @@ export const pt = {
   "nav.groupTraining": "Treino",
   "nav.trainingQuiz": "Treino de quiz",
   "nav.trainingStudy": "Perguntar à IA",
+  "nav.summary": "Resumo",
   "training.subject": "Matéria",
   "training.noSubjects": "Nenhuma matéria encontrada. Sincronize o conteúdo do portal.",
   "training.stats": "{{q}} quizzes · {{r}} leituras",
@@ -185,6 +186,24 @@ export const pt = {
   "study.pickSubjectFirst": "Escolha uma matéria primeiro.",
   "study.needQuestion": "Escreva uma pergunta.",
   "study.error": "Não foi possível responder agora.",
+
+  // summary ("Resumo")
+  "summary.intro":
+    "Reúne o PDF, as leituras e as questões da matéria e gera um resumo de estudo com o que mais cai na prova.",
+  "summary.emptyTitle": "Sem resumo ainda",
+  "summary.emptyDetail": "Gere um resumo desta matéria a partir do seu material.",
+  "summary.generate": "Gerar resumo",
+  "summary.generating": "Gerando resumo…",
+  "summary.regenerate": "Regerar",
+  "summary.copy": "copiar",
+  "summary.copied": "Resumo copiado.",
+  "summary.download": "Baixar .md",
+  "summary.savedAt": "gerado {{date}}",
+  "summary.items": "{{n}} itens",
+  "summary.stepMap": "Resumindo tópicos… {{done}}/{{total}}",
+  "summary.stepCombine": "Montando o resumo final…",
+  "summary.pickSubjectFirst": "Escolha uma matéria primeiro.",
+  "summary.error": "Não foi possível gerar o resumo.",
 
   // activity card menu
   "card.moreAria": "mais opções",

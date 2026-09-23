@@ -481,6 +481,26 @@ export interface TrainingStats {
   bySubject: TrainingSubjectStats[];
 }
 
+// ── Resumo (study summary) ──────────────────────────────────────────────────
+
+/**
+ * A saved study summary for one subject scope (course, or course + module).
+ * `content` is AI-generated markdown covering the subject's strongest exam
+ * topics; regenerate by upserting the same scope.
+ */
+export interface StudySummary {
+  id: number;
+  courseId: number;
+  moduleId: number | null;
+  subjectLabel: string;
+  content: string;
+  model: string | null;
+  itemCount: number;
+  charCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Professor photos (per student) ──────────────────────────────────────────
 
 export type ProfessorLinkSource = "linkedin" | "manual";

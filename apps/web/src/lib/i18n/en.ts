@@ -133,6 +133,7 @@ export const en: Dict = {
   "nav.groupTraining": "Training",
   "nav.trainingQuiz": "Quiz practice",
   "nav.trainingStudy": "Ask AI",
+  "nav.summary": "Summary",
   "training.subject": "Subject",
   "training.noSubjects": "No subjects found. Sync the portal content.",
   "training.stats": "{{q}} quizzes · {{r}} readings",
@@ -181,6 +182,24 @@ export const en: Dict = {
   "study.pickSubjectFirst": "Pick a subject first.",
   "study.needQuestion": "Write a question.",
   "study.error": "Could not answer right now.",
+
+  // summary ("Resumo")
+  "summary.intro":
+    "Gathers the subject's PDFs, readings and questions into a study summary of what is most likely on the exam.",
+  "summary.emptyTitle": "No summary yet",
+  "summary.emptyDetail": "Generate a summary of this subject from your material.",
+  "summary.generate": "Generate summary",
+  "summary.generating": "Generating summary…",
+  "summary.regenerate": "Regenerate",
+  "summary.copy": "copy",
+  "summary.copied": "Summary copied.",
+  "summary.download": "Download .md",
+  "summary.savedAt": "generated {{date}}",
+  "summary.items": "{{n}} items",
+  "summary.stepMap": "Summarizing topics… {{done}}/{{total}}",
+  "summary.stepCombine": "Assembling the final summary…",
+  "summary.pickSubjectFirst": "Pick a subject first.",
+  "summary.error": "Could not generate the summary.",
 
   // activity card menu
   "card.moreAria": "more options",

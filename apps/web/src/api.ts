@@ -25,6 +25,7 @@ import type {
   ProjectSourceFile,
   ProjectSourceState,
   QuizSelection,
+  StudySummary,
   TrainingQuiz,
   TrainingQuizMode,
   TrainingStats,
@@ -638,6 +639,82 @@ export async function streamStudyGuide(
     }
   }
   return full;
+}
+
+// ── Resumo ("study summary") ────────────────────────────────────────────────
+
+export interface SummaryScope {
+  courseId: number;
+  moduleId?: number | null;
+}
+
+/** The saved Resumo for a subject scope, or null when none exists yet. */
+export async function fetchStudySummary(scope: SummaryScope): Promise<StudySummary | null> {
+  const params = new URLSearchParams({ courseId: String(scope.courseId) });
+  if (scope.moduleId != null) params.set("moduleId", String(scope.moduleId));
+  const body = await req<{ summary: StudySummary | null }>(`/api/summary?${params.toString()}`);
+  return body.summary ?? null;
+}
+
+export interface SummaryEvent {
+  type: "start" | "step" | "delta" | "done" | "error";
+  /** Progress within the map/reduce pipeline. */
+  phase?: "map" | "combine";
+  index?: number;
+  total?: number;
+  label?: string;
+  delta?: string;
+  summary?: StudySummary;
+  error?: string;
+}
+
+/**
+ * Generate (or regenerate) the Resumo via SSE. Resolves with the saved summary
+ * once the stream closes; rejects on error.
+ */
+export async function streamStudySummary(
+  scope: SummaryScope,
+  onEvent: (e: SummaryEvent) => void,
+): Promise<StudySummary> {
+  const res = await fetch("/api/summary", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(scope),
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    let detail = "";
+    try {
+      const parsed = JSON.parse(text) as { error?: string };
+      if (parsed?.error) detail = ` · ${parsed.error}`;
+    } catch {
+      // ignore
+    }
+    throw new Error(`POST /api/summary → HTTP ${res.status}${detail}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let saved: StudySummary | null = null;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+    for (const chunk of chunks) {
+      const line = chunk.trim();
+      if (!line.startsWith("data:")) continue;
+      const payload = JSON.parse(line.slice(5).trim()) as SummaryEvent;
+      onEvent(payload);
+      if (payload.type === "done" && payload.summary) saved = payload.summary;
+      if (payload.type === "error") {
+        throw new Error(payload.error ?? translate(getLang(), "api.genFail"));
+      }
+    }
+  }
+  if (!saved) throw new Error(translate(getLang(), "api.streamEnded"));
+  return saved;
 }
 
 export function fmtVersionDate(iso: string, locale = localeFor(getLang())): string {

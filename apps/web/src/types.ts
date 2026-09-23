@@ -476,3 +476,18 @@ export interface TrainingStats {
   lastAt: string | null;
   bySubject: TrainingSubjectStats[];
 }
+
+// ── Resumo (study summary) ──────────────────────────────────────────────────
+
+export interface StudySummary {
+  id: number;
+  courseId: number;
+  moduleId: number | null;
+  subjectLabel: string;
+  content: string;
+  model: string | null;
+  itemCount: number;
+  charCount: number;
+  createdAt: string;
+  updatedAt: string;
+}

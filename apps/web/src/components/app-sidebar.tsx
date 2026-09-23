@@ -5,6 +5,7 @@ import {
   Eye,
   GraduationCap,
   ListChecks,
+  NotebookText,
   Palette,
   RefreshCw,
   SlidersHorizontal,
@@ -40,6 +41,7 @@ const NAV = [
 const TRAINING_NAV = [
   { to: "/treino/quiz", key: "nav.trainingQuiz", icon: GraduationCap },
   { to: "/treino/estudo", key: "nav.trainingStudy", icon: Sparkles },
+  { to: "/treino/resumo", key: "nav.summary", icon: NotebookText },
 ] as const;
 
 const SYSTEM_NAV = [

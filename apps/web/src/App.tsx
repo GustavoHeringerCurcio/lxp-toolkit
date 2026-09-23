@@ -30,6 +30,7 @@ import { DesignPage } from "@/pages/design";
 import { GodsEyePage } from "@/pages/gods-eye";
 import { TrainingQuizPage } from "@/pages/training-quiz";
 import { TrainingStudyPage } from "@/pages/training-study";
+import { TrainingSummaryPage } from "@/pages/training-summary";
 import { TrainingProvider } from "@/lib/training-state";
 import { ErrorState } from "@/components/state-screens";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,6 +48,7 @@ function pageTitle(
   if (pathname === "/gods-eye") return t("nav.godsEye");
   if (pathname === "/treino/quiz") return t("nav.trainingQuiz");
   if (pathname === "/treino/estudo") return t("nav.trainingStudy");
+  if (pathname === "/treino/resumo") return t("nav.summary");
   if (pathname.startsWith("/tarefa/")) {
     const id = Number(pathname.split("/")[2]);
     return items.find((x) => x.id === id)?.title ?? t("app.activityFallback");
@@ -132,6 +134,7 @@ function Shell() {
                 <Route path="/tarefa/:id" element={<ExercisePage />} />
                 <Route path="/treino/quiz" element={<TrainingQuizPage />} />
                 <Route path="/treino/estudo" element={<TrainingStudyPage />} />
+                <Route path="/treino/resumo" element={<TrainingSummaryPage />} />
                 <Route path="/ajustes" element={<SettingsPage />} />
                 <Route path="/design" element={<DesignPage />} />
                 <Route path="/gods-eye" element={<GodsEyePage />} />
