@@ -198,6 +198,7 @@ export const en: Dict = {
   "summary.copy": "copy",
   "summary.copied": "Summary copied.",
   "summary.downloadPdf": "Download PDF",
+  "summary.pdfBusy": "Generating PDF…",
   "summary.pdfError": "Could not generate the PDF.",
   "summary.sizeLabel": "Size",
   "summary.size.small": "Small",

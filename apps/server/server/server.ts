@@ -186,6 +186,45 @@ function safeFilename(name: string, ext: string): string {
 }
 
 /**
+ * ASCII-only fallback of a filename (diacritics stripped). Node rejects any
+ * non-ASCII byte in a header value (`ERR_INVALID_CHAR`), so the plain
+ * `filename=` parameter must be pure ASCII even when the name is not.
+ */
+function asciiFilename(name: string): string {
+  const ascii = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7e]/g, "")
+    .replace(/["\\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return ascii || "resumo";
+}
+
+/** RFC 5987 encoding for the `filename*=UTF-8''…` parameter (unicode names). */
+function rfc5987(name: string): string {
+  return encodeURIComponent(name).replace(/['()*]/g, (c) =>
+    `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+/**
+ * Attachment headers that survive unicode filenames: an ASCII `filename=`
+ * fallback plus the RFC 5987 `filename*=` with the real name, and an
+ * ASCII-safe `x-filename` for the client's `a.download`.
+ */
+function attachmentDisposition(
+  filename: string,
+  mode: "inline" | "attachment",
+): Record<string, string> {
+  const ascii = asciiFilename(filename);
+  return {
+    "content-disposition": `${mode}; filename="${ascii}"; filename*=UTF-8''${rfc5987(filename)}`,
+    "x-filename": ascii,
+  };
+}
+
+/**
  * Build the filled `.docx` for a template activity (a .docx model attached to
  * the task), pouring the parsed use cases into a clone of the model table.
  * Returns `{ error }` when the task has no model or the answer has no cases.
@@ -305,7 +344,7 @@ async function servePreview(res: import("node:http").ServerResponse, rawUrl: str
     res.writeHead(200, {
       "content-type": "application/pdf",
       "content-length": statSync(pdf).size,
-      "content-disposition": `inline; filename="${name.replace(/\.[a-z0-9]+$/i, ".pdf")}"`,
+      ...attachmentDisposition(name.replace(/\.[a-z0-9]+$/i, ".pdf"), "inline"),
       "cache-control": "private, max-age=3600",
     });
     if (headOnly) {
@@ -866,8 +905,7 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, {
         "content-type": "application/pdf",
         "content-length": statSync(pdfPath).size,
-        "content-disposition": `${download ? "attachment" : "inline"}; filename="${filename}"`,
-        "x-filename": filename,
+        ...attachmentDisposition(filename, download ? "attachment" : "inline"),
         "cache-control": "no-store",
       });
       return void createReadStream(pdfPath).pipe(res);
@@ -1035,8 +1073,7 @@ const server = createServer(async (req, res) => {
           "content-type":
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "content-length": built.buffer.length,
-          "content-disposition": `${download ? "attachment" : "inline"}; filename="${built.filename}"`,
-          "x-filename": built.filename,
+          ...attachmentDisposition(built.filename, download ? "attachment" : "inline"),
           "cache-control": "no-store",
         });
         return res.end(built.buffer);
@@ -1045,7 +1082,6 @@ const server = createServer(async (req, res) => {
       const baseName = await uploadBaseName(view);
       const ext = isPdf ? "pdf" : "txt";
       const filename = safeFilename(baseName, ext);
-      const disposition = `${download ? "attachment" : "inline"}; filename="${filename}"`;
 
       if (isPdf) {
         const pdf = await answerToPdf(answer, baseName, { rich });
@@ -1053,8 +1089,7 @@ const server = createServer(async (req, res) => {
         res.writeHead(200, {
           "content-type": "application/pdf",
           "content-length": statSync(pdf).size,
-          "content-disposition": disposition,
-          "x-filename": filename,
+          ...attachmentDisposition(filename, download ? "attachment" : "inline"),
           "cache-control": "no-store",
         });
         createReadStream(pdf).pipe(res);
@@ -1063,8 +1098,7 @@ const server = createServer(async (req, res) => {
 
       res.writeHead(200, {
         "content-type": "text/plain; charset=utf-8",
-        "content-disposition": disposition,
-        "x-filename": filename,
+        ...attachmentDisposition(filename, download ? "attachment" : "inline"),
         "cache-control": "no-store",
       });
       return res.end(answer);

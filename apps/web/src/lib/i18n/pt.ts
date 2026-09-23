@@ -202,6 +202,7 @@ export const pt = {
   "summary.copy": "copiar",
   "summary.copied": "Resumo copiado.",
   "summary.downloadPdf": "Baixar PDF",
+  "summary.pdfBusy": "Gerando PDF…",
   "summary.pdfError": "Não foi possível gerar o PDF.",
   "summary.sizeLabel": "Tamanho",
   "summary.size.small": "Pequeno",

@@ -51,6 +51,7 @@ export function TrainingSummaryPage() {
   const [streamed, setStreamed] = useState("");
   const [step, setStep] = useState<StepState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [preview, setPreview] = useState<SummaryItem[] | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -143,18 +144,23 @@ export function TrainingSummaryPage() {
 
   const downloadPdf = async () => {
     const text = summary?.content ?? streamed;
-    if (!text) return;
-    const title = summary?.subjectLabel ?? t("nav.summary");
+    if (!text || pdfBusy) return;
+    setPdfBusy(true);
     try {
+      const title = summary?.subjectLabel ?? t("nav.summary");
       const { blob, filename } = await fetchSummaryPdf(title, text, true);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("summary.pdfError"));
+    } finally {
+      setPdfBusy(false);
     }
   };
 
@@ -278,9 +284,9 @@ export function TrainingSummaryPage() {
                 <Copy aria-hidden />
                 {t("summary.copy")}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => void downloadPdf()}>
-                <FileDown aria-hidden />
-                {t("summary.downloadPdf")}
+              <Button variant="ghost" size="sm" disabled={pdfBusy} onClick={() => void downloadPdf()}>
+                {pdfBusy ? <Loader2 className="animate-spin" aria-hidden /> : <FileDown aria-hidden />}
+                {pdfBusy ? t("summary.pdfBusy") : t("summary.downloadPdf")}
               </Button>
               <Button variant="outline" size="sm" onClick={() => void generate()}>
                 <RotateCcw aria-hidden />
