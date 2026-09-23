@@ -17,7 +17,7 @@ import { createHash } from "node:crypto";
 import OpenAI from "openai";
 import { openaiKey } from "./config.js";
 import { getAiConfig } from "./store.js";
-import type { AiConfig } from "./types.js";
+import type { AiConfig, SummaryItem, SummarySize } from "./types.js";
 import type { AiProvenance, ChatMessage, ContextItem, ContextQuestion, SubjectContext } from "./training.js";
 
 let _client: OpenAI | null = null;
@@ -31,6 +31,55 @@ const MAX_CONTEXT_CHARS = 60_000;
 const MAX_ITEM_CHARS = 6_000;
 // Keep the final prompt grounded in the real bank, but bounded.
 const MAX_QUESTIONS_IN_PROMPT = 60;
+
+// ── Output sizes ────────────────────────────────────────────────────────────
+
+export const SUMMARY_SIZES: SummarySize[] = ["small", "medium", "big", "extra"];
+
+export interface SummarySizeProfile {
+  /** Cap for the final streamed call. */
+  maxTokens: number;
+  /** Approximate number of likely-exam questions to include. */
+  questions: number;
+  /** Length/shape instruction appended to the prompt. */
+  guide: string;
+}
+
+export const SIZE_PROFILES: Record<SummarySize, SummarySizeProfile> = {
+  small: {
+    maxTokens: 1300,
+    questions: 4,
+    guide:
+      "Tamanho ALVO: curto, cerca de 1 página. Foque só no essencial: 5 a 8 tópicos-chave, " +
+      "os conceitos centrais e poucas pegadinhas.",
+  },
+  medium: {
+    maxTokens: 2400,
+    questions: 8,
+    guide: "Tamanho ALVO: médio, 2 a 3 páginas. Equilibre cobertura e objetividade.",
+  },
+  big: {
+    maxTokens: 4200,
+    questions: 14,
+    guide:
+      "Tamanho ALVO: longo, 4 a 6 páginas. Aprofunde cada tópico com definições, relações e exemplos.",
+  },
+  extra: {
+    maxTokens: 6500,
+    questions: 20,
+    guide:
+      "Tamanho ALVO: bem longo, 6 páginas ou mais. Cobertura quase completa do material, " +
+      "detalhando cada tópico com exemplos e comparações.",
+  },
+};
+
+export function isSummarySize(value: unknown): value is SummarySize {
+  return typeof value === "string" && (SUMMARY_SIZES as string[]).includes(value);
+}
+
+export function normalizeSummarySize(value: unknown): SummarySize {
+  return isSummarySize(value) ? value : "medium";
+}
 
 // ── Context chunking (pure) ─────────────────────────────────────────────────
 
@@ -102,6 +151,20 @@ export function chunkItems(
   return chunks;
 }
 
+/** Compact snapshot of the items that fed a summary (transparency). */
+export function summarizeItems(items: ContextItem[]): SummaryItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    kind: item.kind,
+    moduleName: item.moduleName,
+    sectionTitle: item.sectionTitle,
+    files: item.fileNames,
+    questions: item.questions.length,
+    hidden: item.hidden === true,
+  }));
+}
+
 // ── Prompt building (pure) ──────────────────────────────────────────────────
 
 function expertSystem(ctx: SubjectContext, tail: string): string {
@@ -143,7 +206,12 @@ function questionsBlock(questions: ContextQuestion[]): string {
 }
 
 /** Final "write the medium study Resumo" prompt (combine phase). */
-export function buildFinalSummaryMessages(ctx: SubjectContext, materialText: string): ChatMessage[] {
+export function buildFinalSummaryMessages(
+  ctx: SubjectContext,
+  materialText: string,
+  size: SummarySize = "medium",
+): ChatMessage[] {
+  const profile = SIZE_PROFILES[size];
   const system = expertSystem(
     ctx,
     `Você escreve um resumo de estudo de tamanho médio para a prova.`,
@@ -151,13 +219,15 @@ export function buildFinalSummaryMessages(ctx: SubjectContext, materialText: str
   const user =
     `Material consolidado do curso:\n${materialText}\n\n` +
     questionsBlock(ctx.questions) +
-    `Tarefa: escreva um RESUMO de estudo de tamanho MÉDIO, em markdown simples, ` +
-    `priorizando o que tem mais chance de cair na prova. Use exatamente estas seções:\n` +
+    `Tarefa: escreva um RESUMO de estudo, em markdown simples, ` +
+    `priorizando o que tem mais chance de cair na prova. ${profile.guide} ` +
+    `Use exatamente estas seções:\n` +
     `## Visão geral\n` +
     `## Tópicos-chave\n` +
     `## Conceitos que mais caem\n` +
     `## Questões prováveis\n` +
-    `(para cada uma: a pergunta, a resposta correta em uma linha e o porquê em uma linha)\n` +
+    `(para cada uma: a pergunta, a resposta correta em uma linha e o porquê em uma linha; ` +
+    `inclua cerca de ${profile.questions} questões)\n` +
     `## Pegadinhas\n\n` +
     `Seja específico e fiel ao material. Não repita as instruções nem escreva introdução ou despedida.`;
   return [
@@ -203,11 +273,12 @@ async function streamCompletion(
   messages: ChatMessage[],
   cfg: AiConfig,
   onDelta?: (delta: string) => void,
+  maxTokens?: number,
 ): Promise<{ text: string; provenance: AiProvenance }> {
   const stream = await client().chat.completions.create({
     model: cfg.models.training,
     temperature: cfg.temperature,
-    max_tokens: cfg.max_output_tokens ?? 4000,
+    max_tokens: maxTokens ?? cfg.max_output_tokens ?? 4000,
     stream: true,
     stream_options: { include_usage: true },
     messages,
@@ -251,15 +322,18 @@ export interface SummaryStep {
 }
 
 export interface GenerateSummaryOptions {
+  size?: SummarySize;
   onDelta?: (delta: string) => void;
   onStep?: (step: SummaryStep) => void;
 }
 
 export interface GeneratedSummary {
   content: string;
+  size: SummarySize;
   model: string;
   promptHash: string;
   itemCount: number;
+  items: SummaryItem[];
   provenances: AiProvenance[];
 }
 
@@ -286,6 +360,7 @@ export async function generateResumo(
     throw new Error("Sem conteúdo para resumir. Sincronize o material do portal.");
   }
   const config = cfg ?? (await getAiConfig());
+  const size = normalizeSummarySize(opts.size);
   const chunks = chunkItems(ctx.items);
   const provenances: AiProvenance[] = [];
 
@@ -306,17 +381,24 @@ export async function generateResumo(
   }
 
   opts.onStep?.({ phase: "combine", index: 0, total: 1, label: ctx.moduleName ?? ctx.courseName });
-  const messages = buildFinalSummaryMessages(ctx, materialText);
-  const { text, provenance } = await streamCompletion(messages, config, opts.onDelta);
+  const messages = buildFinalSummaryMessages(ctx, materialText, size);
+  const { text, provenance } = await streamCompletion(
+    messages,
+    config,
+    opts.onDelta,
+    SIZE_PROFILES[size].maxTokens,
+  );
   provenances.push(provenance);
 
   const content = text.trim();
   if (!content) throw new Error("A IA não retornou o resumo.");
   return {
     content,
+    size,
     model: provenance.model,
     promptHash: provenance.promptHash,
     itemCount: ctx.items.length,
+    items: summarizeItems(ctx.items),
     provenances,
   };
 }

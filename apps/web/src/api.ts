@@ -28,6 +28,8 @@ import type {
   ProjectSourceState,
   QuizSelection,
   StudySummary,
+  SummaryItem,
+  SummarySize,
   TrainingQuiz,
   TrainingQuizMode,
   TrainingStats,
@@ -651,6 +653,7 @@ export interface SummaryScope {
   courseId: number;
   moduleId?: number | null;
   examId?: number | null;
+  size?: SummarySize;
 }
 
 /** The saved Resumo for a subject scope, or null when none exists yet. */
@@ -658,8 +661,49 @@ export async function fetchStudySummary(scope: SummaryScope): Promise<StudySumma
   const params = new URLSearchParams({ courseId: String(scope.courseId) });
   if (scope.moduleId != null) params.set("moduleId", String(scope.moduleId));
   if (scope.examId != null) params.set("examId", String(scope.examId));
+  if (scope.size) params.set("size", scope.size);
   const body = await req<{ summary: StudySummary | null }>(`/api/summary?${params.toString()}`);
   return body.summary ?? null;
+}
+
+export interface SummaryItemsResult {
+  items: SummaryItem[];
+  total: number;
+  byKind: Record<string, number>;
+}
+
+/** The items the AI would read for a scope (no AI call) — transparency. */
+export async function fetchSummaryItems(scope: SummaryScope): Promise<SummaryItemsResult> {
+  const params = new URLSearchParams({ courseId: String(scope.courseId) });
+  if (scope.moduleId != null) params.set("moduleId", String(scope.moduleId));
+  if (scope.examId != null) params.set("examId", String(scope.examId));
+  return req<SummaryItemsResult>(`/api/summary/items?${params.toString()}`);
+}
+
+/** Render a Resumo markdown to PDF; returns the blob + suggested filename. */
+export async function fetchSummaryPdf(
+  title: string,
+  markdown: string,
+  download = false,
+): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch("/api/summary/pdf", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title, markdown, download }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let detail = "";
+    try {
+      const body = JSON.parse(text) as { error?: string };
+      if (body?.error) detail = ` · ${body.error}`;
+    } catch {
+      // non-JSON error body
+    }
+    throw new Error(`POST /api/summary/pdf → HTTP ${res.status}${detail}`);
+  }
+  const blob = await res.blob();
+  return { blob, filename: res.headers.get("x-filename") ?? "resumo.pdf" };
 }
 
 export interface SummaryEvent {

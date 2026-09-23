@@ -487,21 +487,43 @@ export interface TrainingStats {
 
 // ── Resumo (study summary) ──────────────────────────────────────────────────
 
+/** Output length preset for a Resumo. */
+export type SummarySize = "small" | "medium" | "big" | "extra";
+
+/** One source item the AI read for a Resumo (transparency snapshot). */
+export interface SummaryItem {
+  id: number;
+  title: string;
+  /** Content classification (pdf/reading/quiz/link/forum/file_upload/other). */
+  kind: string;
+  moduleName: string | null;
+  sectionTitle: string | null;
+  /** Attachment filenames (the PDFs/readings) included for this item. */
+  files: string[];
+  /** Number of quiz questions extracted from the item. */
+  questions: number;
+  /** True when the item came from the God's-Eye (hidden) harvest. */
+  hidden: boolean;
+}
+
 /**
  * A saved study summary for one subject scope (course, or course + module).
  * `content` is AI-generated markdown covering the subject's strongest exam
- * topics; regenerate by upserting the same scope.
+ * topics; regenerate by upserting the same scope + size.
  */
 export interface StudySummary {
   id: number;
   courseId: number;
   moduleId: number | null;
   examId: number | null;
+  size: SummarySize;
   subjectLabel: string;
   content: string;
   model: string | null;
   itemCount: number;
   charCount: number;
+  /** The content items that fed this summary, newest generation wins. */
+  items: SummaryItem[];
   createdAt: string;
   updatedAt: string;
 }

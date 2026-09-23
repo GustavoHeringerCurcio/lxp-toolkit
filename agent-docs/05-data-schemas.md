@@ -108,7 +108,10 @@ inline), and `apps/server/src/exams.ts` classifies every content item to an exam
 
 `buildSubjectContext(courseId, moduleId, examId)` filters the knowledge pack with
 this, so a later exam never re-sends material already examined. Saved Resumos are
-keyed by `(student, course, module, exam)`. Unclassified items stay neutral.
+keyed by `(student, course, module, exam, size)` (sizes: `small`/`medium`/`big`/
+`extra`) and each row keeps `items_json` — a snapshot of the source items
+(module, title, kind, attachment filenames, question count) that fed it, shown in
+the UI for transparency. Unclassified items stay neutral.
 
 ## Content item (normalized, in `scraped/raw/content-tree.json`)
 

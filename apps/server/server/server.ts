@@ -57,7 +57,7 @@ import {
   getTrainingStats,
   type TrainingAnswerInput,
 } from "../src/training-store.js";
-import { generateResumo } from "../src/summary.js";
+import { generateResumo, normalizeSummarySize, summarizeItems } from "../src/summary.js";
 import { getStudySummary, saveStudySummary } from "../src/summary-store.js";
 import {
   deleteExam,
@@ -818,12 +818,52 @@ const server = createServer(async (req, res) => {
       if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
       const moduleParam = params.get("moduleId");
       const examParam = params.get("examId");
+      const size = normalizeSummarySize(params.get("size"));
       const summary = await getStudySummary(
         courseId,
         moduleParam ? Number(moduleParam) : null,
         examParam ? Number(examParam) : null,
+        size,
       );
       return json(res, 200, { summary });
+    }
+    // What the AI would read for this scope (no AI call) — transparency.
+    if (url === "/api/summary/items" && method === "GET") {
+      const params = new URL(req.url ?? "/", "http://local").searchParams;
+      const courseId = Number(params.get("courseId"));
+      if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
+      const moduleParam = params.get("moduleId");
+      const examParam = params.get("examId");
+      const ctx = await buildSubjectContext(
+        courseId,
+        moduleParam ? Number(moduleParam) : null,
+        examParam ? Number(examParam) : null,
+      );
+      const items = summarizeItems(ctx.items);
+      const byKind: Record<string, number> = {};
+      for (const item of items) byKind[item.kind] = (byKind[item.kind] ?? 0) + 1;
+      return json(res, 200, { items, total: items.length, byKind });
+    }
+    // Render a Resumo (markdown) to PDF for download/preview.
+    if (url === "/api/summary/pdf" && method === "POST") {
+      const b = await readBody(req);
+      const markdown = String(b.markdown ?? "");
+      const title = String(b.title ?? "Resumo").trim() || "Resumo";
+      const download = b.download === true;
+      if (!markdown.trim()) return json(res, 400, { error: "markdown obrigatório" });
+      const pdfPath = await answerToPdf(markdown, title, { rich: true });
+      if (!pdfPath || !existsSync(pdfPath)) {
+        return json(res, 500, { error: "não foi possível gerar o PDF" });
+      }
+      const filename = `${title.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "") || "resumo"}.pdf`;
+      res.writeHead(200, {
+        "content-type": "application/pdf",
+        "content-length": statSync(pdfPath).size,
+        "content-disposition": `${download ? "attachment" : "inline"}; filename="${filename}"`,
+        "x-filename": filename,
+        "cache-control": "no-store",
+      });
+      return void createReadStream(pdfPath).pipe(res);
     }
     if (url === "/api/summary" && method === "POST") {
       const b = await readBody(req);
@@ -831,6 +871,7 @@ const server = createServer(async (req, res) => {
       if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
       const moduleId = b.moduleId != null && b.moduleId !== "" ? Number(b.moduleId) : null;
       const examId = b.examId != null && b.examId !== "" ? Number(b.examId) : null;
+      const size = normalizeSummarySize(b.size);
 
       res.writeHead(200, {
         "content-type": "text/event-stream; charset=utf-8",
@@ -853,6 +894,7 @@ const server = createServer(async (req, res) => {
       try {
         const ctx = await buildSubjectContext(courseId, moduleId, examId);
         const generated = await generateResumo(ctx, {
+          size,
           onStep: (step) => {
             sendEvent({ type: "step", ...step });
             flushEvent();
@@ -879,11 +921,13 @@ const server = createServer(async (req, res) => {
           courseId,
           moduleId,
           examId,
+          size: generated.size,
           subjectLabel: subjectLabel(ctx),
           content: generated.content,
           model: generated.model,
           promptHash: generated.promptHash,
           itemCount: generated.itemCount,
+          items: generated.items,
         });
         sendEvent({ type: "done", summary });
         res.end();

@@ -50,6 +50,8 @@ export interface ContextItem {
   material: string;
   questions: ContextQuestion[];
   fileNames: string[];
+  /** True when the item came from the God's-Eye (hidden) harvest. */
+  hidden: boolean;
 }
 
 export interface SubjectContext {
@@ -189,6 +191,7 @@ interface ItemRow {
   section_title: string | null;
   gradebook_id: string | null;
   deadline_at: Date | null;
+  origin: string | null;
   material: string | null;
   material_status: string | null;
 }
@@ -247,7 +250,7 @@ export async function buildSubjectContext(
 
   const rows = await query<ItemRow>(
     `SELECT ci.id, ci.title, ci.kind, ci.html, ci.raw_json, ci.deadline_at, ci.gradebook_id,
-            ci.module_id, ci.section_id,
+            ci.module_id, ci.section_id, ci.origin,
             m.name AS module_name, s.title AS section_title,
             ct.text AS material, ct.status AS material_status
      FROM content_item ci
@@ -345,6 +348,7 @@ export async function buildSubjectContext(
       material,
       questions,
       fileNames: filesByItem.get(id) ?? [],
+      hidden: row.origin === "hidden",
     };
     ctxItems.push(item);
 

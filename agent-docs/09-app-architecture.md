@@ -90,7 +90,7 @@ One `createServer` handler with string-matched routes. Request order at the top:
 | Notes / AI request | `POST /api/note`, `POST /api/ai-request` |
 | Diagram | `POST /api/diagram` |
 | Training | `GET /api/training/subjects`, `GET /api/training/stats`, `POST /api/training/quiz`, `POST /api/training/quiz/:id/complete`, `POST /api/training/study` (SSE) |
-| Resumo | `GET /api/summary?courseId=&moduleId=&examId=`, `POST /api/summary` (SSE) |
+| Resumo | `GET /api/summary?courseId=&moduleId=&examId=&size=`, `POST /api/summary` (SSE), `GET /api/summary/items`, `POST /api/summary/pdf` |
 | Provas | `GET /api/exams?courseId=`, `POST /api/exams`, `DELETE /api/exams/:id`, `POST /api/exam-scope` |
 | Send | `GET /api/send/config`, `GET /api/send/preview`, `GET /api/send/:id`, `POST /api/send`, `POST /api/send/upload`, `POST /api/send/artifact` |
 | Debug | `GET /api/debug-logs`, `GET /api/debug-log/:id` |
@@ -149,6 +149,7 @@ never written by the app.
 | `0014_content_visibility` | `content_item.origin/gradebook_id/is_visible/is_future` (God's Eye) |
 | `0015_study_summary` | `study_summary` (saved Resumo per course/module scope) |
 | `0016_exam_phases` | `course_exam`, `module_exam`, `section_exam`, `item_annotation.exam_id`, `gradebook_category`, `gradebook_activity`, `study_summary.exam_id` (Provas) |
+| `0017_summary_options` | `study_summary.size` + `items_json`; scope index gains `size` (4 sizes per scope + source-item snapshot) |
 
 Key read model: `v_exercise_current` feeds `/api/exercises` via `view.ts::enrich`.
 

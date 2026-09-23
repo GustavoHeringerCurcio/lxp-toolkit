@@ -214,6 +214,14 @@ neutral is always included) and `buildSubjectContext` drops material from earlie
 second exam never re-sends the first exam's content. Unclassified items default to neutral and are
 surfaced with a bulk-assign action in Ajustes.
 
+**Resumo pattern (v3.7).** The Resumo page has a **size control** (Pequeno · Médio · Grande · Extra)
+and keeps one saved summary **per size**
+per scope; the prompt and final `max_tokens` scale with the size. It also shows **transparency**:
+an "Itens usados" disclosure (`SummarySources`) lists every source item grouped by subject → section
+with a monochrome kind icon, attachment names and question counts, plus a kind breakdown. A
+`GET /api/summary/items` preview shows the same list before generating. Download is **PDF**
+(`POST /api/summary/pdf` → `answerToPdf`, LibreOffice-backed with a built-in renderer fallback).
+
 **Agora progress pattern.** `ProgressSummary` is the page's top line: a single segmented bar
 (`ok`/`late`/`coming`) with the overall `ProgressRing` on the right, a labelled legend, and a
 chevron disclosure that expands to one stacked bar per module. The disclosure state persists

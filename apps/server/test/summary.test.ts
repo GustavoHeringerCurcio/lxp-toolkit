@@ -6,6 +6,10 @@ import {
   buildPartialMessages,
   chunkItems,
   isSinglePass,
+  normalizeSummarySize,
+  SIZE_PROFILES,
+  SUMMARY_SIZES,
+  summarizeItems,
 } from "../src/summary.js";
 import { getStudySummary, saveStudySummary } from "../src/summary-store.js";
 import type { ContextItem, SubjectContext } from "../src/training.js";
@@ -23,6 +27,19 @@ function item(id: number, moduleName: string | null, material = "Conteúdo da ap
     material,
     questions: [],
     fileNames: [],
+    hidden: false,
+  };
+}
+
+function ctxFixture(): SubjectContext {
+  return {
+    courseId: 1,
+    courseName: "Curso X",
+    moduleId: null,
+    moduleName: null,
+    items: [],
+    questions: [{ id: 1, text: "Pergunta real?", options: ["a", "b"], itemId: 9, itemTitle: "Q" }],
+    text: "material",
   };
 }
 
@@ -65,17 +82,7 @@ describe("summary · chunking e prompts", () => {
   });
 
   it("monta o prompt parcial e o final com as seções pedidas", () => {
-    const ctx: SubjectContext = {
-      courseId: 1,
-      courseName: "Curso X",
-      moduleId: null,
-      moduleName: null,
-      items: [],
-      questions: [
-        { id: 1, text: "Pergunta real?", options: ["a", "b"], itemId: 9, itemTitle: "Q" },
-      ],
-      text: "material",
-    };
+    const ctx = ctxFixture();
     const partial = buildPartialMessages(ctx, { label: "M1", text: "material", itemCount: 1 });
     expect(partial.find((m) => m.role === "user")?.content).toContain("material");
 
@@ -83,6 +90,46 @@ describe("summary · chunking e prompts", () => {
     const user = final.find((m) => m.role === "user")?.content ?? "";
     expect(user).toContain("## Questões prováveis");
     expect(user).toContain("Pergunta real?");
+  });
+});
+
+describe("summary · tamanhos", () => {
+  it("normaliza o tamanho e escala os tokens", () => {
+    expect(SUMMARY_SIZES).toEqual(["small", "medium", "big", "extra"]);
+    expect(normalizeSummarySize("big")).toBe("big");
+    expect(normalizeSummarySize("huge")).toBe("medium");
+    expect(normalizeSummarySize(null)).toBe("medium");
+    expect(SIZE_PROFILES.extra.maxTokens).toBeGreaterThan(SIZE_PROFILES.small.maxTokens);
+    expect(SIZE_PROFILES.medium.questions).toBeLessThan(SIZE_PROFILES.big.questions);
+  });
+
+  it("o prompt final muda com o tamanho", () => {
+    const ctx = ctxFixture();
+    const small = buildFinalSummaryMessages(ctx, "m", "small").find((m) => m.role === "user")?.content ?? "";
+    const extra = buildFinalSummaryMessages(ctx, "m", "extra").find((m) => m.role === "user")?.content ?? "";
+    expect(small).toContain("1 página");
+    expect(extra).toContain("6 páginas");
+    expect(small).not.toBe(extra);
+  });
+
+  it("faz o snapshot compacto dos itens usados", () => {
+    const items = summarizeItems([
+      {
+        ...item(1, "Banco de Dados I"),
+        fileNames: ["apostila.pdf"],
+        hidden: true,
+        questions: [{ id: 1, text: "Q?", options: ["a"], itemId: 1, itemTitle: "Item 1" }],
+      },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: 1,
+      kind: "pdf",
+      moduleName: "Banco de Dados I",
+      files: ["apostila.pdf"],
+      questions: 1,
+      hidden: true,
+    });
   });
 });
 
@@ -119,44 +166,67 @@ describe.skipIf(!enabled)("summary store (Postgres)", () => {
     const first = await saveStudySummary({
       courseId: COURSE,
       moduleId: null,
+      size: "medium",
       subjectLabel: "Curso de resumo",
       content: "# Primeiro",
       model: "gpt-4o",
       promptHash: "h1",
       itemCount: 3,
+      items: [{ id: 1, title: "Item", kind: "pdf", moduleName: null, sectionTitle: null, files: [], questions: 0, hidden: false }],
     });
     expect(first.content).toBe("# Primeiro");
     expect(first.charCount).toBe("# Primeiro".length);
+    expect(first.items).toHaveLength(1);
 
-    const loaded = await getStudySummary(COURSE, null);
+    const loaded = await getStudySummary(COURSE, null, null, "medium");
     expect(loaded?.id).toBe(first.id);
     expect(loaded?.itemCount).toBe(3);
 
     const second = await saveStudySummary({
       courseId: COURSE,
       moduleId: null,
+      size: "medium",
       subjectLabel: "Curso de resumo",
       content: "# Segundo",
       model: "gpt-4o",
       promptHash: "h2",
       itemCount: 4,
+      items: [],
     });
     expect(second.id).toBe(first.id);
     expect(second.content).toBe("# Segundo");
+  });
+
+  it("mantém um resumo por tamanho", async () => {
+    await saveStudySummary({
+      courseId: COURSE,
+      moduleId: null,
+      size: "big",
+      subjectLabel: "Curso de resumo",
+      content: "# Grande",
+      model: null,
+      promptHash: null,
+      itemCount: 9,
+      items: [],
+    });
+    expect((await getStudySummary(COURSE, null, null, "medium"))?.content).toBe("# Segundo");
+    expect((await getStudySummary(COURSE, null, null, "big"))?.content).toBe("# Grande");
   });
 
   it("não confunde o escopo do curso com o do módulo", async () => {
     await saveStudySummary({
       courseId: COURSE,
       moduleId: MODULE,
+      size: "medium",
       subjectLabel: "Curso de resumo · Módulo",
       content: "# Módulo",
       model: null,
       promptHash: null,
       itemCount: 1,
+      items: [],
     });
-    const course = await getStudySummary(COURSE, null);
-    const module = await getStudySummary(COURSE, MODULE);
+    const course = await getStudySummary(COURSE, null, null, "medium");
+    const module = await getStudySummary(COURSE, MODULE, null, "medium");
     expect(course?.content).toBe("# Segundo");
     expect(module?.content).toBe("# Módulo");
   });

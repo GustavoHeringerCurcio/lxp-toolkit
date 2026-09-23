@@ -1,9 +1,12 @@
 import {
+  BookOpen,
   CircleCheckBig,
+  FileQuestion,
+  FileText,
+  Link2,
   ListChecks,
   MessagesSquare,
   Upload,
-  FileQuestion,
   type LucideIcon,
 } from "lucide-react";
 import type { Anomaly, AnomalySeverity, ContentKind, ExerciseKind, UploadFlavor } from "@/types";
@@ -92,6 +95,17 @@ export const CONTENT_LABEL: Record<ContentKind, string> = {
   other: "Conteúdo",
   quiz: "Quiz",
   file_upload: "Tarefa",
+};
+
+/** Monochrome icon per content classification (transparency lists, source rows). */
+export const CONTENT_ICON: Record<ContentKind, LucideIcon> = {
+  pdf: FileText,
+  reading: BookOpen,
+  link: Link2,
+  forum: MessagesSquare,
+  quiz: ListChecks,
+  file_upload: Upload,
+  other: FileQuestion,
 };
 
 export function kindMeta(kind: ExerciseKind): KindMeta {

@@ -481,16 +481,31 @@ export interface TrainingStats {
 
 // ── Resumo (study summary) ──────────────────────────────────────────────────
 
+export type SummarySize = "small" | "medium" | "big" | "extra";
+
+export interface SummaryItem {
+  id: number;
+  title: string;
+  kind: string;
+  moduleName: string | null;
+  sectionTitle: string | null;
+  files: string[];
+  questions: number;
+  hidden: boolean;
+}
+
 export interface StudySummary {
   id: number;
   courseId: number;
   moduleId: number | null;
   examId: number | null;
+  size: SummarySize;
   subjectLabel: string;
   content: string;
   model: string | null;
   itemCount: number;
   charCount: number;
+  items: SummaryItem[];
   createdAt: string;
   updatedAt: string;
 }

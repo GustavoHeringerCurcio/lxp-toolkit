@@ -8,17 +8,19 @@
  */
 import { query } from "./db.js";
 import { getStudentId } from "./store.js";
-import type { StudySummary } from "./types.js";
+import type { StudySummary, SummaryItem, SummarySize } from "./types.js";
 
 export interface NewStudySummary {
   courseId: number;
   moduleId: number | null;
   examId?: number | null;
+  size: SummarySize;
   subjectLabel: string;
   content: string;
   model: string | null;
   promptHash: string | null;
   itemCount: number;
+  items: SummaryItem[];
 }
 
 interface SummaryRow {
@@ -26,11 +28,13 @@ interface SummaryRow {
   course_id: string;
   module_id: string | null;
   exam_id: string | null;
+  size: string;
   subject_label: string;
   content: string;
   model: string | null;
   item_count: number;
   char_count: number;
+  items_json: SummaryItem[] | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -41,34 +45,38 @@ function toSummary(row: SummaryRow): StudySummary {
     courseId: Number(row.course_id),
     moduleId: row.module_id != null ? Number(row.module_id) : null,
     examId: row.exam_id != null ? Number(row.exam_id) : null,
+    size: (row.size as SummarySize) ?? "medium",
     subjectLabel: row.subject_label,
     content: row.content,
     model: row.model,
     itemCount: row.item_count,
     charCount: row.char_count,
+    items: Array.isArray(row.items_json) ? row.items_json : [],
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
 }
 
-/** The saved Resumo for a scope, or null when none was generated yet. */
+/** The saved Resumo for a scope + size, or null when none was generated yet. */
 export async function getStudySummary(
   courseId: number,
   moduleId: number | null,
   examId: number | null = null,
+  size: SummarySize = "medium",
 ): Promise<StudySummary | null> {
   const studentId = await getStudentId();
   const rows = await query<SummaryRow>(
     `SELECT * FROM study_summary
      WHERE student_id = $1 AND course_id = $2
        AND module_id IS NOT DISTINCT FROM $3::bigint
-       AND exam_id IS NOT DISTINCT FROM $4::bigint`,
-    [studentId, courseId, moduleId, examId],
+       AND exam_id IS NOT DISTINCT FROM $4::bigint
+       AND size = $5`,
+    [studentId, courseId, moduleId, examId, size],
   );
   return rows[0] ? toSummary(rows[0]) : null;
 }
 
-/** Create or replace the saved Resumo for a scope; returns the fresh row. */
+/** Create or replace the saved Resumo for a scope + size; returns the fresh row. */
 export async function saveStudySummary(input: NewStudySummary): Promise<StudySummary> {
   const studentId = await getStudentId();
   const examId = input.examId ?? null;
@@ -77,22 +85,25 @@ export async function saveStudySummary(input: NewStudySummary): Promise<StudySum
     input.courseId,
     input.moduleId,
     examId,
+    input.size,
     input.subjectLabel,
     input.content,
     input.model,
     input.promptHash,
     input.itemCount,
     input.content.length,
+    JSON.stringify(input.items ?? []),
   ];
   // Manual upsert: the scope key has two nullable columns, so matching on the
   // expression index is avoided in favour of `IS NOT DISTINCT FROM`.
   const updated = await query<SummaryRow>(
     `UPDATE study_summary SET
-       subject_label = $5, content = $6, model = $7, prompt_hash = $8,
-       item_count = $9, char_count = $10, updated_at = now()
+       subject_label = $6, content = $7, model = $8, prompt_hash = $9,
+       item_count = $10, char_count = $11, items_json = $12::jsonb, updated_at = now()
      WHERE student_id = $1 AND course_id = $2
        AND module_id IS NOT DISTINCT FROM $3::bigint
        AND exam_id IS NOT DISTINCT FROM $4::bigint
+       AND size = $5
      RETURNING *`,
     params,
   );
@@ -100,8 +111,8 @@ export async function saveStudySummary(input: NewStudySummary): Promise<StudySum
 
   const inserted = await query<SummaryRow>(
     `INSERT INTO study_summary(
-       student_id, course_id, module_id, exam_id, subject_label, content, model, prompt_hash, item_count, char_count, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
+       student_id, course_id, module_id, exam_id, size, subject_label, content, model, prompt_hash, item_count, char_count, items_json, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb, now())
      RETURNING *`,
     params,
   );
