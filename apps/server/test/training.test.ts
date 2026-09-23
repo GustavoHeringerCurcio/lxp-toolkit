@@ -3,6 +3,7 @@ import { closePool, query, runMigrations } from "../src/db.js";
 import {
   buildQuizMessages,
   buildSubjectContext,
+  isSubjectModule,
   listTrainingSubjects,
   normalizeGeneratedQuestions,
   normalizeInferredAnswers,
@@ -94,6 +95,12 @@ describe("training · normalização da IA", () => {
     const user = messages.find((m) => m.role === "user")?.content ?? "";
     expect(user).toContain("Q101");
     expect(user).toContain("JSON");
+  });
+
+  it("considera matéria real quando há professor ou árvore substancial", () => {
+    expect(isSubjectModule(1, 0)).toBe(true);
+    expect(isSubjectModule(0, 12)).toBe(true);
+    expect(isSubjectModule(0, 2)).toBe(false);
   });
 });
 

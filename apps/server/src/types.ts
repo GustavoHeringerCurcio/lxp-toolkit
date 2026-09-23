@@ -453,6 +453,10 @@ export interface TrainingModuleInfo {
   itemCount: number;
   quizCount: number;
   readingCount: number;
+  /** Tree (non-hidden) item count for the module. */
+  treeCount: number;
+  /** True when the module is a real subject (professor-linked or substantial). */
+  isSubject: boolean;
 }
 
 export interface TrainingSubject {

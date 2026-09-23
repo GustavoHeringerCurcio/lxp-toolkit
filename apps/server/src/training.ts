@@ -89,26 +89,49 @@ interface ModuleCountRow {
   item_count: string;
   quiz_count: string;
   reading_count: string;
+  tree_count: string;
+  prof_count: string;
 }
 
 const READING_KINDS = "('pdf','reading')";
+
+/**
+ * Hidden ("God's Eye") topics are only studied/counted when they are not a
+ * duplicate of a tree item — except when they carry questions (unique question
+ * banks live inside duplicate-titled items too). Duplicate readings/material
+ * are dropped; every real question is kept.
+ */
+export const VISIBLE_ITEM_SQL =
+  "(ci.origin = 'tree' OR (ci.origin = 'hidden' AND (" +
+  "COALESCE((ci.raw_json->>'duplicate')::boolean, false) = false " +
+  "OR EXISTS (SELECT 1 FROM question q WHERE q.content_item_id = ci.id))))";
+
+/** A module is a real subject when it has a professor or a substantial tree. */
+export function isSubjectModule(profCount: number, treeCount: number): boolean {
+  return profCount > 0 || treeCount >= 10;
+}
 
 /** Courses + modules with content counts, for the subject picker. */
 export async function listTrainingSubjects(): Promise<TrainingSubject[]> {
   const [courses, modules] = await Promise.all([
     query<CourseCountRow>(
       `SELECT c.id, c.name,
-         (SELECT count(*) FROM content_item ci WHERE ci.course_id = c.id) AS item_count,
-         (SELECT count(*) FROM content_item ci WHERE ci.course_id = c.id AND ci.kind = 'quiz') AS quiz_count,
-         (SELECT count(*) FROM content_item ci WHERE ci.course_id = c.id AND ci.kind IN ${READING_KINDS}) AS reading_count
+         (SELECT count(*) FROM content_item ci
+           WHERE ci.course_id = c.id AND ${VISIBLE_ITEM_SQL}) AS item_count,
+         (SELECT count(*) FROM content_item ci
+           WHERE ci.course_id = c.id AND ci.kind = 'quiz' AND ${VISIBLE_ITEM_SQL}) AS quiz_count,
+         (SELECT count(*) FROM content_item ci
+           WHERE ci.course_id = c.id AND ci.kind IN ${READING_KINDS} AND ${VISIBLE_ITEM_SQL}) AS reading_count
        FROM course c
        ORDER BY c.name`,
     ),
     query<ModuleCountRow>(
       `SELECT m.course_id, m.id, m.name, m.title,
-         count(ci.id) AS item_count,
-         count(*) FILTER (WHERE ci.kind = 'quiz') AS quiz_count,
-         count(*) FILTER (WHERE ci.kind IN ${READING_KINDS}) AS reading_count
+         count(ci.id) FILTER (WHERE ${VISIBLE_ITEM_SQL}) AS item_count,
+         count(ci.id) FILTER (WHERE ci.kind = 'quiz' AND ${VISIBLE_ITEM_SQL}) AS quiz_count,
+         count(ci.id) FILTER (WHERE ci.kind IN ${READING_KINDS} AND ${VISIBLE_ITEM_SQL}) AS reading_count,
+         count(ci.id) FILTER (WHERE ci.origin = 'tree') AS tree_count,
+         (SELECT count(*) FROM module_professor mp WHERE mp.module_id = m.id) AS prof_count
        FROM module m
        LEFT JOIN content_item ci ON ci.module_id = m.id
        GROUP BY m.course_id, m.id, m.name, m.title, m.sequence
@@ -119,14 +142,27 @@ export async function listTrainingSubjects(): Promise<TrainingSubject[]> {
   const byCourse = new Map<string, TrainingModuleInfo[]>();
   for (const m of modules) {
     const list = byCourse.get(m.course_id) ?? [];
+    const treeCount = Number(m.tree_count);
+    const profCount = Number(m.prof_count);
     list.push({
       moduleId: Number(m.id),
       moduleName: m.name ?? m.title,
       itemCount: Number(m.item_count),
       quizCount: Number(m.quiz_count),
       readingCount: Number(m.reading_count),
+      treeCount,
+      isSubject: isSubjectModule(profCount, treeCount),
     });
     byCourse.set(m.course_id, list);
+  }
+
+  // Real subjects first, then the exam/phantom modules; alphabetical within each.
+  for (const list of byCourse.values()) {
+    list.sort(
+      (a, b) =>
+        Number(b.isSubject) - Number(a.isSubject) ||
+        a.moduleName.localeCompare(b.moduleName, "pt"),
+    );
   }
 
   return courses.map((c) => ({
@@ -218,7 +254,7 @@ export async function buildSubjectContext(
      LEFT JOIN module m ON m.id = ci.module_id
      LEFT JOIN section s ON s.id = ci.section_id
      LEFT JOIN content_text ct ON ct.content_item_id = ci.id
-     WHERE ci.course_id = $1 ${moduleClause}
+     WHERE ci.course_id = $1 ${moduleClause} AND ${VISIBLE_ITEM_SQL}
      ORDER BY m.sequence NULLS LAST, ci.id`,
     params,
   );

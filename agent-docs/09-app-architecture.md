@@ -200,7 +200,7 @@ Rules to preserve:
 | `ai.ts` | Calls OpenAI with streaming; returns text + provenance (model, tokens, prompt hash). Also `cheapJsonCompletion` for detection. |
 | `classify.ts` | Lazy AI review of ambiguous uploads. |
 | `gate.ts` | `analyzeDraftQuality` — advisory quality gate over a draft. |
-| `training.ts` | Builds the per-subject knowledge pack (catalog + bank + `content_text`) and generates practice quizzes / streamed study guides. |
+| `training.ts` | Builds the per-subject knowledge pack (catalog + bank + `content_text`) and generates practice quizzes / streamed study guides. The subject picker flags real subjects (professor-linked or substantial tree) vs exam/phantom modules; hidden God's-Eye topics are included only when unique or question-bearing (duplicate readings dropped). |
 | `summary.ts` | `Resumo`: chunk-aware map-reduce summary of a subject (streamed), persisted via `summary-store.ts`. |
 | `exams.ts` / `exam-store.ts` | Exam phases (`course_exam`): manual end dates + item/section/module overrides; classifies content items to the current exam (keyword → gradebook → deadline → majority, manual wins). Scopes the Treino/Resumo knowledge pack so later exams don't re-send old material. |
 | `gradebook.ts` | Imports `surfaces.json.grades` (categories AVD1/AVD2 + evaluations) into `gradebook_category`/`gradebook_activity`. |

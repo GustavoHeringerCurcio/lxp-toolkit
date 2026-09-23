@@ -449,6 +449,8 @@ export interface TrainingModuleInfo {
   itemCount: number;
   quizCount: number;
   readingCount: number;
+  treeCount: number;
+  isSubject: boolean;
 }
 
 export interface TrainingSubject {

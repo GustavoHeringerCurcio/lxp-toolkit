@@ -31,18 +31,22 @@ export function TrainingSubjectPicker({
 
   const course = subjects.find((s) => s.courseId === courseId) ?? null;
   const modules = course?.modules ?? [];
+  const subjectModules = modules.filter((m) => m.isSubject);
+  const otherModules = modules.filter((m) => !m.isSubject);
+  const selectedModule = modules.find((m) => m.moduleId === moduleId) ?? null;
   const defaultedFor = useRef<number | null>(null);
 
-  // Default to the first subject once per course (subject-level study); the
-  // student can still pick "Todas as matérias" afterwards.
+  // Default to the first real subject once per course (subject-level study);
+  // the student can still pick "Todas as matérias" or an exam module afterwards.
   useEffect(() => {
     if (!course || modules.length === 0) return;
     if (defaultedFor.current === course.courseId) return;
     defaultedFor.current = course.courseId;
     if (moduleId == null || !modules.some((m) => m.moduleId === moduleId)) {
-      setModuleId(modules[0].moduleId);
+      const fallback = subjectModules[0] ?? modules[0];
+      setModuleId(fallback.moduleId);
     }
-  }, [course, modules, moduleId, setModuleId]);
+  }, [course, modules, subjectModules, moduleId, setModuleId]);
 
   if (subjects.length === 0) {
     return (
@@ -98,12 +102,26 @@ export function TrainingSubjectPicker({
                 className="w-full appearance-none rounded-lg border bg-background py-2 pl-9 pr-8 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               >
                 <option value="">{t("training.allModules")}</option>
-                {modules.map((m) => (
-                  <option key={m.moduleId} value={m.moduleId}>
-                    {m.moduleName}
-                    {m.quizCount > 0 ? ` (${m.quizCount})` : ""}
-                  </option>
-                ))}
+                {subjectModules.length > 0 && (
+                  <optgroup label={t("training.subjects")}>
+                    {subjectModules.map((m) => (
+                      <option key={m.moduleId} value={m.moduleId}>
+                        {m.moduleName}
+                        {m.quizCount > 0 ? ` (${m.quizCount})` : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {otherModules.length > 0 && (
+                  <optgroup label={t("training.others")}>
+                    {otherModules.map((m) => (
+                      <option key={m.moduleId} value={m.moduleId}>
+                        {m.moduleName}
+                        {m.quizCount > 0 ? ` (${m.quizCount})` : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
           </label>
@@ -113,7 +131,13 @@ export function TrainingSubjectPicker({
           <div className="flex shrink-0 items-center gap-3 pb-2 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1">
               <BookOpen className="size-3" aria-hidden />
-              {t("training.stats", { q: course.quizCount, r: course.readingCount })}
+              {selectedModule
+                ? t("training.statsSubject", {
+                    name: selectedModule.moduleName,
+                    q: selectedModule.quizCount,
+                    r: selectedModule.readingCount,
+                  })
+                : t("training.stats", { q: course.quizCount, r: course.readingCount })}
             </span>
           </div>
         )}
