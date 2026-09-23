@@ -125,7 +125,7 @@ Only the static UI and the thin proxy are serverless-friendly.
 
 - **A. Fresh scrape on the VM** — run `dump`, `dump-surfaces`, `index`, `index:web` inside the
   `app` container. Simplest; subject to reCAPTCHA from a datacenter IP.
-- **B. Copy local data** — `pg_dump` the local DB (port 5433) and copy `scraped/` into the
+- **B. Copy local data** — `pg_dump` the local DB (port 5434) and copy `scraped/` into the
   `lxp-toolkit_scraped` volume. Preserves answers/overrides/profile. Restore into `db` **before**
   starting `app`, so bootstrap sees existing `content_item` rows and only rebuilds the projection.
 

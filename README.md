@@ -133,7 +133,7 @@ npm run web              # refresh + build + serve → http://localhost:4174
 
 Edit the copied `.env` files before running: `apps/server/.env` needs a real
 `OPENAI_API_KEY` (only required for AI generation) and the default
-`DATABASE_URL=postgres://lxp:lxp@localhost:5433/lxp`.
+`DATABASE_URL=postgres://lxp:lxp@localhost:5434/lxp`.
 
 ### Fresh clone
 
@@ -261,7 +261,7 @@ file first. A quality gate flags drafts that look off before you send.
 | `docker` not found / Postgres down | Install and start Docker, then `npm run db:up && npm run db:migrate`. |
 | `DATABASE_URL` not configured | Run `npm run setup`, or add it to `apps/server/.env` (see `.env.example`). |
 | Port 4174 in use | Set `PORT=4175` in `apps/server/.env`. |
-| Port 5433 busy | The bundled container uses host port **5433** on purpose; keep `DATABASE_URL` on `localhost:5433`. |
+| Port 5434 busy | The bundled container uses host port **5434** on purpose; keep `DATABASE_URL` on `localhost:5434`. |
 | Not sure what's missing | `npm run doctor` reports exactly what to fix. |
 
 ---

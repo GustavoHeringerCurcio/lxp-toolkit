@@ -101,7 +101,7 @@ docker compose -f docker-compose.prod.yml exec -T app npm run index:web
 
 ### B. Copy your local data
 
-On the **laptop** (local dev DB runs on port 5433 via `docker-compose.yml`):
+On the **laptop** (local dev DB runs on port 5434 via `docker-compose.yml`):
 
 ```bash
 docker compose exec -T db pg_dump -U lxp -d lxp --no-owner --no-acl > lxp.dump

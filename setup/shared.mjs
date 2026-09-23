@@ -15,7 +15,7 @@ export const PROFILE_JSON = path.join(ROOT, "apps", "server", "config", "profile
 export const CONTENT_TREE = path.join(ROOT, "scraped", "raw", "content-tree.json");
 
 /** Default local Postgres provided by the repo's docker-compose.yml. */
-export const DATABASE_URL_DEFAULT = "postgres://lxp:lxp@localhost:5433/lxp";
+export const DATABASE_URL_DEFAULT = "postgres://lxp:lxp@localhost:5434/lxp";
 
 const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
 const wrap = (code) => (s) => (useColor ? `\x1b[${code}m${s}\x1b[0m` : s);

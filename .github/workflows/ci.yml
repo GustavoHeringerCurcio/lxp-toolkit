@@ -16,14 +16,14 @@ jobs:
           POSTGRES_PASSWORD: lxp
           POSTGRES_DB: lxp
         ports:
-          - 5433:5432
+          - 5434:5432
         options: >-
           --health-cmd "pg_isready -U lxp -d lxp"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
     env:
-      DATABASE_URL: postgres://lxp:lxp@localhost:5433/lxp
+      DATABASE_URL: postgres://lxp:lxp@localhost:5434/lxp
       LXP_TEST_DB: "1"
     steps:
       - uses: actions/checkout@v4

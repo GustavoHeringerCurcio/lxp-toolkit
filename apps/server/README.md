@@ -136,7 +136,7 @@ Editable files in `apps/server/config/` (personal ones gitignored):
 | Variable | Required | Purpose |
 |---|---|---|
 | `OPENAI_API_KEY` | for AI | Drafts, classification, project detection, gate, training. |
-| `DATABASE_URL` | yes | Postgres connection (default `postgres://lxp:lxp@localhost:5433/lxp`). |
+| `DATABASE_URL` | yes | Postgres connection (default `postgres://lxp:lxp@localhost:5434/lxp`). |
 | `DATA_DIR` | no | Scraped data location (defaults to `../../scraped`). |
 | `PORT` | no | HTTP port (default `4174`). |
 | `SOFFICE_BIN` | no | LibreOffice binary for `.pdf` delivery / Office previews. |
