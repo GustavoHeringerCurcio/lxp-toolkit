@@ -34,6 +34,35 @@ export const TONE_CLS: Record<Tone, string> = {
   none: "bg-none-bg text-none border-none/30",
 };
 
+/** Parse a portal deadline ("YYYY-MM-DD HH:MM:SS", local wall-clock) to a timestamp. */
+export function parseDeadlineTs(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const t = new Date(iso.replace(" ", "T")).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+/** True only for deadlines still in the future (expired items are not "upcoming"). */
+export function isUpcoming(deadlineAt: string | null | undefined, now = Date.now()): boolean {
+  const ts = parseDeadlineTs(deadlineAt);
+  return ts != null && ts >= now;
+}
+
+/** God's Eye deadline label: past deadlines are "overdue", never "due in 0d". */
+export function godsEyeDeadlineLabel(
+  deadlineAt: string | null | undefined,
+  now: number,
+  t: TranslateFn,
+  locale: string,
+): string {
+  const ts = parseDeadlineTs(deadlineAt);
+  if (ts == null) return t("godsEye.noDeadline");
+  const date = new Date(ts).toLocaleDateString(locale, { day: "2-digit", month: "short" });
+  if (ts < now) return `${t("godsEye.overdue")} · ${date}`;
+  const days = Math.ceil((ts - now) / 86_400_000);
+  if (days <= 14) return `${t("godsEye.dueIn", { days })} · ${date}`;
+  return date;
+}
+
 export function countInfo(items: { status: Exercise["status"] }[]): { open: number; expired: number; done: number } {
   return {
     open: items.filter((i) => i.status === "open").length,

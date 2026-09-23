@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { cmpOpen, countInfo, countdownParts, deadlineInfo, fmtDeadline } from "./status";
+import {
+  cmpOpen,
+  countInfo,
+  countdownParts,
+  deadlineInfo,
+  fmtDeadline,
+  godsEyeDeadlineLabel,
+  isUpcoming,
+  parseDeadlineTs,
+} from "./status";
 import { translate, type Lang } from "./i18n";
 
 const t = (key: string, vars?: Record<string, string | number>) => translate("pt", key, vars);
@@ -36,6 +45,60 @@ describe("deadlineInfo", () => {
   it("2–3 dias → soon; mais que isso → coming", () => {
     expect(deadlineInfo({ done: false, status: "open", daysLeft: 3 }, t).tone).toBe("soon");
     expect(deadlineInfo({ done: false, status: "open", daysLeft: 4 }, t).tone).toBe("coming");
+  });
+});
+
+describe("parseDeadlineTs", () => {
+  it("aceita o formato do portal (espaço → T)", () => {
+    expect(parseDeadlineTs("2026-09-22 19:00:00")).toBe(new Date(2026, 8, 22, 19, 0, 0).getTime());
+  });
+
+  it("null/ inválido → null", () => {
+    expect(parseDeadlineTs(null)).toBeNull();
+    expect(parseDeadlineTs("")).toBeNull();
+    expect(parseDeadlineTs("nope")).toBeNull();
+  });
+});
+
+describe("isUpcoming", () => {
+  const now = new Date(2026, 8, 22, 21, 30, 0).getTime();
+
+  it("prazo no futuro → true", () => {
+    expect(isUpcoming("2026-09-23 10:00:00", now)).toBe(true);
+  });
+
+  it("prazo já vencido → false", () => {
+    expect(isUpcoming("2026-09-22 19:00:00", now)).toBe(false);
+  });
+
+  it("sem prazo → false", () => {
+    expect(isUpcoming(null, now)).toBe(false);
+  });
+});
+
+describe("godsEyeDeadlineLabel", () => {
+  const now = new Date(2026, 8, 22, 21, 30, 0).getTime();
+
+  it("vencido há poucas horas → 'vencido', nunca 'vence em 0d'", () => {
+    const label = godsEyeDeadlineLabel("2026-09-22 19:00:00", now, t, "pt-BR");
+    expect(label).toContain(t("godsEye.overdue"));
+    expect(label).not.toContain(t("godsEye.dueIn", { days: 0 }));
+  });
+
+  it("futuro próximo → vence em Nd", () => {
+    expect(godsEyeDeadlineLabel("2026-09-25 19:00:00", now, t, "pt-BR")).toContain(
+      t("godsEye.dueIn", { days: 3 }),
+    );
+  });
+
+  it("futuro distante → só a data", () => {
+    const label = godsEyeDeadlineLabel("2026-10-20 19:00:00", now, t, "pt-BR");
+    expect(label).not.toContain("vence");
+    expect(label).not.toContain("vencido");
+  });
+
+  it("sem prazo → rótulo dedicado", () => {
+    expect(godsEyeDeadlineLabel(null, now, t, "pt-BR")).toBe(t("godsEye.noDeadline"));
   });
 });
 

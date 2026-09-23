@@ -5,23 +5,8 @@ import { useT } from "@/lib/i18n";
 import { RichText } from "@/components/rich-text";
 import { kindShort } from "@/lib/kind";
 import { cn } from "@/lib/utils";
+import { godsEyeDeadlineLabel, isUpcoming, parseDeadlineTs } from "@/lib/status";
 import type { Exercise } from "@/types";
-
-function deadlineTs(e: Exercise): number | null {
-  if (!e.deadlineAt) return null;
-  const t = new Date(e.deadlineAt).getTime();
-  return Number.isNaN(t) ? null : t;
-}
-
-function deadlineLabel(e: Exercise, t: (k: string, v?: Record<string, string | number>) => string, locale: string): string {
-  const ts = deadlineTs(e);
-  if (ts == null) return t("godsEye.noDeadline");
-  const days = Math.ceil((ts - Date.now()) / 86_400_000);
-  const date = new Date(ts).toLocaleDateString(locale, { day: "2-digit", month: "short" });
-  if (days < 0) return `${t("godsEye.overdue")} · ${date}`;
-  if (days <= 14) return `${t("godsEye.dueIn", { days })} · ${date}`;
-  return date;
-}
 
 function ItemCard({ item }: { item: Exercise }) {
   const { t, locale } = useT();
@@ -55,7 +40,7 @@ function ItemCard({ item }: { item: Exercise }) {
             <span aria-hidden>·</span>
             <span className="inline-flex items-center gap-1">
               <CalendarClock className="size-3" aria-hidden />
-              {deadlineLabel(item, t, locale)}
+              {godsEyeDeadlineLabel(item.deadlineAt, Date.now(), t, locale)}
             </span>
             {questions.length > 0 && (
               <>
@@ -145,8 +130,8 @@ export function GodsEyePage() {
   const upcoming = useMemo(() => {
     const now = Date.now();
     return [...items, ...hiddenItems]
-      .filter((e) => !e.done && deadlineTs(e) != null && (deadlineTs(e) as number) >= now - 86_400_000)
-      .sort((a, b) => (deadlineTs(a) as number) - (deadlineTs(b) as number))
+      .filter((e) => !e.done && isUpcoming(e.deadlineAt, now))
+      .sort((a, b) => (parseDeadlineTs(a.deadlineAt) as number) - (parseDeadlineTs(b.deadlineAt) as number))
       .slice(0, 25);
   }, [items, hiddenItems]);
 
