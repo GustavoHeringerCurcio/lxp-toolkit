@@ -16,6 +16,8 @@ import { openaiKey } from "./config.js";
 import { query } from "./db.js";
 import { getAiConfig } from "./store.js";
 import { stripHtml } from "./build.js";
+import { getClassifyMaps, listExams } from "./exam-store.js";
+import { resolveCourseExams } from "./exams.js";
 import type { AiConfig, TrainingSubject, TrainingModuleInfo } from "./types.js";
 import type { NewTrainingQuestion } from "./training-store.js";
 
@@ -145,8 +147,12 @@ interface ItemRow {
   kind: string;
   html: string | null;
   raw_json: { html?: string | null; content?: Record<string, unknown> | null } | null;
+  module_id: string | null;
   module_name: string | null;
+  section_id: string | null;
   section_title: string | null;
+  gradebook_id: string | null;
+  deadline_at: Date | null;
   material: string | null;
   material_status: string | null;
 }
@@ -175,7 +181,11 @@ function instructionsFor(row: ItemRow): string {
 }
 
 /** Assemble the subject knowledge pack from Postgres (catalog + material + bank). */
-export async function buildSubjectContext(courseId: number, moduleId?: number | null): Promise<SubjectContext> {
+export async function buildSubjectContext(
+  courseId: number,
+  moduleId?: number | null,
+  examId?: number | null,
+): Promise<SubjectContext> {
   const courseRows = await query<{ id: string; name: string }>(
     "SELECT id, name FROM course WHERE id = $1",
     [courseId],
@@ -199,8 +209,9 @@ export async function buildSubjectContext(courseId: number, moduleId?: number | 
     params.push(moduleId);
   }
 
-  const items = await query<ItemRow>(
-    `SELECT ci.id, ci.title, ci.kind, ci.html, ci.raw_json,
+  const rows = await query<ItemRow>(
+    `SELECT ci.id, ci.title, ci.kind, ci.html, ci.raw_json, ci.deadline_at, ci.gradebook_id,
+            ci.module_id, ci.section_id,
             m.name AS module_name, s.title AS section_title,
             ct.text AS material, ct.status AS material_status
      FROM content_item ci
@@ -211,6 +222,30 @@ export async function buildSubjectContext(courseId: number, moduleId?: number | 
      ORDER BY m.sequence NULLS LAST, ci.id`,
     params,
   );
+
+  // Scope to the current exam: keep items assigned to it plus neutral material.
+  let items = rows;
+  if (examId != null) {
+    const exams = await listExams(courseId);
+    const maps = await getClassifyMaps(courseId, exams);
+    const resolved = resolveCourseExams(
+      rows.map((r) => ({
+        id: Number(r.id),
+        moduleId: r.module_id != null ? Number(r.module_id) : null,
+        moduleTitle: r.module_name,
+        sectionId: r.section_id != null ? Number(r.section_id) : null,
+        sectionTitle: r.section_title,
+        gradebookId: r.gradebook_id != null ? Number(r.gradebook_id) : null,
+        deadlineAt: r.deadline_at ? r.deadline_at.toISOString() : null,
+      })),
+      exams,
+      maps,
+    );
+    items = rows.filter((r) => {
+      const res = resolved.get(Number(r.id));
+      return !res || res.examId == null || res.examId === examId;
+    });
+  }
 
   const itemIds = items.map((i) => Number(i.id));
   const [questionRows, attachmentRows] = itemIds.length

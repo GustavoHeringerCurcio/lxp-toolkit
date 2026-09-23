@@ -186,7 +186,7 @@ same neutral treatment.
 | `/treino/quiz` | **Treino de quiz** | gamified practice quiz (AI-generated or portal-sourced), one question at a time with feedback, score + readiness verdict + history |
 | `/treino/estudo` | **Perguntar à IA** | free-text study Q&A scoped to the selected subject; streamed markdown |
 | `/treino/resumo` | **Resumo** | saved AI study summary of a subject (PDFs + readings + quiz bank): key topics + likely exam questions, streamed and regenerable |
-| `/ajustes` | **Ajustes** | hub with pill tabs (Pessoal · IA · Avançado · Organização): profile + appearance, IA voice/format/rules/content, generation params + preview, institution + professor directory |
+| `/ajustes` | **Ajustes** | hub with pill tabs (Pessoal · IA · Provas · Avançado · Organização): profile + appearance, IA voice/format/rules/content, exam phases (dates + subject→exam mapping), generation params + preview, institution + professor directory |
 | `/design` | **Design** | living style guide: tokens, type ramp, components, states |
 
 Global: **⌘K / Ctrl+K command palette** — navigate, jump to any tarefa, filter by module, toggle
@@ -204,6 +204,15 @@ module has none). It is gamified: one question at a time, immediate correct/wron
 rationale, then a score ring and a 3-tier **self-check** verdict (`lib/training.ts`); sessions and
 scores persist in Postgres (`training_quiz`/`training_question`/`training_answer`). Ask AI is
 free-text and streams markdown.
+
+**Provas pattern (v3.6).** All three study surfaces (Resumo, Treino de quiz, Perguntar à IA) share a
+**Prova** selector (`ExamPicker`, `components/exams.tsx`): `Tudo` plus the course's exam phases
+(AVD1/AVD2/Sub). Phases are defined by a manual **end date** (inline editor + Ajustes → Provas),
+because most material (PDFs/readings) has no per-item date. `exams.ts` classifies each content item
+(manual override → keyword "1º/2º Bimestre" → gradebook category → deadline → sibling majority;
+neutral is always included) and `buildSubjectContext` drops material from earlier exams — so the
+second exam never re-sends the first exam's content. Unclassified items default to neutral and are
+surfaced with a bulk-assign action in Ajustes.
 
 **Agora progress pattern.** `ProgressSummary` is the page's top line: a single segmented bar
 (`ok`/`late`/`coming`) with the overall `ProgressRing` on the right, a labelled legend, and a

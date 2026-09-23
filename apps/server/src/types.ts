@@ -492,6 +492,7 @@ export interface StudySummary {
   id: number;
   courseId: number;
   moduleId: number | null;
+  examId: number | null;
   subjectLabel: string;
   content: string;
   model: string | null;
@@ -499,6 +500,55 @@ export interface StudySummary {
   charCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Exam phases ("Provas") ──────────────────────────────────────────────────
+
+/** A manual exam phase for a course (AVD1, AVD2, Substitutiva…). */
+export interface Exam {
+  id: number;
+  courseId: number;
+  name: string;
+  sequence: number;
+  endsAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ExamScopeType = "module" | "section" | "item";
+
+/** Where the resolved exam for a scope came from. */
+export type ExamAssignmentSource = "manual" | "auto" | "neutral";
+
+/** One module/section row in the Ajustes → Provas overview. */
+export interface ExamAssignmentInfo {
+  scopeType: "module" | "section";
+  scopeId: number;
+  title: string;
+  courseId: number;
+  moduleId: number | null;
+  itemCount: number;
+  /** Resolved exam (manual override or auto classification); null = neutral. */
+  examId: number | null;
+  source: ExamAssignmentSource;
+}
+
+/** Everything the Provas editor needs for one course. */
+export interface ExamOverview {
+  exams: Exam[];
+  assignments: ExamAssignmentInfo[];
+  /** Exam phases proposed from the gradebook when none exist yet. */
+  suggested: ExamSuggestion[];
+  /** Items with no signal at all (neutral). */
+  unclassified: number;
+  totalItems: number;
+}
+
+/** A gradebook-derived exam phase proposal (not yet saved). */
+export interface ExamSuggestion {
+  name: string;
+  sequence: number;
+  endsAt: string | null;
 }
 
 // ── Professor photos (per student) ──────────────────────────────────────────

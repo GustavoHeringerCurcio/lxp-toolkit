@@ -7,6 +7,7 @@ import type { TrainingSubject } from "@/types";
 import { useT } from "@/lib/i18n";
 import { useTrainingState } from "@/lib/training-state";
 import { TrainingSubjectPicker } from "@/components/training-subject-picker";
+import { ExamPicker } from "@/components/exams";
 import { NoData } from "@/components/state-screens";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 export function TrainingStudyPage() {
   const { t } = useT();
-  const { courseId, moduleId } = useTrainingState();
+  const { courseId, moduleId, examId } = useTrainingState();
 
   const [subjects, setSubjects] = useState<TrainingSubject[]>([]);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
@@ -52,7 +53,7 @@ export function TrainingStudyPage() {
     setAsking(true);
     setAnswer("");
     try {
-      await streamStudyGuide({ courseId, moduleId, query }, (e) => {
+      await streamStudyGuide({ courseId, moduleId, examId, query }, (e) => {
         if (e.type === "delta" && e.delta) setAnswer((prev) => prev + e.delta);
       });
     } catch (err) {
@@ -92,6 +93,7 @@ export function TrainingStudyPage() {
       </header>
 
       <TrainingSubjectPicker subjects={subjects} disabled={asking} />
+      <ExamPicker courseId={courseId} disabled={asking} />
 
       <div className="space-y-2 rounded-xl border bg-card p-4">
         <Textarea

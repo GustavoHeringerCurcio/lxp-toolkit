@@ -59,6 +59,13 @@ import {
 } from "../src/training-store.js";
 import { generateResumo } from "../src/summary.js";
 import { getStudySummary, saveStudySummary } from "../src/summary-store.js";
+import {
+  deleteExam,
+  getExamOverview,
+  saveExam,
+  setScopeExam,
+  type ScopeType,
+} from "../src/exam-store.js";
 import { enrich, type ExerciseView } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
 import { classifyFlavor } from "../src/classify.js";
@@ -707,10 +714,11 @@ const server = createServer(async (req, res) => {
       const courseId = Number(b.courseId);
       if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
       const moduleId = b.moduleId != null && b.moduleId !== "" ? Number(b.moduleId) : null;
+      const examId = b.examId != null && b.examId !== "" ? Number(b.examId) : null;
       const mode = b.mode === "mixed" ? "mixed" : "ai";
       const count = Math.min(30, Math.max(5, Number(b.count) || 10));
       const startedAt = Date.now();
-      const ctx = await buildSubjectContext(courseId, moduleId);
+      const ctx = await buildSubjectContext(courseId, moduleId, examId);
       const generated = await generateTrainingQuiz(ctx, mode, count);
       const quiz = await createTrainingQuiz({
         courseId,
@@ -760,6 +768,7 @@ const server = createServer(async (req, res) => {
       if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
       if (!question) return json(res, 400, { error: "Escreva uma pergunta." });
       const moduleId = b.moduleId != null && b.moduleId !== "" ? Number(b.moduleId) : null;
+      const examId = b.examId != null && b.examId !== "" ? Number(b.examId) : null;
 
       res.writeHead(200, {
         "content-type": "text/event-stream; charset=utf-8",
@@ -770,7 +779,7 @@ const server = createServer(async (req, res) => {
       sendEvent({ type: "start" });
       const startedAt = Date.now();
       try {
-        const ctx = await buildSubjectContext(courseId, moduleId);
+        const ctx = await buildSubjectContext(courseId, moduleId, examId);
         const result = await generateStudyGuide(ctx, question, (delta) => {
           sendEvent({ type: "delta", delta });
           if (typeof (res as import("node:http").ServerResponse & { flush?: () => void }).flush === "function") {
@@ -808,7 +817,12 @@ const server = createServer(async (req, res) => {
       const courseId = Number(params.get("courseId"));
       if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
       const moduleParam = params.get("moduleId");
-      const summary = await getStudySummary(courseId, moduleParam ? Number(moduleParam) : null);
+      const examParam = params.get("examId");
+      const summary = await getStudySummary(
+        courseId,
+        moduleParam ? Number(moduleParam) : null,
+        examParam ? Number(examParam) : null,
+      );
       return json(res, 200, { summary });
     }
     if (url === "/api/summary" && method === "POST") {
@@ -816,6 +830,7 @@ const server = createServer(async (req, res) => {
       const courseId = Number(b.courseId);
       if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
       const moduleId = b.moduleId != null && b.moduleId !== "" ? Number(b.moduleId) : null;
+      const examId = b.examId != null && b.examId !== "" ? Number(b.examId) : null;
 
       res.writeHead(200, {
         "content-type": "text/event-stream; charset=utf-8",
@@ -836,7 +851,7 @@ const server = createServer(async (req, res) => {
       sendEvent({ type: "start" });
       const startedAt = Date.now();
       try {
-        const ctx = await buildSubjectContext(courseId, moduleId);
+        const ctx = await buildSubjectContext(courseId, moduleId, examId);
         const generated = await generateResumo(ctx, {
           onStep: (step) => {
             sendEvent({ type: "step", ...step });
@@ -863,6 +878,7 @@ const server = createServer(async (req, res) => {
         const summary = await saveStudySummary({
           courseId,
           moduleId,
+          examId,
           subjectLabel: subjectLabel(ctx),
           content: generated.content,
           model: generated.model,
@@ -877,6 +893,52 @@ const server = createServer(async (req, res) => {
         res.end();
       }
       return;
+    }
+
+    // exam phases ("Provas")
+    if (url === "/api/exams" && method === "GET") {
+      const params = new URL(req.url ?? "/", "http://local").searchParams;
+      const courseId = Number(params.get("courseId"));
+      if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
+      return json(res, 200, await getExamOverview(courseId));
+    }
+    if (url === "/api/exams" && method === "POST") {
+      const b = await readBody(req);
+      const courseId = Number(b.courseId);
+      if (!courseId) return json(res, 400, { error: "courseId obrigatório" });
+      const name = String(b.name ?? "").trim();
+      const sequence = Number(b.sequence);
+      if (!name) return json(res, 400, { error: "name obrigatório" });
+      if (!Number.isFinite(sequence) || sequence <= 0) {
+        return json(res, 400, { error: "sequence inválida" });
+      }
+      const exam = await saveExam(courseId, {
+        id: b.id != null && b.id !== "" ? Number(b.id) : undefined,
+        name,
+        sequence,
+        endsAt: b.endsAt ? String(b.endsAt) : null,
+      });
+      return json(res, 200, { ok: true, exam, overview: await getExamOverview(courseId) });
+    }
+    if (url === "/api/exam-scope" && method === "POST") {
+      const b = await readBody(req);
+      const scopeType = String(b.scopeType ?? "");
+      if (scopeType !== "module" && scopeType !== "section" && scopeType !== "item") {
+        return json(res, 400, { error: "scopeType inválido" });
+      }
+      const scopeId = Number(b.scopeId);
+      if (!scopeId) return json(res, 400, { error: "scopeId obrigatório" });
+      const examId = b.examId != null && b.examId !== "" ? Number(b.examId) : null;
+      await setScopeExam(scopeType as ScopeType, scopeId, examId);
+      const courseId = Number(b.courseId);
+      if (courseId) return json(res, 200, { ok: true, overview: await getExamOverview(courseId) });
+      return json(res, 200, { ok: true });
+    }
+    if (url.startsWith("/api/exams/") && method === "DELETE") {
+      const id = Number(url.split("/")[3]);
+      if (!id) return json(res, 400, { error: "id obrigatório" });
+      await deleteExam(id);
+      return json(res, 200, { ok: true });
     }
 
     // portal send support

@@ -14,6 +14,7 @@ import { useT } from "@/lib/i18n";
 import { useTrainingState } from "@/lib/training-state";
 import { scorePct, verdictFor } from "@/lib/training";
 import { TrainingSubjectPicker } from "@/components/training-subject-picker";
+import { ExamPicker } from "@/components/exams";
 import { ProgressRing } from "@/components/agora-hero";
 import { NoData } from "@/components/state-screens";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ const COUNTS = [10, 20, 30];
 
 export function TrainingQuizPage() {
   const { t } = useT();
-  const { courseId, moduleId } = useTrainingState();
+  const { courseId, moduleId, examId } = useTrainingState();
 
   const [subjects, setSubjects] = useState<TrainingSubject[]>([]);
   const [stats, setStats] = useState<TrainingStats | null>(null);
@@ -66,7 +67,7 @@ export function TrainingQuizPage() {
     if (!courseId) return;
     setPhase("loading");
     try {
-      const generated = await generateTrainingQuiz({ courseId, moduleId, mode, count });
+      const generated = await generateTrainingQuiz({ courseId, moduleId, examId, mode, count });
       setQuiz(generated);
       setIndex(0);
       setChosen(null);
@@ -77,7 +78,7 @@ export function TrainingQuizPage() {
       toast.error(err instanceof Error ? err.message : t("training.error"));
       setPhase("setup");
     }
-  }, [courseId, moduleId, mode, count, t]);
+  }, [courseId, moduleId, examId, mode, count, t]);
 
   const finish = useCallback(
     async (finalScore: number, finalAnswers: AnswerMap) => {
@@ -155,6 +156,7 @@ export function TrainingQuizPage() {
           </header>
 
           <TrainingSubjectPicker subjects={subjects} />
+          <ExamPicker courseId={courseId} />
 
           <div className="space-y-3 rounded-xl border bg-card p-4">
             <div>

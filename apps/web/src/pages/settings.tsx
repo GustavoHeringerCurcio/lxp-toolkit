@@ -3,6 +3,7 @@ import {
   Bug,
   Check,
   Building2,
+  CalendarCog,
   Eye,
   FolderKanban,
   ListChecks,
@@ -25,6 +26,7 @@ import { BackLink } from "@/components/app-sidebar";
 import { OrganizationSection } from "@/components/organization-section";
 import { ProjectSourceSection } from "@/components/project-source-section";
 import { DebugLogsSection } from "@/components/debug-logs-section";
+import { ExamSettings } from "@/components/exams";
 import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_STYLE, renderStylePreview } from "@/lib/prompt-preview";
 import {
   ESTIMATED_GENERATION_TOKENS,
@@ -43,9 +45,9 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-type SettingsTab = "personal" | "ai" | "advanced" | "organizacao";
+type SettingsTab = "personal" | "ai" | "exams" | "advanced" | "organizacao";
 
-const TABS: SettingsTab[] = ["personal", "ai", "advanced", "organizacao"];
+const TABS: SettingsTab[] = ["personal", "ai", "exams", "advanced", "organizacao"];
 
 const DEFAULT_MODELS: AiModels = {
   generation: "gpt-4o",
@@ -392,6 +394,12 @@ export function SettingsPage() {
           <p className="text-xs text-muted-foreground">{t("org.desc")}</p>
           <OrganizationSection />
           <ProjectSourceSection />
+        </Card>
+      )}
+
+      {tab === "exams" && (
+        <Card icon={<CalendarCog className="size-4 text-brand" aria-hidden />} title={t("exams.settingsTitle")}>
+          <ExamSettings />
         </Card>
       )}
 

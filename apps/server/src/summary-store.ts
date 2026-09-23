@@ -13,6 +13,7 @@ import type { StudySummary } from "./types.js";
 export interface NewStudySummary {
   courseId: number;
   moduleId: number | null;
+  examId?: number | null;
   subjectLabel: string;
   content: string;
   model: string | null;
@@ -24,6 +25,7 @@ interface SummaryRow {
   id: string;
   course_id: string;
   module_id: string | null;
+  exam_id: string | null;
   subject_label: string;
   content: string;
   model: string | null;
@@ -38,6 +40,7 @@ function toSummary(row: SummaryRow): StudySummary {
     id: Number(row.id),
     courseId: Number(row.course_id),
     moduleId: row.module_id != null ? Number(row.module_id) : null,
+    examId: row.exam_id != null ? Number(row.exam_id) : null,
     subjectLabel: row.subject_label,
     content: row.content,
     model: row.model,
@@ -52,12 +55,15 @@ function toSummary(row: SummaryRow): StudySummary {
 export async function getStudySummary(
   courseId: number,
   moduleId: number | null,
+  examId: number | null = null,
 ): Promise<StudySummary | null> {
   const studentId = await getStudentId();
   const rows = await query<SummaryRow>(
     `SELECT * FROM study_summary
-     WHERE student_id = $1 AND course_id = $2 AND COALESCE(module_id, 0) = COALESCE($3, 0)`,
-    [studentId, courseId, moduleId],
+     WHERE student_id = $1 AND course_id = $2
+       AND module_id IS NOT DISTINCT FROM $3::bigint
+       AND exam_id IS NOT DISTINCT FROM $4::bigint`,
+    [studentId, courseId, moduleId, examId],
   );
   return rows[0] ? toSummary(rows[0]) : null;
 }
@@ -65,31 +71,39 @@ export async function getStudySummary(
 /** Create or replace the saved Resumo for a scope; returns the fresh row. */
 export async function saveStudySummary(input: NewStudySummary): Promise<StudySummary> {
   const studentId = await getStudentId();
-  await query(
-    `INSERT INTO study_summary(
-       student_id, course_id, module_id, subject_label, content, model, prompt_hash, item_count, char_count, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
-     ON CONFLICT (student_id, course_id, COALESCE(module_id, 0)) DO UPDATE SET
-       subject_label = EXCLUDED.subject_label,
-       content       = EXCLUDED.content,
-       model         = EXCLUDED.model,
-       prompt_hash   = EXCLUDED.prompt_hash,
-       item_count    = EXCLUDED.item_count,
-       char_count    = EXCLUDED.char_count,
-       updated_at    = now()`,
-    [
-      studentId,
-      input.courseId,
-      input.moduleId,
-      input.subjectLabel,
-      input.content,
-      input.model,
-      input.promptHash,
-      input.itemCount,
-      input.content.length,
-    ],
+  const examId = input.examId ?? null;
+  const params = [
+    studentId,
+    input.courseId,
+    input.moduleId,
+    examId,
+    input.subjectLabel,
+    input.content,
+    input.model,
+    input.promptHash,
+    input.itemCount,
+    input.content.length,
+  ];
+  // Manual upsert: the scope key has two nullable columns, so matching on the
+  // expression index is avoided in favour of `IS NOT DISTINCT FROM`.
+  const updated = await query<SummaryRow>(
+    `UPDATE study_summary SET
+       subject_label = $5, content = $6, model = $7, prompt_hash = $8,
+       item_count = $9, char_count = $10, updated_at = now()
+     WHERE student_id = $1 AND course_id = $2
+       AND module_id IS NOT DISTINCT FROM $3::bigint
+       AND exam_id IS NOT DISTINCT FROM $4::bigint
+     RETURNING *`,
+    params,
   );
-  const saved = await getStudySummary(input.courseId, input.moduleId);
-  if (!saved) throw new Error("falha ao salvar o resumo");
-  return saved;
+  if (updated[0]) return toSummary(updated[0]);
+
+  const inserted = await query<SummaryRow>(
+    `INSERT INTO study_summary(
+       student_id, course_id, module_id, exam_id, subject_label, content, model, prompt_hash, item_count, char_count, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
+     RETURNING *`,
+    params,
+  );
+  return toSummary(inserted[0]);
 }

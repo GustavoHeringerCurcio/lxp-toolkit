@@ -90,7 +90,8 @@ One `createServer` handler with string-matched routes. Request order at the top:
 | Notes / AI request | `POST /api/note`, `POST /api/ai-request` |
 | Diagram | `POST /api/diagram` |
 | Training | `GET /api/training/subjects`, `GET /api/training/stats`, `POST /api/training/quiz`, `POST /api/training/quiz/:id/complete`, `POST /api/training/study` (SSE) |
-| Resumo | `GET /api/summary?courseId=&moduleId=`, `POST /api/summary` (SSE) |
+| Resumo | `GET /api/summary?courseId=&moduleId=&examId=`, `POST /api/summary` (SSE) |
+| Provas | `GET /api/exams?courseId=`, `POST /api/exams`, `DELETE /api/exams/:id`, `POST /api/exam-scope` |
 | Send | `GET /api/send/config`, `GET /api/send/preview`, `GET /api/send/:id`, `POST /api/send`, `POST /api/send/upload`, `POST /api/send/artifact` |
 | Debug | `GET /api/debug-logs`, `GET /api/debug-log/:id` |
 | Refresh | `POST /api/refresh`, `GET /api/refresh/status` |
@@ -147,6 +148,7 @@ never written by the app.
 | `0013_remove_gradebook_only_items` | cleans phantom gradebook-only items |
 | `0014_content_visibility` | `content_item.origin/gradebook_id/is_visible/is_future` (God's Eye) |
 | `0015_study_summary` | `study_summary` (saved Resumo per course/module scope) |
+| `0016_exam_phases` | `course_exam`, `module_exam`, `section_exam`, `item_annotation.exam_id`, `gradebook_category`, `gradebook_activity`, `study_summary.exam_id` (Provas) |
 
 Key read model: `v_exercise_current` feeds `/api/exercises` via `view.ts::enrich`.
 
@@ -200,6 +202,8 @@ Rules to preserve:
 | `gate.ts` | `analyzeDraftQuality` — advisory quality gate over a draft. |
 | `training.ts` | Builds the per-subject knowledge pack (catalog + bank + `content_text`) and generates practice quizzes / streamed study guides. |
 | `summary.ts` | `Resumo`: chunk-aware map-reduce summary of a subject (streamed), persisted via `summary-store.ts`. |
+| `exams.ts` / `exam-store.ts` | Exam phases (`course_exam`): manual end dates + item/section/module overrides; classifies content items to the current exam (keyword → gradebook → deadline → majority, manual wins). Scopes the Treino/Resumo knowledge pack so later exams don't re-send old material. |
+| `gradebook.ts` | Imports `surfaces.json.grades` (categories AVD1/AVD2 + evaluations) into `gradebook_category`/`gradebook_activity`. |
 | `project-context.ts` | Project detection/merge for the prompt. |
 | `template.ts` / `docx.ts` / `usecase.ts` | Template `.docx` detection, use-case parsing, filled-document rendering. |
 | `diagram.ts` / `diagram-tool.ts` | UML diagram spec + rasterization. |

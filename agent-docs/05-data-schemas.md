@@ -90,6 +90,26 @@ effective project block (`buildProjectInstructionBlock`) and a generic table/for
 `ai_config.project_auto_detect` (Ajustes → IA). Endpoints: `POST /api/context/analyze`,
 `GET/POST /api/project-profile`, `POST /api/activity-project`.
 
+## Exam phases (`course_exam`) — Provas
+
+Two grades per semester (AVD1, AVD2, + Substitutiva). The gradebook
+(`surfaces.json.grades`) is imported into `gradebook_category` (AVD1/AVD2/…) and
+`gradebook_activity` (evaluation `id` bridges `content_item.gradebook_id`). The
+student defines each exam's **end date** in `course_exam` (Ajustes → Provas or
+inline), and `apps/server/src/exams.ts` classifies every content item to an exam:
+
+1. `item_annotation.exam_id` (per-item override)
+2. `section_exam` / `module_exam` (scope override)
+3. section/module title keyword (`1º Bimestre`, `AVD2`, `BIM 1`, `P1`…)
+4. gradebook category (via `gradebook_id`)
+5. item `deadline_at` vs exam `ends_at`
+6. majority of resolved siblings (same section/module)
+7. neutral — always included
+
+`buildSubjectContext(courseId, moduleId, examId)` filters the knowledge pack with
+this, so a later exam never re-sends material already examined. Saved Resumos are
+keyed by `(student, course, module, exam)`. Unclassified items stay neutral.
+
 ## Content item (normalized, in `scraped/raw/content-tree.json`)
 
 Each leaf item in the scraped content tree looks like:

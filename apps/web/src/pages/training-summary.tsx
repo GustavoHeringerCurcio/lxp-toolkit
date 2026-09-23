@@ -6,6 +6,7 @@ import type { StudySummary, TrainingSubject } from "@/types";
 import { useT } from "@/lib/i18n";
 import { useTrainingState } from "@/lib/training-state";
 import { TrainingSubjectPicker } from "@/components/training-subject-picker";
+import { ExamPicker } from "@/components/exams";
 import { Markdown } from "@/lib/markdown";
 import { NoData } from "@/components/state-screens";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ interface StepState {
 
 export function TrainingSummaryPage() {
   const { t } = useT();
-  const { courseId, moduleId } = useTrainingState();
+  const { courseId, moduleId, examId } = useTrainingState();
 
   const [subjects, setSubjects] = useState<TrainingSubject[]>([]);
   const [loadingSubjects, setLoadingSubjects] = useState(true);
@@ -58,7 +59,7 @@ export function TrainingSummaryPage() {
     let alive = true;
     setLoadingSummary(true);
     setError(null);
-    fetchStudySummary({ courseId, moduleId })
+    fetchStudySummary({ courseId, moduleId, examId })
       .then((s) => {
         if (alive) setSummary(s);
       })
@@ -71,7 +72,7 @@ export function TrainingSummaryPage() {
     return () => {
       alive = false;
     };
-  }, [courseId, moduleId]);
+  }, [courseId, moduleId, examId]);
 
   const generate = useCallback(async () => {
     if (!courseId) {
@@ -85,7 +86,7 @@ export function TrainingSummaryPage() {
     setStep(null);
     streamRef.current = "";
     try {
-      const saved = await streamStudySummary({ courseId, moduleId }, (e) => {
+      const saved = await streamStudySummary({ courseId, moduleId, examId }, (e) => {
         if (e.type === "step") {
           setStep({ phase: e.phase ?? "map", index: e.index ?? 0, total: e.total ?? 1, label: e.label ?? "" });
         } else if (e.type === "delta" && e.delta) {
@@ -103,7 +104,7 @@ export function TrainingSummaryPage() {
     } finally {
       setGenerating(false);
     }
-  }, [courseId, moduleId, t]);
+  }, [courseId, moduleId, examId, t]);
 
   const copy = async () => {
     const text = summary?.content ?? streamed;
@@ -159,6 +160,7 @@ export function TrainingSummaryPage() {
       </header>
 
       <TrainingSubjectPicker subjects={subjects} disabled={generating} />
+      <ExamPicker courseId={courseId} disabled={generating} />
 
       {error && !generating && (
         <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">

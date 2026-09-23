@@ -95,6 +95,9 @@ const MODULE = 9_999_992_002;
 describe.skipIf(!enabled)("summary store (Postgres)", () => {
   beforeAll(async () => {
     await runMigrations();
+    // Clean any rows left by a previously aborted run (module CASCADE/SET NULL
+    // can otherwise collide with the whole-course scope).
+    await query("DELETE FROM study_summary WHERE course_id = $1", [COURSE]).catch(() => undefined);
     await query("INSERT INTO course(id, name) VALUES ($1,$2) ON CONFLICT (id) DO NOTHING", [
       COURSE,
       "Curso de resumo",
@@ -106,6 +109,7 @@ describe.skipIf(!enabled)("summary store (Postgres)", () => {
   });
 
   afterAll(async () => {
+    await query("DELETE FROM study_summary WHERE course_id = $1", [COURSE]);
     await query("DELETE FROM module WHERE id = $1", [MODULE]);
     await query("DELETE FROM course WHERE id = $1", [COURSE]);
     await closePool();

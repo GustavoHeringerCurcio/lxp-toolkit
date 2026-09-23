@@ -5,6 +5,7 @@ import { assist, raw } from "./paths.js";
 import { closePool, healthCheck, query, runMigrations, withTransaction } from "./db.js";
 import { loadAiConfig, loadAnswers, loadOverrides, loadProfile, loadSubmissions } from "./config.js";
 import { stripHtml } from "./build.js";
+import { importGradebook } from "./gradebook.js";
 import {
   matchProfessor,
   professorFromModuleTitle,
@@ -617,6 +618,8 @@ export interface ImportSummary {
   answers: number;
   submissions: number;
   annotations: number;
+  gradebookCategories: number;
+  gradebookActivities: number;
 }
 
 /** Import the scraped content tree + legacy JSON state into Postgres. */
@@ -652,6 +655,7 @@ export async function importAll(): Promise<ImportSummary> {
   const submissions = await backfillSubmissions(studentId);
   const annotations = await backfillOverrides(studentId);
   await importAiConfig(studentId);
+  const gradebook = await importGradebook();
 
   const profs = await query<{ n: string }>("SELECT count(*)::text AS n FROM professor");
   return {
@@ -661,6 +665,8 @@ export async function importAll(): Promise<ImportSummary> {
     answers,
     submissions,
     annotations,
+    gradebookCategories: gradebook.categories,
+    gradebookActivities: gradebook.activities,
   };
 }
 

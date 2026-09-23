@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { BookOpen, GraduationCap, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TrainingSubject } from "@/types";
@@ -6,8 +6,9 @@ import { useT } from "@/lib/i18n";
 import { useTrainingState } from "@/lib/training-state";
 
 /**
- * The shared "switch the data" control: pick the course (matéria) and, optionally,
- * the module (tópico) the AI should be an expert on. Used by both Treino routes.
+ * The shared "switch the data" control: pick the course, then the subject
+ * (matéria = module — DBI, ARS…). The AI's knowledge pack is scoped to the
+ * chosen subject; the exam phase is picked separately.
  */
 export function TrainingSubjectPicker({
   subjects,
@@ -21,7 +22,7 @@ export function TrainingSubjectPicker({
   const { t } = useT();
   const { courseId, moduleId, setCourseId, setModuleId } = useTrainingState();
 
-  // Keep the selection valid as the catalog loads/changes.
+  // Keep the course valid as the catalog loads/changes.
   useEffect(() => {
     if (subjects.length === 0) return;
     const known = courseId != null && subjects.some((s) => s.courseId === courseId);
@@ -30,6 +31,18 @@ export function TrainingSubjectPicker({
 
   const course = subjects.find((s) => s.courseId === courseId) ?? null;
   const modules = course?.modules ?? [];
+  const defaultedFor = useRef<number | null>(null);
+
+  // Default to the first subject once per course (subject-level study); the
+  // student can still pick "Todas as matérias" afterwards.
+  useEffect(() => {
+    if (!course || modules.length === 0) return;
+    if (defaultedFor.current === course.courseId) return;
+    defaultedFor.current = course.courseId;
+    if (moduleId == null || !modules.some((m) => m.moduleId === moduleId)) {
+      setModuleId(modules[0].moduleId);
+    }
+  }, [course, modules, moduleId, setModuleId]);
 
   if (subjects.length === 0) {
     return (
@@ -44,7 +57,7 @@ export function TrainingSubjectPicker({
       <div className="flex flex-wrap items-end gap-3">
         <label className="min-w-0 flex-1">
           <span className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            {t("training.subject")}
+            {t("training.course")}
           </span>
           <div className="relative">
             <GraduationCap
@@ -55,7 +68,7 @@ export function TrainingSubjectPicker({
               value={courseId ?? ""}
               onChange={(e) => setCourseId(e.target.value ? Number(e.target.value) : null)}
               disabled={disabled}
-              aria-label={t("training.subject")}
+              aria-label={t("training.course")}
               className="w-full appearance-none rounded-lg border bg-background py-2 pl-9 pr-8 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
             >
               {subjects.map((s) => (
@@ -70,7 +83,7 @@ export function TrainingSubjectPicker({
         {modules.length > 0 && (
           <label className="min-w-0 flex-1">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              {t("training.module")}
+              {t("training.subject")}
             </span>
             <div className="relative">
               <Layers
@@ -81,7 +94,7 @@ export function TrainingSubjectPicker({
                 value={moduleId ?? ""}
                 onChange={(e) => setModuleId(e.target.value ? Number(e.target.value) : null)}
                 disabled={disabled}
-                aria-label={t("training.module")}
+                aria-label={t("training.subject")}
                 className="w-full appearance-none rounded-lg border bg-background py-2 pl-9 pr-8 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               >
                 <option value="">{t("training.allModules")}</option>

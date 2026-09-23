@@ -14,6 +14,8 @@ import type {
   DebugLogDto,
   DebugLogFullDto,
   DiagramArtifactDto,
+  Exam,
+  ExamOverview,
   ExercisesPayload,
   FlavorSource,
   GateResultDto,
@@ -556,6 +558,7 @@ export async function fetchTrainingSubjects(): Promise<TrainingSubject[]> {
 export interface TrainingQuizRequest {
   courseId: number;
   moduleId?: number | null;
+  examId?: number | null;
   mode: TrainingQuizMode;
   count: number;
 }
@@ -592,6 +595,7 @@ export interface StudyEvent {
 export interface StudyRequest {
   courseId: number;
   moduleId?: number | null;
+  examId?: number | null;
   query: string;
 }
 
@@ -646,12 +650,14 @@ export async function streamStudyGuide(
 export interface SummaryScope {
   courseId: number;
   moduleId?: number | null;
+  examId?: number | null;
 }
 
 /** The saved Resumo for a subject scope, or null when none exists yet. */
 export async function fetchStudySummary(scope: SummaryScope): Promise<StudySummary | null> {
   const params = new URLSearchParams({ courseId: String(scope.courseId) });
   if (scope.moduleId != null) params.set("moduleId", String(scope.moduleId));
+  if (scope.examId != null) params.set("examId", String(scope.examId));
   const body = await req<{ summary: StudySummary | null }>(`/api/summary?${params.toString()}`);
   return body.summary ?? null;
 }
@@ -715,6 +721,46 @@ export async function streamStudySummary(
   }
   if (!saved) throw new Error(translate(getLang(), "api.streamEnded"));
   return saved;
+}
+
+// ── Exam phases ("Provas") ──────────────────────────────────────────────────
+
+export async function fetchExamOverview(courseId: number): Promise<ExamOverview> {
+  return req<ExamOverview>(`/api/exams?courseId=${courseId}`);
+}
+
+export interface SaveExamInput {
+  id?: number;
+  courseId: number;
+  name: string;
+  sequence: number;
+  endsAt?: string | null;
+}
+
+export interface ExamSaveResult {
+  ok: boolean;
+  exam: Exam;
+  overview: ExamOverview;
+}
+
+export async function saveExam(input: SaveExamInput): Promise<ExamSaveResult> {
+  return (await post("/api/exams", input)) as ExamSaveResult;
+}
+
+export async function deleteExam(id: number): Promise<void> {
+  await req(`/api/exams/${id}`, { method: "DELETE" });
+}
+
+export interface ExamScopeInput {
+  courseId: number;
+  scopeType: "module" | "section" | "item";
+  scopeId: number;
+  examId: number | null;
+}
+
+export async function setExamScope(input: ExamScopeInput): Promise<ExamOverview> {
+  const res = (await post("/api/exam-scope", input)) as { overview?: ExamOverview };
+  return res.overview ?? { exams: [], assignments: [], suggested: [], unclassified: 0, totalItems: 0 };
 }
 
 export function fmtVersionDate(iso: string, locale = localeFor(getLang())): string {

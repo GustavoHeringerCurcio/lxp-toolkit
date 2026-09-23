@@ -483,6 +483,7 @@ export interface StudySummary {
   id: number;
   courseId: number;
   moduleId: number | null;
+  examId: number | null;
   subjectLabel: string;
   content: string;
   model: string | null;
@@ -490,4 +491,44 @@ export interface StudySummary {
   charCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Exam phases ("Provas") ──────────────────────────────────────────────────
+
+export interface Exam {
+  id: number;
+  courseId: number;
+  name: string;
+  sequence: number;
+  endsAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ExamScopeType = "module" | "section" | "item";
+export type ExamAssignmentSource = "manual" | "auto" | "neutral";
+
+export interface ExamAssignmentInfo {
+  scopeType: "module" | "section";
+  scopeId: number;
+  title: string;
+  courseId: number;
+  moduleId: number | null;
+  itemCount: number;
+  examId: number | null;
+  source: ExamAssignmentSource;
+}
+
+export interface ExamSuggestion {
+  name: string;
+  sequence: number;
+  endsAt: string | null;
+}
+
+export interface ExamOverview {
+  exams: Exam[];
+  assignments: ExamAssignmentInfo[];
+  suggested: ExamSuggestion[];
+  unclassified: number;
+  totalItems: number;
 }
