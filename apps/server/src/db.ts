@@ -74,16 +74,21 @@ export function migrationsDir(): string {
 }
 
 /**
+ * Advisory-lock key used to serialize migrations across processes/workers.
+ * `CREATE TABLE IF NOT EXISTS` is not concurrency-safe in Postgres (the table's
+ * composite type still collides), so parallel Vitest workers or a server boot
+ * racing the Atualizar flow could apply the same migration twice. Advisory
+ * locks are cluster-wide and released automatically if the connection dies.
+ */
+const MIGRATION_LOCK_KEY = 0x4c58_504d; // "LXPM"
+
+/**
  * Apply every not-yet-applied `*.sql` migration in lexical order, each in its
  * own transaction, recording it in `schema_migrations`. Idempotent: re-running
- * with no new files is a no-op.
+ * with no new files is a no-op. Concurrent callers are serialized with an
+ * advisory lock, so only one process applies a given migration.
  */
 export async function runMigrations(): Promise<string[]> {
-  await getPool().query(`CREATE TABLE IF NOT EXISTS schema_migrations (
-    version    text PRIMARY KEY,
-    applied_at timestamptz NOT NULL DEFAULT now()
-  )`);
-
   const dir = migrationsDir();
   if (!existsSync(dir)) return [];
 
@@ -92,21 +97,49 @@ export async function runMigrations(): Promise<string[]> {
     .sort();
   const applied: string[] = [];
 
-  for (const file of files) {
-    const version = file.replace(/\.sql$/, "");
-    const { rowCount } = await getPool().query(
-      "SELECT 1 FROM schema_migrations WHERE version = $1",
-      [version],
-    );
-    if (rowCount && rowCount > 0) continue;
+  const client = await getPool().connect();
+  let lockHeld = false;
+  let unlockFailed = false;
+  try {
+    await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_KEY]);
+    lockHeld = true;
 
-    const sql = readFileSync(path.join(dir, file), "utf-8");
-    await withTransaction(async (client) => {
-      await client.query(sql);
-      await client.query("INSERT INTO schema_migrations(version) VALUES ($1)", [version]);
-    });
-    applied.push(version);
+    await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+      version    text PRIMARY KEY,
+      applied_at timestamptz NOT NULL DEFAULT now()
+    )`);
+
+    for (const file of files) {
+      const version = file.replace(/\.sql$/, "");
+      const { rowCount } = await client.query(
+        "SELECT 1 FROM schema_migrations WHERE version = $1",
+        [version],
+      );
+      if (rowCount && rowCount > 0) continue;
+
+      const sql = readFileSync(path.join(dir, file), "utf-8");
+      await client.query("BEGIN");
+      try {
+        await client.query(sql);
+        await client.query("INSERT INTO schema_migrations(version) VALUES ($1)", [version]);
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw err;
+      }
+      applied.push(version);
+    }
+
+    return applied;
+  } finally {
+    if (lockHeld) {
+      try {
+        await client.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_KEY]);
+      } catch {
+        // Never return a connection to the pool while it still holds the lock.
+        unlockFailed = true;
+      }
+    }
+    client.release(unlockFailed);
   }
-
-  return applied;
 }

@@ -32,4 +32,13 @@ describe("migrations", () => {
       expect(names.has(expected), expected).toBe(true);
     }
   });
+
+  it("serializa chamadas concorrentes de migração", async (ctx) => {
+    if (!available) return ctx.skip();
+
+    // Parallel workers must not race `CREATE TABLE IF NOT EXISTS` (Postgres
+    // still collides on the table's composite type).
+    const results = await Promise.all([runMigrations(), runMigrations(), runMigrations()]);
+    expect(results.flat()).toEqual([]);
+  });
 });
