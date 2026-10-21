@@ -50,6 +50,8 @@ Full detail: `agent-docs/10-deployment.md`.
   `exercises.json` is a cache invalidated by its `catalogVersion`.
 - Commands (run from the repo root; they delegate to the workspaces): `npm run setup`
   (interactive onboarding: deps + browser + env files + database), `npm run doctor` (health check),
+  `docker compose up -d --build` (local service: Postgres + API + built UI on
+  http://localhost:4174; bind-mounts `./scraped` and `apps/server/data`),
   `npm run db:up`, `npm run db:migrate`, `npm run dump`, `npm run dump-surfaces`,
   `npm run crawl-routes`, `npm run capture-api`, `npm run catalog` (regenerate the endpoint
   catalog from a captured `users/me` manifest), `npm run agent`, `npm run homework`,

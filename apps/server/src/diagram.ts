@@ -411,7 +411,9 @@ function svgSize(svg: string): { width: number; height: number } {
 async function svgToPng(svg: string): Promise<Buffer> {
   const { width, height } = svgSize(svg);
   const { chromium } = await import("playwright");
-  const browser = await chromium.launch();
+  // Chromium's sandbox is unavailable in most containers (and as root).
+  const noSandbox = /^(1|true|yes)$/i.test(process.env.PLAYWRIGHT_NO_SANDBOX ?? "");
+  const browser = await chromium.launch({ args: noSandbox ? ["--no-sandbox"] : [] });
   try {
     const page = await browser.newPage({
       viewport: { width, height },

@@ -135,6 +135,24 @@ Edit the copied `.env` files before running: `apps/server/.env` needs a real
 `OPENAI_API_KEY` (only required for AI generation) and the default
 `DATABASE_URL=postgres://lxp:lxp@localhost:5434/lxp`.
 
+### Docker service
+
+Run the whole app as a container instead of `npm run dev` (no Node/Chromium/LibreOffice
+needed on the host):
+
+```bash
+docker compose up -d --build     # Postgres + API + built UI → http://localhost:4174
+docker compose logs -f app       # migrations, import and projection logs
+docker compose down
+```
+
+The container reads credentials from the same gitignored `apps/server/.env` and
+`packages/portal/.env`, and bind-mounts `./scraped` + `./apps/server/data`, so your
+existing content and cache are reused. The UI is a production build: after editing
+frontend or server code, rebuild with `docker compose up -d --build`. Ports are bound to
+`127.0.0.1` only. If host port `5434` is already taken by another Postgres, override it:
+`LXP_DB_PORT=5435 docker compose up -d`.
+
 ### Fresh clone
 
 Everything personal (`scraped/`, `.env`, `data/`) is gitignored, so a clone starts clean:

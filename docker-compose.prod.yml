@@ -46,9 +46,14 @@ services:
       OUT_DIR: /data/scraped
       PORT: "4174"
       TOOLKIT_TOKEN: ${TOOLKIT_TOKEN:-}
+      # Chromium cannot use its sandbox inside the container; the scraper and
+      # the diagram renderer both honor this flag.
+      PLAYWRIGHT_NO_SANDBOX: "true"
     volumes:
       - scraped:/data/scraped
       - serverdata:/app/apps/server/data
+    # Chromium needs more than Docker's default 64 MB /dev/shm.
+    shm_size: "1gb"
     ports:
       # Bound to loopback: Caddy (or an SSH tunnel) terminates TLS in front.
       - "127.0.0.1:4174:4174"

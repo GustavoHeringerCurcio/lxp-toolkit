@@ -1,3 +1,11 @@
+# Local stack: Postgres + the full LXP Toolkit app.
+#
+#   docker compose up -d --build   # UI + API on http://localhost:4174
+#   docker compose logs -f app
+#   docker compose down
+#
+# Reuses your existing ./scraped data and ./apps/server/data cache (bind mounts)
+# and the Postgres volume, so switching from `npm run dev` loses nothing.
 services:
   db:
     image: postgres:16-alpine
@@ -8,7 +16,8 @@ services:
       POSTGRES_PASSWORD: lxp
       POSTGRES_DB: lxp
     ports:
-      - "5434:5432"
+      # Host port for psql/pg_dump/migrations; override with LXP_DB_PORT.
+      - "127.0.0.1:${LXP_DB_PORT:-5434}:5432"
     volumes:
       - lxp_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -16,6 +25,46 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+    networks:
+      - lxp
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lxp-toolkit-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # Credentials are read from the gitignored host files at runtime. Do NOT
+    # bind-mount them into the container: apps/server/src/paths.ts loads
+    # apps/server/.env with `override: true` and would clobber the values below.
+    env_file:
+      - apps/server/.env
+      - packages/portal/.env
+    environment:
+      DATABASE_URL: postgres://lxp:lxp@db:5432/lxp
+      DATA_DIR: /data/scraped
+      OUT_DIR: /data/scraped
+      PORT: "4174"
+      # Chromium cannot use its sandbox inside a normal Docker container.
+      PLAYWRIGHT_NO_SANDBOX: "true"
+    volumes:
+      - ./scraped:/data/scraped
+      - ./apps/server/data:/app/apps/server/data
+    ports:
+      # Loopback only; the API is unauthenticated in local mode.
+      - "127.0.0.1:4174:4174"
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4174/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      # Bootstrap runs migrations + imports + text extraction before listening.
+      start_period: 300s
+    stop_grace_period: 20s
     networks:
       - lxp
 
