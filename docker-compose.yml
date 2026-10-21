@@ -71,6 +71,13 @@ services:
 networks:
   lxp:
     driver: bridge
+    # Docker Desktop's NAT breaks path-MTU discovery. The host path here is
+    # ~1448 bytes, so the default 1500 MTU drops large TLS 1.3 ClientHellos
+    # (Node/undici and Chromium), surfacing as "Connection error" against
+    # OpenAI. 1280 is the IPv6 minimum and fixes both clients without
+    # downgrading TLS.
+    driver_opts:
+      com.docker.network.driver.mtu: "1280"
     ipam:
       config:
         - subnet: 10.99.0.0/16
