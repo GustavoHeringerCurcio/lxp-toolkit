@@ -620,6 +620,32 @@ export interface ImportSummary {
   annotations: number;
   gradebookCategories: number;
   gradebookActivities: number;
+  /** Phantom God's-Eye rows removed (container ids misread as hidden topics). */
+  containerHiddenPurged: number;
+}
+
+/**
+ * Remove phantom God's Eye rows written by older harvests. The topic endpoint
+ * answers a container (module/section) id with the container's context plus its
+ * first child, so the old harvest stored that child under the container id —
+ * colliding with `section`/`module` and duplicating a visible item. All FKs
+ * cascade, so the delete is safe.
+ */
+async function purgeContainerHiddenItems(): Promise<number> {
+  const rows = await query<{ n: string }>(
+    `WITH removed AS (
+       DELETE FROM content_item ci
+       WHERE ci.origin = 'hidden'
+         AND (
+           ci.raw_json->'context'->>'topicTypeId' IN ('1','2')
+           OR EXISTS (SELECT 1 FROM section s WHERE s.id = ci.id)
+           OR EXISTS (SELECT 1 FROM module m WHERE m.id = ci.id)
+         )
+       RETURNING 1
+     )
+     SELECT count(*)::text AS n FROM removed`,
+  );
+  return Number(rows[0]?.n ?? "0");
 }
 
 /** Import the scraped content tree + legacy JSON state into Postgres. */
@@ -656,6 +682,7 @@ export async function importAll(): Promise<ImportSummary> {
   const annotations = await backfillOverrides(studentId);
   await importAiConfig(studentId);
   const gradebook = await importGradebook();
+  const containerHiddenPurged = await purgeContainerHiddenItems();
 
   const profs = await query<{ n: string }>("SELECT count(*)::text AS n FROM professor");
   return {
@@ -667,6 +694,7 @@ export async function importAll(): Promise<ImportSummary> {
     annotations,
     gradebookCategories: gradebook.categories,
     gradebookActivities: gradebook.activities,
+    containerHiddenPurged,
   };
 }
 
@@ -674,7 +702,10 @@ async function main(): Promise<void> {
   const summary = await importAll();
   console.log(
     `db: import ok — courses=${summary.courses} items=${summary.items} professors=${summary.professors} ` +
-      `answers=${summary.answers} submissions=${summary.submissions} annotations=${summary.annotations}`,
+      `answers=${summary.answers} submissions=${summary.submissions} annotations=${summary.annotations}` +
+      (summary.containerHiddenPurged > 0
+        ? ` · purged ${summary.containerHiddenPurged} phantom God's-Eye row(s)`
+        : ""),
   );
   const file = assist("data", "exercises.json");
   console.log(`   next: npm run index:web (projects the DB to ${file})`);

@@ -622,6 +622,53 @@ function numOrNull(value: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/** Topic types that are containers (modules/sections), not content leaves. */
+const CONTAINER_TOPIC_TYPES = new Set([1, 2]);
+
+/**
+ * Pick the topic that corresponds to the requested id from a topic-detail
+ * payload. The endpoint answers a *container* id (module/section) with the
+ * container's `context` plus its first descendant in `topics[]` — using that
+ * child as if it were the requested topic creates phantom rows whose id is a
+ * section id (a real id-space collision in Postgres). Return `null` for those.
+ */
+function pickHiddenTopic(
+  data: HiddenTopicDetail,
+  id: number,
+): Record<string, unknown> | null {
+  const context = data.context ?? null;
+  const contextType = Number(context?.topicTypeId ?? 0);
+  if (CONTAINER_TOPIC_TYPES.has(contextType)) return null;
+  const contextId = numOrNull(context?.topicId);
+  if (contextId != null && contextId !== id) return null;
+
+  const raw = data.topics;
+  const list = (Array.isArray(raw) ? raw : raw ? [raw] : []) as Record<string, unknown>[];
+  const match = list.find((topic) => Number(topic.id) === id);
+  if (match) return match;
+  // Some payloads omit `topics[].id`; accept a singleton only then, and only
+  // when the context (authoritative for the requested id) points at it.
+  if (list.length === 1 && list[0].id == null && contextId === id) return list[0];
+  return null;
+}
+
+/**
+ * True when a previously harvested item is actually a container response (the
+ * pre-fix harvest persisted these). Used to purge them from the cache/DB.
+ */
+export function isContainerItem(
+  item: Pick<ContentItem, "itemId" | "itemTitle" | "context">,
+): boolean {
+  const context = item.context;
+  if (!context) return false;
+  const contextType = Number(context.topicTypeId ?? 0);
+  if (CONTAINER_TOPIC_TYPES.has(contextType)) return true;
+  const contextId = numOrNull(context.topicId);
+  if (contextId != null && contextId !== item.itemId) return true;
+  const contextTitle = context.topicTitle != null ? String(context.topicTitle).trim() : null;
+  return contextTitle != null && contextTitle !== item.itemTitle.trim();
+}
+
 /** Build a `ContentItem` from a hidden topic detail (not present in the tree). */
 function hiddenItemFromTopic(
   course: { id: number; name: string },
@@ -631,8 +678,7 @@ function hiddenItemFromTopic(
   treeTitles: Set<string>,
   gradebookById: Map<number, GradebookActivity>,
 ): ContentItem | null {
-  const raw = data.topics;
-  const t = (Array.isArray(raw) ? raw[0] : raw) as Record<string, unknown> | undefined;
+  const t = pickHiddenTopic(data, id);
   if (!t) return null;
   const context = data.context ?? null;
   const topicTypeId = Number(t.topicTypeId ?? context?.topicTypeId ?? 0);
@@ -780,11 +826,14 @@ export async function harvestHiddenTopics(
   }
   const gradebookById = new Map(gradebook.map((g) => [g.id, g]));
 
-  // Reuse previously harvested items that are still unpublished.
+  // Reuse previously harvested items that are still unpublished, dropping any
+  // container responses written by older harvests (their id collides with a
+  // section/module id and their content belongs to the container's first child).
   const hidden: ContentItem[] = [];
   const previousIds = new Set<number>();
   for (const prev of options.previous ?? []) {
-    if (treeIds.has(prev.itemId)) continue;
+    if (treeIds.has(prev.itemId) || previousIds.has(prev.itemId)) continue;
+    if (isContainerItem(prev)) continue;
     previousIds.add(prev.itemId);
     hidden.push(prev);
   }
@@ -854,6 +903,7 @@ export async function harvestHiddenTopics(
   });
   await Promise.all(workers);
 
+  const unique = [...new Map(hidden.map((item) => [item.itemId, item])).values()];
   return {
     courseId: course.id,
     courseName: course.name,
@@ -861,6 +911,6 @@ export async function harvestHiddenTopics(
     scanned,
     errors,
     throttled,
-    hidden,
+    hidden: unique,
   };
 }

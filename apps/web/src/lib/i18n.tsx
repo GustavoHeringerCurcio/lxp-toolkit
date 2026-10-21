@@ -65,6 +65,7 @@ function readStored(): Lang {
  * through untouched, so `t()` returns it as-is.
  */
 const SERVER_STEP_KEYS: Record<string, string> = {
+  "Verificando o banco de dados": "server.step.db",
   "Buscando conteúdo novo no portal": "server.step.fetching",
   "Buscando notas, calendário e avisos": "server.step.surfaces",
   "Montando o índice de tarefas do portal": "server.step.portalIndex",

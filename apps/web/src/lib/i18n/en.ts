@@ -708,6 +708,7 @@ export const en: Dict = {
   "refresh.failed": "Failed to refresh: {{error}}",
 
   // server-provided refresh steps (translated client-side)
+  "server.step.db": "Checking the database",
   "server.step.fetching": "Fetching new portal content",
   "server.step.surfaces": "Fetching grades, calendar and notices",
   "server.step.portalIndex": "Building the portal homework index",

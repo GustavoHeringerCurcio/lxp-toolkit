@@ -58,8 +58,9 @@ Full detail: `agent-docs/10-deployment.md`.
   `npm run dev:fresh` runs `sync` first; `npm run web` (built) refreshes via `preweb`. Skip with
   `SKIP_SYNC=1` (or `SKIP_DUMP=1`). Run
   `npm run typecheck` after code changes.
-- **Full refresh = `dump` → `dump-surfaces` → `index` → `index:web`** (that's what `sync`,
-  `dev:fresh`, `web`'s `preweb`, and the web app's **"Atualizar"** button run). The content tree is
+- **Full refresh = `db:migrate` → `dump` → `dump-surfaces` → `index` → `index:web`** (that's what
+  `sync`, `dev:fresh`, `web`'s `preweb`, and the web app's **"Atualizar"** button run; the migrate
+  preflight fails before scraping when the DB is unreachable). The content tree is
   the only source for the catalog; the gradebook is dumped separately for the human-readable
   `scraped/grades-*.md` surfaces, not merged into the task list.
 - **God's Eye (hidden topics):** the portal's topic-detail endpoint serves content by id even when

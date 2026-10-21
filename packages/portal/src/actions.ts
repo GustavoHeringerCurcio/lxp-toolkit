@@ -16,10 +16,16 @@ export async function markRead(
   return res.status === 200 || res.status === 204;
 }
 
+/** Give up on a stuck CDN response instead of hanging the whole scrape. */
+const DOWNLOAD_TIMEOUT_MS = 120_000;
+
 /** Download a PDF by absolute URL to a local directory. Returns the saved path or null. */
 export async function downloadPdf(url: string, filename: string | null, dir: string): Promise<string | null> {
   try {
-    const res = await fetch(url, { headers: { accept: "application/pdf" } });
+    const res = await fetch(url, {
+      headers: { accept: "application/pdf" },
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+    });
     if (!res.ok) {
       logger.warn({ url, status: res.status }, "pdf download failed");
       return null;

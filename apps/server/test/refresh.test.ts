@@ -51,16 +51,23 @@ function makeController(plan: SpawnSpec[]) {
 }
 
 describe("createRefreshController", () => {
-  it("roda dump, dump-surfaces e os dois índices, nos diretórios certos", async () => {
-    const { controller, calls } = makeController([{ code: 0 }, { code: 0 }, { code: 0 }, { code: 0 }]);
+  it("migra o banco antes de rodar dump, dump-surfaces e os dois índices", async () => {
+    const { controller, calls } = makeController([
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+    ]);
 
     await controller.run();
 
-    expect(calls).toHaveLength(4);
-    expect(calls[0]).toMatchObject({ command: "npm", args: ["run", "dump"], cwd: "C:/repo" });
-    expect(calls[1]).toMatchObject({ command: "npm", args: ["run", "dump-surfaces"], cwd: "C:/repo" });
-    expect(calls[2]).toMatchObject({ command: "npm", args: ["run", "index"], cwd: "C:/repo" });
-    expect(calls[3]).toMatchObject({ command: "npm", args: ["run", "index:web"], cwd: "C:/repo" });
+    expect(calls).toHaveLength(5);
+    expect(calls[0]).toMatchObject({ command: "npm", args: ["run", "db:migrate"], cwd: "C:/repo" });
+    expect(calls[1]).toMatchObject({ command: "npm", args: ["run", "dump"], cwd: "C:/repo" });
+    expect(calls[2]).toMatchObject({ command: "npm", args: ["run", "dump-surfaces"], cwd: "C:/repo" });
+    expect(calls[3]).toMatchObject({ command: "npm", args: ["run", "index"], cwd: "C:/repo" });
+    expect(calls[4]).toMatchObject({ command: "npm", args: ["run", "index:web"], cwd: "C:/repo" });
     const state = controller.status();
     expect(state.running).toBe(false);
     expect(state.error).toBeNull();
@@ -70,7 +77,13 @@ describe("createRefreshController", () => {
   });
 
   it("start() é idempotente enquanto uma execução está em andamento", async () => {
-    const { controller, calls } = makeController([{ code: 0 }, { code: 0 }, { code: 0 }, { code: 0 }]);
+    const { controller, calls } = makeController([
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+    ]);
 
     const first = controller.start();
     const second = controller.start();
@@ -78,11 +91,11 @@ describe("createRefreshController", () => {
     expect(first).toBe(true);
     expect(second).toBe(false);
     await vi.waitFor(() => expect(controller.status().running).toBe(false));
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(5);
   });
 
   it("marca falha quando um passo sai com código diferente de zero", async () => {
-    const { controller } = makeController([{ code: 1 }]);
+    const { controller } = makeController([{ code: 0 }, { code: 1 }]);
 
     await controller.run();
 
@@ -93,8 +106,19 @@ describe("createRefreshController", () => {
     expect(state.finishedAt).toBeTruthy();
   });
 
+  it("falha cedo, sem scrape, quando o banco não está pronto", async () => {
+    const { controller, calls } = makeController([{ stderr: "connect ECONNREFUSED", code: 1 }]);
+
+    await controller.run();
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].args).toEqual(["run", "db:migrate"]);
+    expect(controller.status().step).toBe("Falhou");
+  });
+
   it("recomeça headful quando o log do portal traz reCAPTCHA", async () => {
     const { controller, calls } = makeController([
+      { code: 0 },
       { stdout: "erro: reCAPTCHA exigido", code: 1 },
       { code: 0 },
       { code: 0 },
@@ -104,22 +128,26 @@ describe("createRefreshController", () => {
 
     await controller.run();
 
-    expect(calls).toHaveLength(5);
-    expect(calls[0].args).toEqual(["run", "dump"]);
-    expect(calls[0].env?.HEADFUL).toBeUndefined();
+    expect(calls).toHaveLength(6);
+    expect(calls[0].args).toEqual(["run", "db:migrate"]);
     expect(calls[1].args).toEqual(["run", "dump"]);
-    expect(calls[1].env?.HEADFUL).toBe("true");
-    expect(calls[2].args).toEqual(["run", "dump-surfaces"]);
+    expect(calls[1].env?.HEADFUL).toBeUndefined();
+    expect(calls[2].args).toEqual(["run", "dump"]);
     expect(calls[2].env?.HEADFUL).toBe("true");
-    expect(calls[3].args).toEqual(["run", "index"]);
-    expect(calls[4].args).toEqual(["run", "index:web"]);
+    expect(calls[3].args).toEqual(["run", "dump-surfaces"]);
+    expect(calls[3].env?.HEADFUL).toBe("true");
+    expect(calls[4].args).toEqual(["run", "index"]);
+    expect(calls[5].args).toEqual(["run", "index:web"]);
     const state = controller.status();
     expect(state.error).toBeNull();
     expect(state.step).toBe("Concluído");
   });
 
   it("traduz credenciais ausentes em mensagem acionável", async () => {
-    const { controller } = makeController([{ stderr: "no credentials found", code: 1 }]);
+    const { controller } = makeController([
+      { code: 0 },
+      { stderr: "no credentials found", code: 1 },
+    ]);
 
     await controller.run();
 

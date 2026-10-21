@@ -65,6 +65,12 @@ it with `origin:"hidden"`, `gradebookId` (from `context.gradeBookId`) and the `i
 flags. Results are cached in `scraped/raw/hidden-index.json`; a re-run only scans new ids and drops
 harvested items that the portal later publishes. Skip the sweep with `SKIP_HARVEST=1`.
 
+**Container responses are ignored.** The endpoint answers a module/section id with the container's
+`context` plus its first descendant in `topics[]`; the harvest only accepts the topic whose id
+matches the probed id (`context.topicTypeId` 1/2 is skipped). Older harvests stored that child under
+the container id, creating phantom rows that collide with `section`/`module`; `import.ts` now purges
+them on every index run.
+
 Hidden items flow through import/projection (migration `0014_content_visibility.sql` adds
 `origin`/`gradebook_id`/`is_visible`/`is_future` to `content_item`) but are **excluded from the
 normal task lists** and surfaced read-only at the web route `/gods-eye`.

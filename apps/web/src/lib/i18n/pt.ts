@@ -713,6 +713,7 @@ export const pt = {
   "refresh.failed": "Falha ao atualizar: {{error}}",
 
   // server-provided refresh steps (translated client-side)
+  "server.step.db": "Verificando o banco de dados",
   "server.step.fetching": "Buscando conteúdo novo no portal",
   "server.step.surfaces": "Buscando notas, calendário e avisos",
   "server.step.portalIndex": "Montando o índice de tarefas do portal",

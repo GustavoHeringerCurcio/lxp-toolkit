@@ -95,6 +95,7 @@ function treeItem(id: number, title: string): ContentItem {
 }
 
 function topicDetail(overrides: {
+  id: number;
   title: string;
   topicTypeId?: number;
   gradeBookId?: number | null;
@@ -103,6 +104,8 @@ function topicDetail(overrides: {
 }): unknown {
   return {
     context: {
+      topicId: overrides.id,
+      topicTitle: overrides.title,
       parentTopicId: overrides.parentTopicId ?? 901,
       parentTopicTitle: "Secao",
       grandParentTopicId: overrides.grandParentTopicId ?? 900,
@@ -111,7 +114,7 @@ function topicDetail(overrides: {
     },
     topics: [
       {
-        id: 1,
+        id: overrides.id,
         title: overrides.title,
         topicTypeId: overrides.topicTypeId ?? 8,
         categoryTypeId: 5,
@@ -149,9 +152,14 @@ describe("harvestHiddenTopics", () => {
   it("recupera tópicos fora da árvore, deriva módulo/seção e enriquece o prazo pelo boletim", async () => {
     const get = vi.fn(async (path: string) => {
       if (path.endsWith("/topics/101")) {
-        return { status: 200, data: topicDetail({ title: "Oculto com nota", gradeBookId: 500 }) };
+        return {
+          status: 200,
+          data: topicDetail({ id: 101, title: "Oculto com nota", gradeBookId: 500 }),
+        };
       }
-      if (path.endsWith("/topics/103")) return { status: 200, data: topicDetail({ title: "Atividade A" }) };
+      if (path.endsWith("/topics/103")) {
+        return { status: 200, data: topicDetail({ id: 103, title: "Atividade A" }) };
+      }
       throw new Error("GET -> 404");
     });
     const client = { get } as unknown as ApiClient;
@@ -199,6 +207,117 @@ describe("harvestHiddenTopics", () => {
     );
 
     expect(get).not.toHaveBeenCalled();
+    expect(result.hidden.map((h) => h.itemId)).toEqual([200]);
+  });
+
+  it("ignora respostas de container (seção/módulo) e não cria fantasma com id de seção", async () => {
+    const get = vi.fn(async (path: string) => {
+      if (path.endsWith("/topics/101")) {
+        // The endpoint answers a section id with the section context plus its
+        // first child; keying that child by the section id creates a phantom.
+        return {
+          status: 200,
+          data: {
+            context: {
+              topicId: 101,
+              topicTitle: "Exercícios - 1º Bimestre",
+              topicTypeId: 2,
+              parentTopicId: 900,
+              grandParentTopicId: null,
+            },
+            topics: [
+              {
+                id: 102,
+                title: "Exercícios_Unidade 1",
+                topicTypeId: 3,
+                progressTypeId: 1,
+                content: { html: "<p>pdf</p>" },
+              },
+            ],
+          },
+        };
+      }
+      throw new Error("GET -> 404");
+    });
+    const client = { get } as unknown as ApiClient;
+
+    const result = await harvestHiddenTopics(
+      client,
+      { id: 1, name: "Curso" },
+      [treeItem(100, "Atividade A")],
+      [],
+      { margin: 1 },
+    );
+
+    expect(result.scanned).toBe(1);
+    expect(result.hidden).toEqual([]);
+  });
+
+  it("ignora resposta cujo tópico retornado tem outro id (container sem type 2)", async () => {
+    const get = vi.fn(async (path: string) => {
+      if (path.endsWith("/topics/101")) {
+        return {
+          status: 200,
+          data: {
+            context: { topicId: 101, topicTitle: "Seção", topicTypeId: 3 },
+            topics: [
+              {
+                id: 102,
+                title: "Primeiro filho",
+                topicTypeId: 3,
+                content: { html: "<p>filho</p>" },
+              },
+            ],
+          },
+        };
+      }
+      throw new Error("GET -> 404");
+    });
+    const client = { get } as unknown as ApiClient;
+
+    const result = await harvestHiddenTopics(
+      client,
+      { id: 1, name: "Curso" },
+      [treeItem(100, "Atividade A")],
+      [],
+      { margin: 1 },
+    );
+
+    expect(result.hidden).toEqual([]);
+  });
+
+  it("descarta falsos ocultos antigos criados a partir de containers", async () => {
+    const get = vi.fn(async () => {
+      throw new Error("should not fetch previous ids");
+    });
+    const client = { get } as unknown as ApiClient;
+
+    const phantom = {
+      ...treeItem(105, "Exercícios_Unidade 1"),
+      origin: "hidden" as const,
+      moduleId: 900,
+      sectionId: null,
+      sectionTitle: null,
+      context: {
+        topicId: 105,
+        topicTitle: "Exercícios - 1º Bimestre",
+        topicTypeId: 2,
+      },
+    };
+    const valid = {
+      ...treeItem(200, "Antigo oculto"),
+      origin: "hidden" as const,
+      context: { topicId: 200, topicTitle: "Antigo oculto", topicTypeId: 3 },
+    };
+
+    const result = await harvestHiddenTopics(
+      client,
+      { id: 1, name: "Curso" },
+      [treeItem(100, "Atividade A")],
+      [],
+      { margin: 0, previous: [phantom, valid] },
+    );
+
     expect(result.hidden.map((h) => h.itemId)).toEqual([200]);
   });
 });

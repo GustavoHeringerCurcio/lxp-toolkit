@@ -102,6 +102,11 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
     state.finishedAt = null;
     // The full scrape: portal content + the other surfaces (grades, calendar,
     // notices, messages, achievements, LTI), then the two local indexes.
+    // Fail fast on DB/config problems before spending minutes scraping: the
+    // index step would otherwise hit them only after the whole dump.
+    const preflightSteps: [string[], string][] = [
+      [["run", "db:migrate"], "Verificando o banco de dados"],
+    ];
     const scrapeSteps: [string[], string][] = [
       [["run", "dump"], "Buscando conteúdo novo no portal"],
       [["run", "dump-surfaces"], "Buscando notas, calendário e avisos"],
@@ -115,6 +120,11 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
         await runStep(args, config.repoRoot, label, extraEnv);
       }
     };
+    const runPreflight = async (): Promise<void> => {
+      for (const [args, label] of preflightSteps) {
+        await runStep(args, config.repoRoot, label);
+      }
+    };
     const runIndexes = async (): Promise<void> => {
       for (const [args, label] of indexSteps) {
         await runStep(args, config.repoRoot, label);
@@ -122,6 +132,7 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
     };
     let headfulRetryUsed = false;
     try {
+      await runPreflight();
       await runScrape();
       await runIndexes();
       state.step = "Concluído";
