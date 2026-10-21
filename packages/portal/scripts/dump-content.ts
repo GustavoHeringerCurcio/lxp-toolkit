@@ -8,6 +8,7 @@ import {
   harvestHiddenTopics,
   parseForumInfo,
   parseQuizQuestions,
+  retainedHiddenItems,
   type ContentCourse,
   type ContentItem,
   type HiddenHarvestResult,
@@ -32,6 +33,38 @@ function topicFetcher(session: Session, courseId: number) {
     if (res.status() !== 200) throw new Error(`GET topic ${id} -> ${res.status()}`);
     return res.json();
   };
+}
+
+/**
+ * Topic ids announced in the last calendar dump. Appointments with
+ * `entityType:"topic"` carry the real topic id, which lets the hidden sweep
+ * find not-yet-published tasks that live far from the current tree ids.
+ */
+function calendarTopicIds(rawDir: string, courseId: number): number[] {
+  const file = path.join(rawDir, "surfaces.json");
+  if (!existsSync(file)) return [];
+  try {
+    const data = JSON.parse(readFileSync(file, "utf-8")) as {
+      surfaces?: Record<string, unknown>;
+    };
+    const appointments = data.surfaces?.["calendar-appointments"];
+    if (!Array.isArray(appointments)) return [];
+    const ids = new Set<number>();
+    for (const raw of appointments as Array<Record<string, unknown>>) {
+      if (raw.entityType !== "topic") continue;
+      const id = Number(raw.id);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      const mains = Array.isArray(raw.academicMain)
+        ? (raw.academicMain as Array<Record<string, unknown>>)
+        : [];
+      if (!mains.some((m) => Number(m.academicMainId) === courseId)) continue;
+      ids.add(id);
+    }
+    return [...ids];
+  } catch (err) {
+    logger.debug({ err }, "failed to read calendar topic ids");
+    return [];
+  }
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -262,6 +295,10 @@ async function main(): Promise<void> {
       for (const course of courses) {
         try {
           const gradebook = await fetchGradebookActivities(session.client, course.courseId);
+          const extraIds = [
+            ...(course.containerIds ?? []),
+            ...calendarTopicIds(rawDir, course.courseId),
+          ];
           const result = await harvestHiddenTopics(
             session.client,
             { id: course.courseId, name: course.courseName },
@@ -269,6 +306,7 @@ async function main(): Promise<void> {
             gradebook,
             {
               previous: previousByCourse.get(course.courseId) ?? [],
+              extraIds,
               fetchTopic: topicFetcher(session, course.courseId),
               concurrency: 2,
               delayMs: 120,
@@ -294,11 +332,82 @@ async function main(): Promise<void> {
         }
       }
 
+      // Safety net: a failed (or entirely missing) course must never drop the
+      // hidden topics harvested on a previous run. Keep them in both artifacts
+      // so a later update still surfaces them and a fresh DB import retains
+      // them. Only container phantoms are removed here.
+      const currentIds = new Set(courses.map((c) => c.courseId));
+      const harvested = new Set(harvestResults.map((r) => r.courseId));
+      const failedCourses: { courseId: number; courseName: string; kept: number }[] = [];
+      for (const course of courses) {
+        if (harvested.has(course.courseId)) continue;
+        const previous = previousByCourse.get(course.courseId) ?? [];
+        const kept = retainedHiddenItems(
+          previous,
+          course.items.map((i) => i.itemId),
+        );
+        if (kept.length > 0) course.items.push(...kept);
+        harvestResults.push({
+          courseId: course.courseId,
+          courseName: course.courseName,
+          candidates: 0,
+          scanned: 0,
+          errors: 0,
+          throttled: false,
+          hidden: kept,
+        });
+        failedCourses.push({ courseId: course.courseId, courseName: course.courseName, kept: kept.length });
+      }
+
+      const missingCourses: number[] = [];
+      for (const [courseId, previous] of previousByCourse) {
+        if (currentIds.has(courseId)) continue;
+        const kept = retainedHiddenItems(previous);
+        missingCourses.push(courseId);
+        harvestResults.push({
+          courseId,
+          courseName: kept[0]?.courseName ?? "",
+          candidates: 0,
+          scanned: 0,
+          errors: 0,
+          throttled: false,
+          hidden: kept,
+        });
+      }
+
+      const throttledCourses = harvestResults
+        .filter((r) => r.throttled)
+        .map((r) => r.courseName || String(r.courseId));
+      const partial =
+        failedCourses.length > 0 || missingCourses.length > 0 || throttledCourses.length > 0;
+
       writeFileSync(
         hiddenIndexPath,
-        json({ generatedAt: new Date().toISOString(), courses: harvestResults }),
+        json({
+          generatedAt: new Date().toISOString(),
+          partial,
+          throttled: throttledCourses.length > 0,
+          failedCourses,
+          missingCourses,
+          courses: harvestResults,
+        }),
         "utf-8",
       );
+
+      if (partial) {
+        const parts = [
+          failedCourses.length > 0
+            ? `varredura falhou: ${failedCourses.map((f) => f.courseName || f.courseId).join(", ")}`
+            : "",
+          missingCourses.length > 0 ? `curso não coletado: ${missingCourses.join(", ")}` : "",
+          throttledCourses.length > 0 ? `WAF interrompeu: ${throttledCourses.join(", ")}` : "",
+        ].filter(Boolean);
+        logger.warn(
+          { failedCourses, missingCourses, throttledCourses },
+          "God's Eye sweep incomplete",
+        );
+        console.log(`[gods-eye] partial — ${parts.join("; ")}`);
+      }
     }
 
     const totalItems = courses.reduce((n, c) => n + c.items.length, 0);

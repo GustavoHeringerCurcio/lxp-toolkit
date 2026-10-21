@@ -5,6 +5,7 @@ import {
   isDone,
   isMarkable,
   normalizeTitle,
+  retainedHiddenItems,
   type ContentItem,
   type GradebookActivity,
 } from "./content.js";
@@ -319,5 +320,31 @@ describe("harvestHiddenTopics", () => {
     );
 
     expect(result.hidden.map((h) => h.itemId)).toEqual([200]);
+  });
+});
+
+describe("retainedHiddenItems", () => {
+  it("preserva atividades válidas e remove só containers/duplicatas da árvore", () => {
+    const valid = {
+      ...treeItem(200, "Atividade futura"),
+      origin: "hidden" as const,
+      kind: "file_upload" as const,
+      hasDeadline: true,
+      deadlineAt: "2026-12-01 23:59:00",
+      context: { topicId: 200, topicTitle: "Atividade futura", topicTypeId: 8 },
+    };
+    const container = {
+      ...treeItem(201, "Primeiro filho"),
+      origin: "hidden" as const,
+      context: { topicId: 201, topicTitle: "Seção", topicTypeId: 2 },
+    };
+    const published = {
+      ...treeItem(202, "Já publicada"),
+      origin: "hidden" as const,
+      context: { topicId: 202, topicTitle: "Já publicada", topicTypeId: 8 },
+    };
+
+    const kept = retainedHiddenItems([valid, valid, container, published], [202]);
+    expect(kept.map((h) => h.itemId)).toEqual([200]);
   });
 });

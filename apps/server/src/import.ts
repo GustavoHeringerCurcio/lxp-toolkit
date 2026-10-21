@@ -628,24 +628,26 @@ export interface ImportSummary {
  * Remove phantom God's Eye rows written by older harvests. The topic endpoint
  * answers a container (module/section) id with the container's context plus its
  * first child, so the old harvest stored that child under the container id —
- * colliding with `section`/`module` and duplicating a visible item. All FKs
+ * colliding with `section`/`module` and duplicating a visible item.
+ *
+ * Deliberately conservative: a row that carries points (gradebook id) or a
+ * question bank is never deleted, even if it looks like a container. All FKs
  * cascade, so the delete is safe.
  */
-async function purgeContainerHiddenItems(): Promise<number> {
-  const rows = await query<{ n: string }>(
-    `WITH removed AS (
-       DELETE FROM content_item ci
-       WHERE ci.origin = 'hidden'
-         AND (
-           ci.raw_json->'context'->>'topicTypeId' IN ('1','2')
-           OR EXISTS (SELECT 1 FROM section s WHERE s.id = ci.id)
-           OR EXISTS (SELECT 1 FROM module m WHERE m.id = ci.id)
-         )
-       RETURNING 1
-     )
-     SELECT count(*)::text AS n FROM removed`,
+async function purgeContainerHiddenItems(): Promise<{ count: number; ids: number[] }> {
+  const rows = await query<{ id: string }>(
+    `DELETE FROM content_item ci
+     WHERE ci.origin = 'hidden'
+       AND ci.gradebook_id IS NULL
+       AND NOT EXISTS (SELECT 1 FROM question q WHERE q.content_item_id = ci.id)
+       AND (
+         ci.raw_json->'context'->>'topicTypeId' IN ('1','2')
+         OR EXISTS (SELECT 1 FROM section s WHERE s.id = ci.id)
+         OR EXISTS (SELECT 1 FROM module m WHERE m.id = ci.id)
+       )
+     RETURNING ci.id`,
   );
-  return Number(rows[0]?.n ?? "0");
+  return { count: rows.length, ids: rows.map((r) => Number(r.id)) };
 }
 
 /** Import the scraped content tree + legacy JSON state into Postgres. */
@@ -682,7 +684,12 @@ export async function importAll(): Promise<ImportSummary> {
   const annotations = await backfillOverrides(studentId);
   await importAiConfig(studentId);
   const gradebook = await importGradebook();
-  const containerHiddenPurged = await purgeContainerHiddenItems();
+  const purged = await purgeContainerHiddenItems();
+  if (purged.count > 0) {
+    console.log(
+      `db: purged ${purged.count} phantom God's-Eye row(s): ${purged.ids.join(", ")}`,
+    );
+  }
 
   const profs = await query<{ n: string }>("SELECT count(*)::text AS n FROM professor");
   return {
@@ -694,7 +701,7 @@ export async function importAll(): Promise<ImportSummary> {
     annotations,
     gradebookCategories: gradebook.categories,
     gradebookActivities: gradebook.activities,
-    containerHiddenPurged,
+    containerHiddenPurged: purged.count,
   };
 }
 

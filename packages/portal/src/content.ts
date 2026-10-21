@@ -112,6 +112,12 @@ export interface ContentCourse {
   courseId: number;
   courseName: string;
   items: ContentItem[];
+  /**
+   * Module/section topic ids (containers). Used as extra anchors when sweeping
+   * for hidden topics, so unpublished activities under unlisted containers are
+   * still found.
+   */
+  containerIds?: number[];
 }
 
 export type ContentKind =
@@ -390,6 +396,7 @@ export async function collectContent(
     );
     const leaves: RawLeaf[] = [];
     const sectionIds: number[] = [];
+    const containerIds = new Set<number>();
 
     const walk = (
       node: ContentTreeNode,
@@ -401,10 +408,12 @@ export async function collectContent(
       const t = node.topicTypeId ?? 0;
       const children = node.children ?? [];
       if (t === 1) {
+        containerIds.add(node.id);
         for (const child of children) walk(child, node.id, node.title, null, null);
         return;
       }
       if (t === 2) {
+        containerIds.add(node.id);
         sectionIds.push(node.id);
         for (const child of children) walk(child, moduleId, moduleTitle, node.id, node.title);
         return;
@@ -535,7 +544,12 @@ export async function collectContent(
       }
     }
 
-    result.push({ courseId: course.id, courseName: course.name, items });
+    result.push({
+      courseId: course.id,
+      courseName: course.name,
+      items,
+      containerIds: [...containerIds].sort((a, b) => a - b),
+    });
     logger.info({ course: course.name, items: items.length }, "course content collected");
   }
 
@@ -654,7 +668,9 @@ function pickHiddenTopic(
 
 /**
  * True when a previously harvested item is actually a container response (the
- * pre-fix harvest persisted these). Used to purge them from the cache/DB.
+ * pre-fix harvest persisted these). Kept deliberately conservative: only the
+ * container type or the id mismatch is decisive, never the title (a future
+ * activity can legitimately have a slightly different title).
  */
 export function isContainerItem(
   item: Pick<ContentItem, "itemId" | "itemTitle" | "context">,
@@ -664,9 +680,23 @@ export function isContainerItem(
   const contextType = Number(context.topicTypeId ?? 0);
   if (CONTAINER_TOPIC_TYPES.has(contextType)) return true;
   const contextId = numOrNull(context.topicId);
-  if (contextId != null && contextId !== item.itemId) return true;
-  const contextTitle = context.topicTitle != null ? String(context.topicTitle).trim() : null;
-  return contextTitle != null && contextTitle !== item.itemTitle.trim();
+  return contextId != null && contextId !== item.itemId;
+}
+
+/** Keep previous hidden items that are still valid and absent from the tree. */
+export function retainedHiddenItems(
+  previous: ContentItem[],
+  existingIds: Iterable<number> = [],
+): ContentItem[] {
+  const existing = new Set(existingIds);
+  const seen = new Set<number>();
+  const kept: ContentItem[] = [];
+  for (const item of previous) {
+    if (existing.has(item.itemId) || seen.has(item.itemId) || isContainerItem(item)) continue;
+    seen.add(item.itemId);
+    kept.push(item);
+  }
+  return kept;
 }
 
 /** Build a `ContentItem` from a hidden topic detail (not present in the tree). */
@@ -829,14 +859,8 @@ export async function harvestHiddenTopics(
   // Reuse previously harvested items that are still unpublished, dropping any
   // container responses written by older harvests (their id collides with a
   // section/module id and their content belongs to the container's first child).
-  const hidden: ContentItem[] = [];
-  const previousIds = new Set<number>();
-  for (const prev of options.previous ?? []) {
-    if (treeIds.has(prev.itemId) || previousIds.has(prev.itemId)) continue;
-    if (isContainerItem(prev)) continue;
-    previousIds.add(prev.itemId);
-    hidden.push(prev);
-  }
+  const hidden: ContentItem[] = retainedHiddenItems(options.previous ?? [], treeIds);
+  const previousIds = new Set(hidden.map((item) => item.itemId));
 
   const candidateSet = new Set<number>();
   for (const id of treeIds) {

@@ -69,7 +69,16 @@ harvested items that the portal later publishes. Skip the sweep with `SKIP_HARVE
 `context` plus its first descendant in `topics[]`; the harvest only accepts the topic whose id
 matches the probed id (`context.topicTypeId` 1/2 is skipped). Older harvests stored that child under
 the container id, creating phantom rows that collide with `section`/`module`; `import.ts` now purges
-them on every index run.
+them on every index run (never rows with a gradebook id or questions).
+
+**Retention & visibility.** A failed or missing course never drops its previously harvested hidden
+items — they are carried into `hidden-index.json` and `content-tree.json`, and import keeps DB rows
+that disappear from a later scrape. The sweep is also anchored to module/section ids and the last
+calendar's topic ids. If a course fails or the WAF aborts the sweep, `dump` prints
+`[gods-eye] partial …`; the app surfaces it as a non-fatal warning in the refresh banner. The UI
+only lists items **due from today onward** (never past/old ones; an undated item survives only when
+it has a gradebook link). Quizzes/uploads/forums and any item with a deadline, gradebook id or
+questions are **always shown**, even when flagged as a duplicate/older version.
 
 Hidden items flow through import/projection (migration `0014_content_visibility.sql` adds
 `origin`/`gradebook_id`/`is_visible`/`is_future` to `content_item`) but are **excluded from the

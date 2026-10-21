@@ -303,6 +303,8 @@ export interface RefreshStatus {
   running: boolean;
   step: string;
   error: string | null;
+  /** Non-fatal problem (e.g. a partial God's Eye sweep). */
+  warning?: string | null;
   startedAt: string | null;
   finishedAt: string | null;
   log?: string;

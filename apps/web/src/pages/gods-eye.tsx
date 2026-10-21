@@ -6,6 +6,7 @@ import { RichText } from "@/components/rich-text";
 import { kindShort } from "@/lib/kind";
 import { cn } from "@/lib/utils";
 import { godsEyeDeadlineLabel, isUpcoming, parseDeadlineTs } from "@/lib/status";
+import { hiddenDuplicatesCount, visibleHiddenItems } from "@/lib/gods-eye";
 import type { Exercise } from "@/types";
 
 function ItemCard({ item }: { item: Exercise }) {
@@ -122,18 +123,18 @@ export function GodsEyePage() {
   const [showDuplicates, setShowDuplicates] = useState(false);
 
   const hidden = useMemo(
-    () => hiddenItems.filter((e) => showDuplicates || !e.duplicate),
+    () => visibleHiddenItems(hiddenItems, showDuplicates),
     [hiddenItems, showDuplicates],
   );
-  const duplicatesCount = hiddenItems.length - hidden.length;
+  const duplicatesCount = useMemo(() => hiddenDuplicatesCount(hiddenItems), [hiddenItems]);
 
   const upcoming = useMemo(() => {
     const now = Date.now();
-    return [...items, ...hiddenItems]
+    return items
       .filter((e) => !e.done && isUpcoming(e.deadlineAt, now))
       .sort((a, b) => (parseDeadlineTs(a.deadlineAt) as number) - (parseDeadlineTs(b.deadlineAt) as number))
       .slice(0, 25);
-  }, [items, hiddenItems]);
+  }, [items]);
 
   const empty = hidden.length === 0 && upcoming.length === 0;
 

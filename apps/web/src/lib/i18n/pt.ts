@@ -26,7 +26,7 @@ export const pt = {
 
   // God's Eye — hidden & upcoming activities
   "godsEye.title": "Olho de Deus",
-  "godsEye.subtitle": "Atividades que o portal não mostra na trilha, mas ainda serve pela API.",
+  "godsEye.subtitle": "Próximas atividades de hoje em diante que o portal esconde da trilha, mas ainda serve pela API.",
   "godsEye.hiddenSection": "Não publicados",
   "godsEye.upcomingSection": "Próximos prazos",
   "godsEye.empty": "Nada por aqui. Rode uma atualização para varrer o conteúdo oculto.",
@@ -711,6 +711,7 @@ export const pt = {
   "refresh.updating": "Atualizando…",
   "refresh.update": "Atualizar",
   "refresh.failed": "Falha ao atualizar: {{error}}",
+  "refresh.warning": "Atualização parcial: {{warning}}",
 
   // server-provided refresh steps (translated client-side)
   "server.step.db": "Verificando o banco de dados",

@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 import { fetchRefreshStatus, startContentRefresh, type RefreshStatus } from "@/api";
 import { Button } from "@/components/ui/button";
 import { serverStepKey, useT } from "@/lib/i18n";
@@ -17,6 +17,7 @@ const IDLE: RefreshStatus = {
   running: false,
   step: "",
   error: null,
+  warning: null,
   startedAt: null,
   finishedAt: null,
 };
@@ -140,21 +141,27 @@ export function ContentRefreshButton({
 
 export function ContentRefreshBanner({ state }: { state: RefreshStatus }) {
   const { t } = useT();
-  if (!state.running && !state.error) return null;
+  if (!state.running && !state.error && !state.warning) return null;
+  const tone = state.error
+    ? "border-destructive/30 bg-destructive/10 text-destructive"
+    : state.warning && !state.running
+      ? "border-soon/30 bg-soon-bg text-soon"
+      : "border-brand/30 bg-brand/10 text-brand";
   return (
     <div
-      className={
-        state.error
-          ? "flex items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive"
-          : "flex items-center gap-2 border-b border-brand/30 bg-brand/10 px-4 py-2 text-xs text-brand"
-      }
+      className={`flex items-center gap-2 border-b px-4 py-2 text-xs ${tone}`}
       role="status"
     >
       {state.running && <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />}
+      {!state.running && state.warning && !state.error && (
+        <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+      )}
       {state.error ? (
         <span>{t("refresh.failed", { error: state.error })}</span>
-      ) : (
+      ) : state.running ? (
         <span>{t(state.step ? serverStepKey(state.step) : "refresh.updating")}…</span>
+      ) : (
+        <span>{t("refresh.warning", { warning: state.warning ?? "" })}</span>
       )}
     </div>
   );

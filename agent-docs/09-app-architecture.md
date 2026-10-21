@@ -250,6 +250,8 @@ db:migrate → dump → dump-surfaces → index → index:web
 
 - The DB preflight fails fast (before the scrape) when Postgres is unreachable or a migration
   cannot apply.
+- A partial God's Eye sweep (`[gods-eye] partial …` on the dump output) is exposed as
+  `RefreshState.warning`; the UI shows it as an amber banner without marking the refresh failed.
 - Refuses a concurrent run (`start()` returns `false` while running).
 - Retries the scrape **once headful** when the log matches `/reCAPTCHA/` (for the UI/terminal case;
   a headless cloud server can't show the window).

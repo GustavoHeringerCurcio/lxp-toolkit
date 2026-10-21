@@ -143,6 +143,24 @@ describe("createRefreshController", () => {
     expect(state.step).toBe("Concluído");
   });
 
+  it("expõe aviso quando a varredura do God's Eye foi parcial", async () => {
+    const { controller } = makeController([
+      { code: 0 },
+      { stdout: "[gods-eye] partial — varredura falhou: Curso X", code: 0 },
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+    ]);
+
+    await controller.run();
+
+    const state = controller.status();
+    expect(state.error).toBeNull();
+    expect(state.step).toBe("Concluído");
+    expect(state.warning).toMatch(/Olho de Deus/);
+    expect(state.warning).toMatch(/Curso X/);
+  });
+
   it("traduz credenciais ausentes em mensagem acionável", async () => {
     const { controller } = makeController([
       { code: 0 },

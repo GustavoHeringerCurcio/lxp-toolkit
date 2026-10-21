@@ -69,8 +69,12 @@ Full detail: `agent-docs/10-deployment.md`.
   the topic is absent from the student's content tree. `npm run dump` harvests those topics
   (`content.ts::harvestHiddenTopics`, cached in `scraped/raw/hidden-index.json`) and appends them
   with `origin:"hidden"`. They flow through import/projection but are kept **out of the normal
-  lists** and surfaced read-only at the web route `/gods-eye`. Skip the sweep with
-  `SKIP_HARVEST=1`; the columns live in migration `0014_content_visibility.sql`.
+  lists** and surfaced read-only at the web route `/gods-eye`. Container (module/section) responses
+  are ignored, failed courses keep their previous hidden cache, and actionable hidden items
+  (quiz/upload/forum or with deadline/gradebook/questions) are always visible in God's Eye. Its UI
+  only lists **activities due from today onward** (past/old ones are never shown). A
+  partial sweep prints `[gods-eye] partial …` and becomes a non-fatal refresh warning. Skip the
+  sweep with `SKIP_HARVEST=1`; the columns live in migration `0014_content_visibility.sql`.
 - `scraped/raw/homework-index.json` (built by `npm run index`) links each open assignment to its
   section + sibling content + local files — prefer it over re-scraping. The web UI is
   `npm run dev` (serves `apps/web` via Vite + `apps/server`) or `npm run web` (built static).

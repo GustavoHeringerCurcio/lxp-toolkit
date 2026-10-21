@@ -22,7 +22,7 @@ export const en: Dict = {
 
   // God's Eye — hidden & upcoming activities
   "godsEye.title": "God's Eye",
-  "godsEye.subtitle": "Activities the portal hides from the trail but still serves through the API.",
+  "godsEye.subtitle": "Upcoming activities from today onward that the portal hides from the trail but still serves through the API.",
   "godsEye.hiddenSection": "Unpublished",
   "godsEye.upcomingSection": "Upcoming deadlines",
   "godsEye.empty": "Nothing here. Run a refresh to sweep hidden content.",
@@ -706,6 +706,7 @@ export const en: Dict = {
   "refresh.updating": "Updating…",
   "refresh.update": "Refresh",
   "refresh.failed": "Failed to refresh: {{error}}",
+  "refresh.warning": "Partial refresh: {{warning}}",
 
   // server-provided refresh steps (translated client-side)
   "server.step.db": "Checking the database",

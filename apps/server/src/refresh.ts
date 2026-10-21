@@ -9,6 +9,8 @@ export interface RefreshState {
   running: boolean;
   step: string;
   error: string | null;
+  /** Non-fatal problem (e.g. a partial God's Eye sweep) to show as a warning. */
+  warning: string | null;
   startedAt: string | null;
   finishedAt: string | null;
   log: string;
@@ -50,6 +52,7 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
     running: false,
     step: "",
     error: null,
+    warning: null,
     startedAt: null,
     finishedAt: null,
     log: "",
@@ -92,11 +95,24 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
     return msg;
   }
 
+  /** A partial God's Eye sweep is reported by `dump` on stdout. */
+  function partialWarning(): string | null {
+    const match = state.log.match(/\[gods-eye\] partial[^\n]*/);
+    if (!match) return null;
+    const detail = match[0]
+      .replace(/^\[gods-eye\]\s*partial\s*[—-]?\s*/i, "")
+      .trim();
+    return detail
+      ? `A varredura do Olho de Deus foi parcial (${detail}). Rode a atualização novamente para completar.`
+      : "A varredura do Olho de Deus foi parcial. Rode a atualização novamente para completar.";
+  }
+
   async function run(): Promise<void> {
     if (state.running) return;
     state.running = true;
     state.step = "Iniciando…";
     state.error = null;
+    state.warning = null;
     state.log = "";
     state.startedAt = new Date().toISOString();
     state.finishedAt = null;
@@ -135,6 +151,7 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
       await runPreflight();
       await runScrape();
       await runIndexes();
+      state.warning = partialWarning();
       state.step = "Concluído";
     } catch (err) {
       // If the portal demanded a reCAPTCHA, retry the scrape once headful so the
@@ -145,6 +162,7 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
         try {
           await runScrape({ HEADFUL: "true" });
           await runIndexes();
+          state.warning = partialWarning();
           state.step = "Concluído";
         } catch (err2) {
           state.error = friendlyError(err2);
