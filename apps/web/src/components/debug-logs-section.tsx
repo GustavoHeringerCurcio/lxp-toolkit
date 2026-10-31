@@ -61,7 +61,7 @@ export function DebugLogsSection() {
               className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs"
             >
               <div className="flex items-center gap-2">
-                <Bug className="size-3.5 shrink-0 text-soon" aria-hidden />
+                <Bug className="size-3.5 shrink-0 text-foreground" aria-hidden />
                 <span className="font-medium text-foreground/90">
                   {log.contentItemId != null ? `${t("debug.item")} ${log.contentItemId}` : t("debug.item")}
                 </span>

@@ -81,7 +81,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
         <NavLink to="/" className="flex items-center gap-2.5 px-1 py-0.5">
-          <BrandMark className="size-8 rounded-lg shadow-md shadow-primary/25" />
+          <BrandMark className="size-8 rounded-lg shadow-md shadow-black/20" />
           <div className="min-w-0 leading-tight">
             <div className="truncate font-heading text-[15px] font-semibold tracking-tight">LXP Toolkit</div>
             <div className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">

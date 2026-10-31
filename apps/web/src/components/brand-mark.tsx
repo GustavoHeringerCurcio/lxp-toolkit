@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 /**
- * LXP Toolkit mark — "Stacked X": a rounded tile with two offset diagonals
+ * LXP Toolkit mark — "Stacked X": a rounded ink tile with two offset diagonals
  * forming an X, the back one translucent to read as layers/toolkit. Uses theme
  * tokens so it inverts correctly in dark mode. Mirrored by `public/favicon.svg`.
  */

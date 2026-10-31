@@ -115,8 +115,8 @@ export function DesignPage() {
         <Card>
           <CardContent className="space-y-4">
             <div>
-              <div className="font-heading text-3xl font-semibold tracking-tight">Fraunces — display</div>
-              <div className="mt-1 font-mono text-[10px] text-muted-foreground">font-heading · opsz auto</div>
+              <div className="font-heading text-3xl font-semibold tracking-tight">Inter — display</div>
+              <div className="mt-1 font-mono text-[10px] text-muted-foreground">font-heading · Inter</div>
             </div>
             <div>
               <div className="text-base">{t("design.typographyBody")}</div>

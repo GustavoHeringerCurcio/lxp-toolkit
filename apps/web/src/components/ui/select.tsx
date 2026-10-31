@@ -9,7 +9,7 @@ function Select({ className, children, ...props }: React.ComponentProps<"select"
         data-slot="select"
         className={cn(
           // Closed control: solid card surface so the value is always readable,
-          // brand-tinted hover/focus to match the Folio skin.
+          // ink-tinted hover/focus to match the Mono skin.
           "h-8 w-full min-w-0 cursor-pointer appearance-none rounded-lg border border-input bg-card py-1 pr-8 pl-2.5 text-base font-medium text-foreground shadow-none transition-[color,background-color,border-color,box-shadow] outline-none",
           "hover:border-brand/45 hover:bg-accent/40",
           "focus-visible:border-brand focus-visible:ring-3 focus-visible:ring-ring/35",

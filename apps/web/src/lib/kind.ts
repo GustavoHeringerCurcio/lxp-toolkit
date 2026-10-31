@@ -179,7 +179,7 @@ export function activityBadge(e: {
 export const BADGE_TONE_CLS: Record<BadgeTone, string> = {
   none: NEUTRAL_BADGE,
   error: "border-late/50 bg-transparent text-late",
-  warn: "border-soon/50 bg-transparent text-soon",
+  warn: "border-soon/50 bg-transparent text-foreground",
 };
 
 /**

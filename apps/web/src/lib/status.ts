@@ -29,7 +29,7 @@ export function deadlineInfo(
 export const TONE_CLS: Record<Tone, string> = {
   ok: "bg-ok-bg text-ok border-ok/30",
   late: "bg-late-bg text-late border-late/30",
-  soon: "bg-soon-bg text-soon border-soon/30",
+  soon: "bg-soon-bg text-foreground border-soon/30",
   coming: "bg-coming-bg text-coming border-coming/30",
   none: "bg-none-bg text-none border-none/30",
 };

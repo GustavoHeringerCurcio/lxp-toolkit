@@ -620,17 +620,17 @@ export async function answerToPdf(
 <head><meta charset="utf-8"><title>${escapeHtml(baseName)}</title>
 <style>
   @page { margin: 2.5cm; }
-  body { font-family: "Lato", Arial, sans-serif; font-size: 12pt; line-height: 1.5; color: #0F171D; }
-  h1 { font-family: "Poppins", Arial, sans-serif; font-size: 15pt; margin: 0 0 1em; }
+  body { font-family: "Inter", Arial, sans-serif; font-size: 12pt; line-height: 1.5; color: #171717; }
+  h1 { font-family: "Inter", Arial, sans-serif; font-size: 15pt; margin: 0 0 1em; }
   h2 { font-size: 13pt; margin: 1.2em 0 0.5em; }
   h3 { font-size: 12pt; margin: 1em 0 0.4em; }
   p { margin: 0 0 0.6em; white-space: pre-wrap; }
   ul, ol { margin: 0 0 0.6em 1.4em; }
   li { margin: 0 0 0.2em; }
   table { border-collapse: collapse; width: 100%; margin: 0 0 1em; }
-  th, td { border: 1px solid #b9c0c9; padding: 4px 8px; text-align: left; vertical-align: top; }
-  th { background: #eef1f4; }
-  hr { border: none; border-top: 1px solid #c9ced6; margin: 1em 0; }
+  th, td { border: 1px solid #d4d4d4; padding: 4px 8px; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  hr { border: none; border-top: 1px solid #e5e5e5; margin: 1em 0; }
 </style></head>
 <body><h1>${escapeHtml(baseName)}</h1>${inner}</body></html>`;
     writeFileSync(htmlPath, html, "utf-8");

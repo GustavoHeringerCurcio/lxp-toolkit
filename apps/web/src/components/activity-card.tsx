@@ -56,7 +56,7 @@ export function ActivityCard({ e }: { e: Exercise }) {
             ? contentLabel(e.contentKind, t)
             : "";
   const lateish = !e.done && e.status === "expired";
-  const dateTone = lateish ? "text-late" : !e.done && e.daysLeft != null && e.daysLeft <= 3 ? "text-soon" : "text-muted-foreground";
+  const dateTone = lateish ? "text-late" : !e.done && e.daysLeft != null && e.daysLeft <= 3 ? "text-foreground" : "text-muted-foreground";
 
   const open = () => navigate(`/tarefa/${e.id}`);
   const generate = () => navigate(`/tarefa/${e.id}?gerar=1`);

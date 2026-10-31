@@ -224,7 +224,7 @@ export function TrainingQuizPage() {
           {stats && stats.attempts > 0 && (
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-card p-4 text-sm">
               <span className="flex items-center gap-2 font-medium">
-                <Trophy className="size-4 text-soon" aria-hidden />
+                <Trophy className="size-4 text-foreground" aria-hidden />
                 {t("training.history")}
               </span>
               <span className="text-muted-foreground">

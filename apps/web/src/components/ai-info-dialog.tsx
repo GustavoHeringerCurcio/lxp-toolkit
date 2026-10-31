@@ -35,7 +35,7 @@ export function AiInfoDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         </DialogHeader>
 
         {!readingFiles && (
-          <p className="rounded-md border border-soon/40 bg-soon/10 px-2.5 py-2 text-xs text-soon">
+          <p className="rounded-md border border-soon/40 bg-soon/10 px-2.5 py-2 text-xs text-foreground">
             {t("exercise.aiInfoOff")}
           </p>
         )}
@@ -57,7 +57,7 @@ export function AiInfoDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                       <span
                         className={cn(
                           "mt-0.5 shrink-0",
-                          negative ? "text-muted-foreground" : limits ? "text-soon" : "text-ok",
+                          negative ? "text-muted-foreground" : limits ? "text-foreground" : "text-ok",
                         )}
                         aria-hidden
                       >

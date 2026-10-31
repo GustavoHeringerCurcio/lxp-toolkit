@@ -137,7 +137,7 @@ export function SendDialog({
             </span>
             <DialogTitle className="text-lg leading-tight">{t("send.dialogTitle")}</DialogTitle>
           </div>
-          <DialogDescription className="mt-2 flex items-center gap-1.5 text-xs font-medium text-soon">
+          <DialogDescription className="mt-2 flex items-center gap-1.5 text-xs font-medium text-foreground">
             <WarningIcon className="size-3.5" />
             {t("send.dialogWarn")}
           </DialogDescription>

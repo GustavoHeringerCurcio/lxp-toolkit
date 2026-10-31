@@ -16,7 +16,7 @@ function hashDraft(s: string): string {
 
 const TONE = {
   ready: { bar: "bg-ok", text: "text-ok", border: "border-ok/30", bg: "bg-ok/10" },
-  review: { bar: "bg-soon", text: "text-soon", border: "border-soon/30", bg: "bg-soon/10" },
+  review: { bar: "bg-soon", text: "text-foreground", border: "border-soon/30", bg: "bg-soon/10" },
   weak: { bar: "bg-destructive", text: "text-destructive", border: "border-destructive/30", bg: "bg-destructive/10" },
 } as const;
 
@@ -45,7 +45,7 @@ function BulletList({ title, items, tone }: { title: string; items: string[]; to
       <ul className="mt-1 space-y-0.5">
         {items.map((item, i) => (
           <li key={i} className="flex gap-1.5 text-xs text-muted-foreground">
-            <span className={tone === "warn" ? "text-soon" : "text-brand"} aria-hidden>
+            <span className={tone === "warn" ? "text-foreground" : "text-brand"} aria-hidden>
               •
             </span>
             <span>{item}</span>
@@ -162,7 +162,7 @@ export function GatePanel({
               {t(`gate.verdict.${result.verdict}`)}
             </span>
             {result.logged && (
-              <span className="rounded-full border border-soon/30 bg-soon/10 px-2 py-0.5 text-[10px] font-medium text-soon">
+              <span className="rounded-full border border-soon/30 bg-soon/10 px-2 py-0.5 text-[10px] font-medium text-foreground">
                 {t("gate.logged")}
               </span>
             )}
@@ -212,7 +212,7 @@ export function GatePanel({
             <SubScore label={t("gate.completeness")} value={result.completenessScore} />
           </div>
           {result.completenessScore <= 90 && (
-            <p className="text-xs text-soon">{t("gate.completenessLow")}</p>
+            <p className="text-xs text-foreground">{t("gate.completenessLow")}</p>
           )}
           {result.checks.length > 0 && (
             <div className="space-y-1 border-t border-border/60 pt-2.5">

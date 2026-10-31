@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 const STATUS_CLS: Record<ProjectSourceFileStatus, string> = {
   ok: "border-ok/30 bg-ok/10 text-ok",
   empty: "border-border bg-muted/50 text-muted-foreground",
-  unsupported: "border-soon/30 bg-soon/10 text-soon",
+  unsupported: "border-soon/30 bg-soon/10 text-foreground",
   error: "border-destructive/40 bg-destructive/10 text-destructive",
 };
 

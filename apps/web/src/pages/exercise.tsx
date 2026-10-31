@@ -598,7 +598,7 @@ function AnswerPanel({
               "flex items-start gap-2 rounded-md border p-3 text-sm",
               (sub.status === "ok" || sub.status === "already") && "border-ok/40 bg-ok/10 text-ok",
               sub.status === "failed" && "border-destructive/40 bg-destructive/10 text-destructive",
-              sub.status === "unknown" && "border-soon/40 bg-soon/10 text-soon",
+              sub.status === "unknown" && "border-soon/40 bg-soon/10 text-foreground",
               sub.status === "running" && "border-border bg-muted/40 text-muted-foreground",
             )}
           >

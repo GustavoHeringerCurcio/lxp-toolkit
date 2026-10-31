@@ -56,7 +56,7 @@ function ItemCard({ item }: { item: Exercise }) {
 
       {open && (
         <div className="space-y-4 border-t p-4">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-soon">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
             <Lock className="size-3" aria-hidden />
             {t("godsEye.readOnly")}
           </p>

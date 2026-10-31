@@ -226,7 +226,7 @@ export function ContentRefreshBanner({ state }: { state: RefreshStatus }) {
   const tone = state.error
     ? "border-destructive/30 bg-destructive/10 text-destructive"
     : state.warning && !state.running
-      ? "border-soon/30 bg-soon-bg text-soon"
+      ? "border-soon/30 bg-soon-bg text-foreground"
       : "border-brand/30 bg-brand/10 text-brand";
   return (
     <div
