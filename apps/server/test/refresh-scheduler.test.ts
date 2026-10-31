@@ -377,6 +377,25 @@ describe("createRefreshScheduler", () => {
     expect(scheduler.status().nextSlot).toBeNull();
   });
 
+  it("chama onDecision apenas quando a decisão muda", async () => {
+    const decisions: string[] = [];
+    const { controller } = makeController();
+    const scheduler = createRefreshScheduler({
+      controller,
+      loadState: async () => ({ recent: [] }),
+      config: makeConfig(),
+      now: () => new Date("2026-10-30T07:30:00Z"),
+      log: () => {},
+      onDecision: (message) => decisions.push(message),
+    });
+
+    await scheduler.tick();
+    await scheduler.tick();
+
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0]).toMatch(/silêncio/);
+  });
+
   it("start() é idempotente", () => {
     const { controller } = makeController();
     const timeouts: Array<() => void> = [];

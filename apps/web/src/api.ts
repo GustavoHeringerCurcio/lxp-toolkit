@@ -358,6 +358,75 @@ export async function fetchRefreshStatus(): Promise<RefreshStatus> {
   return req<RefreshStatus>("/api/refresh/status");
 }
 
+export interface RefreshLogRunSummary {
+  file: string;
+  source: string;
+  status: "running" | "ok" | "failed";
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  error: string | null;
+  warning: string | null;
+}
+
+export interface RefreshLogStatusDto {
+  updatedAt: string;
+  timezone: string;
+  autoRefresh: boolean;
+  slots: string[];
+  quietHours: { start: string; end: string } | null;
+  lastRun: RefreshLogRunSummary | null;
+  lastSuccessAt: string | null;
+  lastDecision: string | null;
+}
+
+export interface RefreshLogRun extends RefreshLogRunSummary {
+  version: number;
+  timezone: string;
+  localStartedAt: string;
+  localFinishedAt: string | null;
+  step: string;
+  logExcerpt: string;
+  logTruncated: boolean;
+}
+
+export interface RefreshLogSchedulerEvent {
+  at: string;
+  type: "app-start" | "scheduler";
+  decision?: string;
+  autoRefresh?: boolean;
+  slots?: string[];
+  timezone?: string;
+  quietHours?: { start: string; end: string } | null;
+}
+
+export interface RefreshLogSchedulerDay {
+  date: string;
+  timezone: string;
+  events: RefreshLogSchedulerEvent[];
+}
+
+export interface RefreshLogsIndex {
+  dir: string;
+  status: RefreshLogStatusDto | null;
+  runs: RefreshLogRunSummary[];
+  schedulerDays: string[];
+}
+
+export async function fetchRefreshLogs(): Promise<RefreshLogsIndex> {
+  return req<RefreshLogsIndex>("/api/refresh/logs");
+}
+
+export async function fetchRefreshRunLog(file: string): Promise<RefreshLogRun> {
+  return req<RefreshLogRun>(`/api/refresh/logs/run?file=${encodeURIComponent(file)}`);
+}
+
+export async function fetchRefreshSchedulerLog(date: string): Promise<RefreshLogSchedulerDay> {
+  return req<RefreshLogSchedulerDay>(
+    `/api/refresh/logs/scheduler?date=${encodeURIComponent(date)}`,
+  );
+}
+
 export async function fetchAnswerState(id: number): Promise<AnswerState> {
   return req<AnswerState>(`/api/answer/${id}`);
 }

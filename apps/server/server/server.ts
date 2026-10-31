@@ -6,6 +6,18 @@ import { ASSISTANT_DIR, assist, dataDir, raw, openaiKeyLast4, openaiKeySource } 
 import { isAuthorized, toolkitToken } from "../src/auth.js";
 import { createRefreshController, headfulRetryEnabled } from "../src/refresh.js";
 import { createRefreshScheduler, loadRefreshSchedulerConfig } from "../src/refresh-scheduler.js";
+import {
+  initRefreshLog,
+  listRefreshRuns,
+  listSchedulerDays,
+  readRefreshRun,
+  readRefreshStatus,
+  readSchedulerLog,
+  recordRunFinish,
+  recordRunStart,
+  recordSchedulerDecision,
+  refreshLogDir,
+} from "../src/refresh-log.js";
 import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import { healthCheck, query, runMigrations } from "../src/db.js";
 import { importAll } from "../src/import.js";
@@ -151,6 +163,13 @@ const refresh = createRefreshController({
   // The container has no display, so a headful reCAPTCHA retry would only
   // waste time; the failure is surfaced with an actionable message instead.
   headfulRetry: headfulRetryEnabled(process.env.REFRESH_HEADFUL_RETRY),
+  onStart: async (source, startedAt) => {
+    await recordRunStart({
+      source,
+      startedAt,
+      config: refreshScheduler.status(),
+    });
+  },
   onFinish: async (state, source) => {
     await recordRefreshRun({
       source,
@@ -160,6 +179,23 @@ const refresh = createRefreshController({
       error: state.error,
       warning: state.warning,
     });
+    try {
+      await recordRunFinish({
+        source,
+        startedAt: state.startedAt ?? new Date().toISOString(),
+        finishedAt: state.finishedAt ?? new Date().toISOString(),
+        status: state.error ? "failed" : "ok",
+        step: state.step,
+        error: state.error,
+        warning: state.warning,
+        log: state.log,
+        config: refreshScheduler.status(),
+      });
+    } catch (err) {
+      console.warn(
+        `[refresh-log] finish: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     // Time-based alerts (24h / expired) also run after a failed scrape, since
     // they only depend on deadlines already stored in Postgres.
     void runNotificationScan("refresh").catch((err) => {
@@ -175,6 +211,17 @@ const refreshScheduler = createRefreshScheduler({
   controller: refresh,
   loadState: getRefreshScheduleState,
   config: loadRefreshSchedulerConfig(),
+  onDecision: (decision) => {
+    void recordSchedulerDecision({
+      at: new Date().toISOString(),
+      decision,
+      config: refreshScheduler.status(),
+    }).catch((err) => {
+      console.warn(
+        `[refresh-log] decision: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+  },
 });
 
 const MIME: Record<string, string> = {
@@ -723,6 +770,26 @@ const server = createServer(async (req, res) => {
         lastSuccessAt,
         auto: refreshScheduler.status(),
       });
+    }
+    if (url === "/api/refresh/logs" && method === "GET") {
+      return json(res, 200, {
+        dir: refreshLogDir(),
+        status: readRefreshStatus(),
+        runs: listRefreshRuns(30),
+        schedulerDays: listSchedulerDays(30),
+      });
+    }
+    if (url === "/api/refresh/logs/run" && method === "GET") {
+      const file = new URL(req.url ?? "/", "http://local").searchParams.get("file") ?? "";
+      const log = readRefreshRun(file);
+      if (!log) return json(res, 404, { error: "log não encontrado" });
+      return json(res, 200, log);
+    }
+    if (url === "/api/refresh/logs/scheduler" && method === "GET") {
+      const date = new URL(req.url ?? "/", "http://local").searchParams.get("date") ?? "";
+      const log = readSchedulerLog(date);
+      if (!log) return json(res, 404, { error: "log não encontrado" });
+      return json(res, 200, log);
     }
     if (url === "/api/profile" && method === "GET") {
       return json(res, 200, await getProfile());
@@ -1828,6 +1895,19 @@ async function bootstrap(): Promise<void> {
     console.log(
       `   auto refresh: ${refreshScheduler.status().enabled ? refreshScheduler.status().slots.join(", ") : "desligado"}\n`,
     );
+    void (async () => {
+      try {
+        const state = await getRefreshScheduleState(10);
+        await initRefreshLog({
+          config: refreshScheduler.status(),
+          lastSuccessAt: state.lastSuccessAt,
+        });
+      } catch (err) {
+        console.warn(
+          `[refresh-log] init: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    })();
     // Delayed by REFRESH_BOOT_DELAY_SECONDS; the first tick is the daily catch-up.
     refreshScheduler.start();
   });

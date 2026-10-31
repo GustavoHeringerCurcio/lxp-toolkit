@@ -208,6 +208,37 @@ describe("createRefreshController", () => {
     expect(controller.status().error).toMatch(/reCAPTCHA/);
   });
 
+  it("chama onStart antes do primeiro passo", async () => {
+    const { spawn } = createFakeSpawn([
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+    ]);
+    const events: string[] = [];
+    let startedAt = "";
+    const controller = createRefreshController({
+      repoRoot: "C:/repo",
+      assistantDir: "C:/repo/apps/server",
+      npm: "npm",
+      env: {},
+      spawn,
+      onStart: (source, at) => {
+        startedAt = at;
+        events.push(`start:${source}`);
+      },
+      onFinish: () => {
+        events.push("finish");
+      },
+    });
+
+    await controller.run("boot");
+
+    expect(events).toEqual(["start:boot", "finish"]);
+    expect(startedAt).toBeTruthy();
+  });
+
   it("chama onFinish com o snapshot final e a origem", async () => {
     const { spawn } = createFakeSpawn([
       { code: 0 },

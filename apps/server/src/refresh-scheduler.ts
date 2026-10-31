@@ -72,6 +72,8 @@ export interface RefreshSchedulerOptions {
   config: RefreshScheduleConfig;
   now?: () => Date;
   log?: (message: string) => void;
+  /** Called when the scheduler's decision changes (for JSON logs). */
+  onDecision?: (message: string) => void;
   setTimeoutFn?: typeof setTimeout;
   clearTimeoutFn?: typeof clearTimeout;
   setIntervalFn?: typeof setInterval;
@@ -263,6 +265,7 @@ export function createRefreshScheduler(options: RefreshSchedulerOptions): Refres
     config,
     now = () => new Date(),
     log = (message: string) => console.log(message),
+    onDecision,
     setTimeoutFn = setTimeout,
     clearTimeoutFn = clearTimeout,
     setIntervalFn = setInterval,
@@ -286,6 +289,13 @@ export function createRefreshScheduler(options: RefreshSchedulerOptions): Refres
     if (message === lastDecision) return;
     lastDecision = message;
     log(`[refresh-scheduler] ${message}`);
+    try {
+      onDecision?.(message);
+    } catch (err) {
+      console.error(
+        `[refresh-scheduler] onDecision: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   async function tick(): Promise<void> {

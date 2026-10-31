@@ -29,6 +29,8 @@ export interface RefreshConfig {
    * Called once per finished run (success or failure) with a snapshot of the
    * final state. The server uses it to persist `refresh_run` rows.
    */
+  /** Called once when a run starts, before the first pipeline step. */
+  onStart?: (source: RefreshSource, startedAt: string) => void | Promise<void>;
   onFinish?: (state: RefreshState, source: RefreshSource) => void | Promise<void>;
   /**
    * Retry headful when the portal demands a reCAPTCHA. Defaults to `true`
@@ -136,8 +138,18 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
     state.error = null;
     state.warning = null;
     state.log = "";
-    state.startedAt = new Date().toISOString();
+    const startedAt = new Date().toISOString();
+    state.startedAt = startedAt;
     state.finishedAt = null;
+    if (config.onStart) {
+      try {
+        await config.onStart(source, startedAt);
+      } catch (err) {
+        console.error(
+          `[refresh] onStart: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
     // The full scrape: portal content + the other surfaces (grades, calendar,
     // notices, messages, achievements, LTI), then the two local indexes.
     // Fail fast on DB/config problems before spending minutes scraping: the
