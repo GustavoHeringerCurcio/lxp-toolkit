@@ -4,7 +4,8 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { ASSISTANT_DIR, assist, dataDir, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
 import { isAuthorized, toolkitToken } from "../src/auth.js";
-import { createRefreshController } from "../src/refresh.js";
+import { createRefreshController, headfulRetryEnabled } from "../src/refresh.js";
+import { createRefreshScheduler, loadRefreshSchedulerConfig } from "../src/refresh-scheduler.js";
 import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import { healthCheck, query, runMigrations } from "../src/db.js";
 import { importAll } from "../src/import.js";
@@ -25,9 +26,11 @@ import {
   getProfile,
   getProjectProfile,
   getProjectSource,
+  getRefreshScheduleState,
   listDebugLogs,
   listProjectSourceFiles,
   recordAiRun,
+  recordRefreshRun,
   restoreAnswerVersion,
   saveActivityProject,
   saveAiConfig,
@@ -133,6 +136,26 @@ const PORT = Number(process.env.PORT || 4174);
 const refresh = createRefreshController({
   repoRoot: path.resolve(ASSISTANT_DIR, "..", ".."),
   assistantDir: ASSISTANT_DIR,
+  // The container has no display, so a headful reCAPTCHA retry would only
+  // waste time; the failure is surfaced with an actionable message instead.
+  headfulRetry: headfulRetryEnabled(process.env.REFRESH_HEADFUL_RETRY),
+  onFinish: async (state, source) => {
+    await recordRefreshRun({
+      source,
+      status: state.error ? "failed" : "ok",
+      startedAt: state.startedAt ?? new Date().toISOString(),
+      finishedAt: state.finishedAt ?? new Date().toISOString(),
+      error: state.error,
+      warning: state.warning,
+    });
+  },
+});
+
+/** Daily catch-up + fixed-time refreshes (off unless AUTO_REFRESH=1). */
+const refreshScheduler = createRefreshScheduler({
+  controller: refresh,
+  loadState: getRefreshScheduleState,
+  config: loadRefreshSchedulerConfig(),
 });
 
 const MIME: Record<string, string> = {
@@ -665,7 +688,17 @@ const server = createServer(async (req, res) => {
       });
     }
     if (url === "/api/refresh/status") {
-      return json(res, 200, refresh.status());
+      let lastSuccessAt: string | null = null;
+      try {
+        lastSuccessAt = (await getRefreshScheduleState(5)).lastSuccessAt;
+      } catch {
+        // Status must stay available even if the DB hiccups.
+      }
+      return json(res, 200, {
+        ...refresh.status(),
+        lastSuccessAt,
+        auto: refreshScheduler.status(),
+      });
     }
     if (url === "/api/profile" && method === "GET") {
       return json(res, 200, await getProfile());
@@ -1702,8 +1735,13 @@ async function bootstrap(): Promise<void> {
     console.log(`   ai config: Postgres · ai_config`);
     console.log(`   openai key: …${openaiKeyLast4()} (fonte: ${openaiKeySource()})`);
     console.log(
-      `   auth: ${toolkitToken() ? "TOOLKIT_TOKEN ativo (API privada)" : "sem TOOLKIT_TOKEN (modo local)"}\n`,
+      `   auth: ${toolkitToken() ? "TOOLKIT_TOKEN ativo (API privada)" : "sem TOOLKIT_TOKEN (modo local)"}`,
     );
+    console.log(
+      `   auto refresh: ${refreshScheduler.status().enabled ? refreshScheduler.status().slots.join(", ") : "desligado"}\n`,
+    );
+    // Delayed by REFRESH_BOOT_DELAY_SECONDS; the first tick is the daily catch-up.
+    refreshScheduler.start();
   });
 }
 
