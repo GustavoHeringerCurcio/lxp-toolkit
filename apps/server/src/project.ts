@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { writeFileAtomic } from "./atomic.js";
 import { query } from "./db.js";
 import { ASSISTANT_EXERCISES_FILE } from "./build.js";
 import { actionKindFor, detectAnomalies, flavorFromAnomalies, isSurveyItem, localFilesFor, needsFlavorReview, parseForumInfo, stripHtml } from "./build.js";
@@ -238,10 +239,9 @@ export async function writeProjection(): Promise<{ file: string; count: number }
   const exercises = await buildProjection();
   const catalogVersion = await getCatalogVersion();
   mkdirSync(path.dirname(ASSISTANT_EXERCISES_FILE), { recursive: true });
-  writeFileSync(
+  writeFileAtomic(
     ASSISTANT_EXERCISES_FILE,
     JSON.stringify({ generatedAt: new Date().toISOString(), catalogVersion, exercises }, null, 2),
-    "utf-8",
   );
   return { file: ASSISTANT_EXERCISES_FILE, count: exercises.length };
 }
