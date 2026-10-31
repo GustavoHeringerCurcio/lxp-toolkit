@@ -78,8 +78,7 @@ written again. `exercises.json` is a cache invalidated by its `catalogVersion`.
 | `/treino/quiz` | **Treino de quiz** | Gamified practice quiz generated from your course material (or the real portal questions). |
 | `/treino/estudo` | **Perguntar à IA** | Free-text study Q&A scoped to the selected subject. |
 | `/gods-eye` | **God's Eye** | Read-only view of hidden/upcoming topics the portal serves but doesn't list. |
-| `/ajustes` | **Ajustes** | Hub with tabs: Pessoal · IA · Avançado · Organização. |
-| `/design` | **Design** | Living style guide. |
+| `/ajustes` | **Ajustes** | Hub with tabs: Pessoal · Notificações · IA · Avançado · Organização. |
 
 Global: a **⌘K / Ctrl+K command palette** (navigate, jump to a tarefa, filter by module, toggle
 theme, refresh content). The header **Atualizar** button re-scrapes the portal and rebuilds the

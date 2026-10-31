@@ -1,12 +1,12 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
+  BellRing,
   ChartColumn,
   ChevronLeft,
   Eye,
   GraduationCap,
   ListChecks,
   NotebookText,
-  Palette,
   RefreshCw,
   SlidersHorizontal,
   Sparkles,
@@ -47,7 +47,7 @@ const TRAINING_NAV = [
 const SYSTEM_NAV = [
   { to: "/gods-eye", key: "nav.godsEye", icon: Eye },
   { to: "/ajustes", key: "nav.settings", icon: SlidersHorizontal },
-  { to: "/design", key: "nav.design", icon: Palette },
+  { to: "/ajustes?tab=notifications", key: "nav.notifications", icon: BellRing, tab: "notifications" },
 ] as const;
 
 function isRouteActive(to: string, pathname: string, match?: readonly string[]): boolean {
@@ -60,6 +60,7 @@ export function AppSidebar() {
   const { t } = useT();
   const location = useLocation();
   const navigate = useNavigate();
+  const requestedTab = new URLSearchParams(location.search).get("tab");
 
   const professors = [
     ...new Map(
@@ -146,19 +147,28 @@ export function AppSidebar() {
           <SidebarGroupLabel>{t("nav.groupSystem")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {SYSTEM_NAV.map((n) => (
-                <SidebarMenuItem key={n.to}>
-                  <SidebarMenuButton
-                    isActive={location.pathname === n.to}
-                    tooltip={t(n.key)}
-                    onClick={() => navigate(n.to)}
-                    className="group-data-[collapsible=icon]:!px-2"
-                  >
-                    <n.icon />
-                    <span>{t(n.key)}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {SYSTEM_NAV.map((n) => {
+                const path = n.to.split("?")[0];
+                const active =
+                  n.to === "/ajustes"
+                    ? location.pathname === "/ajustes" && requestedTab !== "notifications"
+                    : "tab" in n
+                      ? location.pathname === path && requestedTab === n.tab
+                      : location.pathname === path;
+                return (
+                  <SidebarMenuItem key={n.to}>
+                    <SidebarMenuButton
+                      isActive={active}
+                      tooltip={t(n.key)}
+                      onClick={() => navigate(n.to)}
+                      className="group-data-[collapsible=icon]:!px-2"
+                    >
+                      <n.icon />
+                      <span>{t(n.key)}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

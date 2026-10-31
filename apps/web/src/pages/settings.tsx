@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   BellRing,
   Bug,
@@ -68,6 +69,10 @@ import { Textarea } from "@/components/ui/textarea";
 type SettingsTab = "personal" | "notifications" | "ai" | "exams" | "advanced" | "organizacao";
 
 const TABS: SettingsTab[] = ["personal", "notifications", "ai", "exams", "advanced", "organizacao"];
+
+function isSettingsTab(value: string | null): value is SettingsTab {
+  return value != null && (TABS as string[]).includes(value);
+}
 
 const DEFAULT_MODELS: AiModels = {
   generation: "gpt-4o",
@@ -245,7 +250,33 @@ export function SettingsPage() {
   const { cfg, patchConfig } = useAppData();
   const { t, lang, locale, setLang } = useT();
   const { theme, setTheme } = useTheme();
-  const [tab, setTab] = useLocalStorage<SettingsTab>("lxp.settings.tab", "ai");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const [tab, setTab] = useLocalStorage<SettingsTab>(
+    "lxp.settings.tab",
+    isSettingsTab(requestedTab) ? requestedTab : "ai",
+  );
+  const lastAppliedTab = useRef<string | null>(null);
+
+  useEffect(() => {
+    const requested = searchParams.get("tab");
+    if (!requested) {
+      lastAppliedTab.current = null;
+      return;
+    }
+    if (!isSettingsTab(requested) || lastAppliedTab.current === requested) return;
+    lastAppliedTab.current = requested;
+    setTab(requested);
+  }, [searchParams, setTab]);
+
+  const selectTab = (value: SettingsTab) => {
+    setTab(value);
+    if (searchParams.has("tab")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("tab");
+      setSearchParams(next, { replace: true });
+    }
+  };
   const [style, setStyle] = useState<AiStyle>(DEFAULT_STYLE);
   const [sections, setSections] = useState<AiActivitySections>(DEFAULT_ACTIVITY_SECTIONS);
   const [models, setModels] = useState<AiModels>(DEFAULT_MODELS);
@@ -468,7 +499,7 @@ export function SettingsPage() {
             key={s}
             role="tab"
             aria-selected={tab === s}
-            onClick={() => setTab(s)}
+            onClick={() => selectTab(s)}
             className={cn(
               "rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               tab === s

@@ -302,7 +302,7 @@ enabled at once; the four event switches are global:
 
 - React 18 + Vite 5 + Tailwind v4; design system in `apps/web/DESIGN.md` ("Folio").
 - Routes: `/` (Agora), `/tarefas`, `/progresso`, `/tarefa/:id`, `/treino/quiz`, `/treino/estudo`,
-  `/treino/resumo`, `/gods-eye`, `/ajustes`, `/design`.
+  `/treino/resumo`, `/gods-eye`, `/ajustes` (including `/ajustes?tab=notifications`).
 - All API calls go through `src/api.ts::req()` (relative `/api/...`), so the same build works
   behind the Vite proxy (dev), the Node server (prod), and the Vercel proxy (cloud). `src/lib/files.ts`
   builds file preview URLs (`/api/preview?url=…` for Office, direct CDN URL for PDFs).

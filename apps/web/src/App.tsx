@@ -27,7 +27,6 @@ import { TarefasPage } from "@/pages/tarefas";
 import { ProgressoPage } from "@/pages/progresso";
 import { ExercisePage } from "@/pages/exercise";
 import { SettingsPage } from "@/pages/settings";
-import { DesignPage } from "@/pages/design";
 import { GodsEyePage } from "@/pages/gods-eye";
 import { TrainingQuizPage } from "@/pages/training-quiz";
 import { TrainingStudyPage } from "@/pages/training-study";
@@ -45,7 +44,6 @@ function pageTitle(
   if (pathname === "/tarefas") return t("nav.tasks");
   if (pathname === "/progresso") return t("nav.progress");
   if (pathname === "/ajustes") return t("nav.settings");
-  if (pathname === "/design") return t("nav.design");
   if (pathname === "/gods-eye") return t("nav.godsEye");
   if (pathname === "/treino/quiz") return t("nav.trainingQuiz");
   if (pathname === "/treino/estudo") return t("nav.trainingStudy");
@@ -138,7 +136,6 @@ function Shell() {
                 <Route path="/treino/estudo" element={<TrainingStudyPage />} />
                 <Route path="/treino/resumo" element={<TrainingSummaryPage />} />
                 <Route path="/ajustes" element={<SettingsPage />} />
-                <Route path="/design" element={<DesignPage />} />
                 <Route path="/gods-eye" element={<GodsEyePage />} />
                 <Route path="*" element={<AgoraPage />} />
               </Routes>

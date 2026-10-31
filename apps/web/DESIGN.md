@@ -154,7 +154,7 @@ Self-hosted via `@fontsource-variable/*` (no runtime Google Fonts):
 | Nav - Tarefas | `ListChecks` |
 | Nav - Progresso | `ChartColumn` |
 | Nav - Ajustes | `SlidersHorizontal` |
-| Nav - Design | `Palette` |
+| Nav - Notificacoes | `BellRing` |
 | Nav - Treino de quiz | `GraduationCap` |
 | Nav - Perguntar a IA | `Sparkles` |
 | Nav - Resumo | `NotebookText` |
@@ -207,8 +207,7 @@ same neutral treatment.
 | `/treino/quiz` | **Treino de quiz** | gamified practice quiz (AI-generated or portal-sourced), one question at a time with feedback, score + readiness verdict + history |
 | `/treino/estudo` | **Perguntar a IA** | free-text study Q&A scoped to the selected subject; streamed markdown |
 | `/treino/resumo` | **Resumo** | saved AI study summary of a subject (PDFs + readings + quiz bank): key topics + likely exam questions, streamed and regenerable |
-| `/ajustes` | **Ajustes** | hub with pill tabs (Pessoal / IA / Provas / Avancado / Organizacao): profile + appearance, IA voice/format/rules/content, exam phases (dates + subject->exam mapping), generation params + preview, institution + professor directory |
-| `/design` | **Design** | living style guide: tokens, type ramp, components, states |
+| `/ajustes` | **Ajustes** | hub with pill tabs (Pessoal / Notificacoes / IA / Provas / Avancado / Organizacao): profile + appearance, Discord/Bark alerts, IA voice/format/rules/content, exam phases (dates + subject->exam mapping), generation params + preview, institution + professor directory |
 
 Global: **Cmd-K / Ctrl+K command palette** - navigate, jump to any tarefa, filter by module, toggle
 theme, refresh content.

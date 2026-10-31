@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  BellRing,
   ChartColumn,
   Languages,
   ListChecks,
   Moon,
-  Palette,
   RefreshCw,
   RotateCw,
   SlidersHorizontal,
@@ -102,9 +102,9 @@ export function CommandPalette() {
             <SlidersHorizontal />
             {t("nav.settings")}
           </CommandItem>
-          <CommandItem onSelect={() => go("/design")}>
-            <Palette />
-            {t("nav.designGuide")}
+          <CommandItem onSelect={() => go("/ajustes?tab=notifications")}>
+            <BellRing />
+            {t("nav.notifications")}
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />
