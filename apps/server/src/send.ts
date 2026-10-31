@@ -3,6 +3,7 @@ import path from "node:path";
 import { ASSISTANT_DIR, assist } from "./paths.js";
 import { spawnCommand } from "./exec.js";
 import { appendSubmission, getProfile, getSubmissions, setManualStatus } from "./store.js";
+import { notifyActivityDone } from "./notifications.js";
 import type { QuizSelection, SendMode, SubmissionEntry } from "./types.js";
 
 export type { SendMode };
@@ -363,8 +364,11 @@ function spawnRunner(rootDir: string, reqFile: string, resFile: string, entry: S
 async function markDone(exerciseId: number): Promise<void> {
   try {
     await setManualStatus(exerciseId, "done");
+    // Immediate completion alert; the refresh scan also catches completions
+    // made outside the toolkit. The ledger makes both paths idempotent.
+    await notifyActivityDone(exerciseId);
   } catch {
-    /* ignore */
+    /* notifications are best-effort */
   }
 }
 

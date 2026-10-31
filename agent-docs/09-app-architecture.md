@@ -95,6 +95,7 @@ One `createServer` handler with string-matched routes. Request order at the top:
 | Send | `GET /api/send/config`, `GET /api/send/preview`, `GET /api/send/:id`, `POST /api/send`, `POST /api/send/upload`, `POST /api/send/artifact` |
 | Debug | `GET /api/debug-logs`, `GET /api/debug-log/:id` |
 | Refresh | `POST /api/refresh`, `GET /api/refresh/status` |
+| Notifications | `GET /api/notifications`, `POST /api/notifications`, `POST /api/notifications/test` |
 | Export | `GET /api/export/:id` |
 | Files | `GET /api/preview?url=` (Office→PDF), `GET /scraped/**` (local study files) |
 | SPA | `/` and `/assets/*` serve `apps/web/dist`; anything else falls back to `index.html` |
@@ -150,6 +151,9 @@ never written by the app.
 | `0015_study_summary` | `study_summary` (saved Resumo per course/module scope) |
 | `0016_exam_phases` | `course_exam`, `module_exam`, `section_exam`, `item_annotation.exam_id`, `gradebook_category`, `gradebook_activity`, `study_summary.exam_id` (Provas) |
 | `0017_summary_options` | `study_summary.size` + `items_json`; scope index gains `size` (4 sizes per scope + source-item snapshot) |
+| `0018_refresh_run` | `refresh_run` (manual/scheduled/boot refresh history for the daily scheduler) |
+| `0019_ai_read_attachments` | `ai_config.read_attachments` (send PDFs/images to the generation model) |
+| `0020_notifications` | `notification_config` (Discord/Bark channels + event toggles + `baseline_at`) and `notification_event` (idempotency ledger) |
 
 Key read model: `v_exercise_current` feeds `/api/exercises` via `view.ts::enrich`.
 
@@ -267,6 +271,31 @@ db:migrate → dump → dump-surfaces → index → index:web
 `scripts/sync.mjs` runs the same steps locally plus Docker/migrations, hard-failing on any step.
 `scripts/dev.mjs` starts API + Vite without scraping.
 
+### 9.1 Notifications (`apps/server/src/notifications.ts`)
+
+Settings → **Notificações** stores one `notification_config` row per student and sends to
+**Discord incoming webhooks** and/or **Bark** (`https://api.day.app/push`). Both channels can be
+enabled at once; the four event switches are global:
+
+| Event | Rule |
+|---|---|
+| `new` | tree item with `content_item.created_at > baseline_at` |
+| `due_soon` | open item with a deadline in the next 24 hours |
+| `done` | item completed in the toolkit (immediate after a successful send) or `item_state.done` transition seen at refresh |
+| `expired` | open item whose deadline passed after `baseline_at` |
+
+- The scanner runs on **server/container boot** (`bootstrap`) and **after every refresh run**
+  (success or failure); there is no background timer. Due-soon/expired checks therefore happen at
+  those two moments only.
+- Only normal tree items are considered (`origin='tree'`); God's Eye/hidden topics are ignored.
+- `notification_event` is the idempotency ledger: each occurrence is claimed atomically before
+  sending (`INSERT … ON CONFLICT DO NOTHING`), so boot + refresh + immediate done cannot duplicate.
+- Events disabled by a toggle, or with no channel configured, are recorded as `skipped` so
+  re-enabling does not replay old alerts.
+- Webhook URLs and Bark device keys are stored server-side and only returned masked (`…abcd`).
+  Discord URLs are validated against the official `discord.com`/`discordapp.com` webhook path
+  (SSRF guard). Delivery is best-effort and never blocks a refresh or submission.
+
 ---
 
 ## 10. Frontend (`apps/web`)
@@ -298,6 +327,8 @@ db:migrate → dump → dump-surfaces → index → index:web
 | `ALLOWED_ORIGIN` | server | no | enables CORS for direct browser calls |
 | `SOFFICE_BIN` | server | no | LibreOffice binary for PDF/Office previews |
 | `GITHUB_TOKEN` | server | no | fetch private project READMEs |
+| `BARK_BASE_URL` | server | no | Bark server for notifications (default `https://api.day.app`) |
+| `APP_PUBLIC_URL` | server | no | public app URL used to deep-link notifications to `/tarefa/:id` |
 | `BACKEND_URL`, `TOOLKIT_TOKEN` | Vercel | in cloud | proxy target + secret |
 
 ---

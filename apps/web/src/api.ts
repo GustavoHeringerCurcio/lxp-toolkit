@@ -19,6 +19,9 @@ import type {
   ExercisesPayload,
   FlavorSource,
   GateResultDto,
+  NotificationChannelResultDto,
+  NotificationConfigDto,
+  NotificationSaveInput,
   OrganizationDto,
   ProfessorLink,
   ProjectProfileDto,
@@ -78,6 +81,25 @@ export async function fetchConfig(): Promise<AiConfigDto> {
 
 export async function saveProfile(profile: AiProfile): Promise<void> {
   await post("/api/profile", profile);
+}
+
+// ── Notifications (Discord webhook + Bark) ──────────────────────────────────
+
+export async function fetchNotificationConfig(): Promise<NotificationConfigDto> {
+  return req<NotificationConfigDto>("/api/notifications");
+}
+
+export async function saveNotificationConfig(input: NotificationSaveInput): Promise<NotificationConfigDto> {
+  return (await post("/api/notifications", input)) as NotificationConfigDto;
+}
+
+export interface NotificationTestResult {
+  ok: boolean;
+  channels: NotificationChannelResultDto[];
+}
+
+export async function testNotificationConfig(): Promise<NotificationTestResult> {
+  return (await post("/api/notifications/test", {})) as NotificationTestResult;
 }
 
 // ── Professor photos ────────────────────────────────────────────────────────

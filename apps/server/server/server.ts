@@ -21,6 +21,8 @@ import {
   getAnswers,
   getCurrentAttemptId,
   getDebugLog,
+  getNotificationConfig,
+  getNotificationSummary,
   getOverrides,
   getProfessorLinks,
   getProfile,
@@ -39,6 +41,7 @@ import {
   saveAnswerVersion,
   saveAutoFlavor,
   saveNote,
+  saveNotificationConfig,
   saveProfessorLink,
   saveProfile,
   saveProjectProfile,
@@ -97,6 +100,7 @@ import type {
   AiStyle,
   AnswerRecord,
   GateResult,
+  NotificationConfig,
   QuizQ,
   QuizSelection,
 } from "../src/types.js";
@@ -123,6 +127,14 @@ import { applyTemplateDefaults, forceTodayDate, parseUseCases, type UseCase } fr
 import { parseLinkedinUrl } from "../src/linkedin.js";
 import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/organizations.js";
 import {
+  defaultNotificationConfig,
+  isBarkDeviceKey,
+  normalizeDiscordWebhookUrl,
+  publicNotificationConfig,
+  runNotificationScan,
+  sendNotificationTest,
+} from "../src/notifications.js";
+import {
   PROJECT_FILE_MAX_BYTES,
   addProjectFile,
   fetchGithubReadme,
@@ -147,6 +159,13 @@ const refresh = createRefreshController({
       finishedAt: state.finishedAt ?? new Date().toISOString(),
       error: state.error,
       warning: state.warning,
+    });
+    // Time-based alerts (24h / expired) also run after a failed scrape, since
+    // they only depend on deadlines already stored in Postgres.
+    void runNotificationScan("refresh").catch((err) => {
+      console.warn(
+        `[notifications] falha na varredura pós-atualização: ${err instanceof Error ? err.message : String(err)}`,
+      );
     });
   },
 });
@@ -688,6 +707,10 @@ const server = createServer(async (req, res) => {
         profile: await getProfile(),
       });
     }
+    if (url === "/api/notifications" && method === "GET") {
+      const [config, summary] = await Promise.all([getNotificationConfig(), getNotificationSummary()]);
+      return json(res, 200, publicNotificationConfig(config, summary));
+    }
     if (url === "/api/refresh/status") {
       let lastSuccessAt: string | null = null;
       try {
@@ -1184,6 +1207,60 @@ const server = createServer(async (req, res) => {
     }
 
     if (method === "POST") {
+      if (url === "/api/notifications") {
+        const b = await readBody(req);
+        const current = (await getNotificationConfig()) ?? defaultNotificationConfig();
+        const next: NotificationConfig = { ...current };
+
+        if (typeof b.discordEnabled === "boolean") next.discordEnabled = b.discordEnabled;
+        if (typeof b.barkEnabled === "boolean") next.barkEnabled = b.barkEnabled;
+        if (typeof b.notifyNew === "boolean") next.notifyNew = b.notifyNew;
+        if (typeof b.notifyDueSoon === "boolean") next.notifyDueSoon = b.notifyDueSoon;
+        if (typeof b.notifyDone === "boolean") next.notifyDone = b.notifyDone;
+        if (typeof b.notifyExpired === "boolean") next.notifyExpired = b.notifyExpired;
+
+        if (b.clearDiscordWebhook === true || b.discordWebhookUrl === null || b.discordWebhookUrl === "") {
+          next.discordWebhookUrl = null;
+        } else if (typeof b.discordWebhookUrl === "string") {
+          const normalized = normalizeDiscordWebhookUrl(b.discordWebhookUrl);
+          if (!normalized) {
+            return json(res, 400, {
+              error: "Webhook do Discord inválido. Use a URL do canal (discord.com/api/webhooks/...).",
+            });
+          }
+          next.discordWebhookUrl = normalized;
+        }
+
+        if (b.clearBarkDeviceKey === true || b.barkDeviceKey === null || b.barkDeviceKey === "") {
+          next.barkDeviceKey = null;
+        } else if (typeof b.barkDeviceKey === "string") {
+          const key = b.barkDeviceKey.trim();
+          if (!isBarkDeviceKey(key)) {
+            return json(res, 400, { error: "Device Key do Bark inválida." });
+          }
+          next.barkDeviceKey = key;
+        }
+
+        if (next.discordEnabled && !next.discordWebhookUrl) {
+          return json(res, 400, { error: "Configure o webhook do Discord para ativar esse canal." });
+        }
+        if (next.barkEnabled && !next.barkDeviceKey) {
+          return json(res, 400, { error: "Configure a Device Key do Bark para ativar esse canal." });
+        }
+
+        await saveNotificationConfig(next);
+        const [saved, summary] = await Promise.all([getNotificationConfig(), getNotificationSummary()]);
+        return json(res, 200, { ok: true, ...publicNotificationConfig(saved ?? next, summary) });
+      }
+      if (url === "/api/notifications/test") {
+        const config = await getNotificationConfig();
+        if (!config) return json(res, 400, { error: "Salve as notificações antes de testar." });
+        const channels = await sendNotificationTest(config);
+        if (channels.length === 0) {
+          return json(res, 400, { error: "Ative e configure pelo menos um canal." });
+        }
+        return json(res, 200, { ok: channels.every((c) => c.ok), channels });
+      }
       if (url === "/api/note") {
         const b = await readBody(req);
         const id = Number(b.id);
@@ -1734,6 +1811,12 @@ async function bootstrap(): Promise<void> {
   } catch (err) {
     console.warn(`   text: could not extract material (${err instanceof Error ? err.message : String(err)})`);
   }
+  // Boot catch-up: deadlines may have crossed the 24h mark while Docker was off.
+  void runNotificationScan("boot").catch((err) => {
+    console.warn(
+      `[notifications] falha na varredura de início: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  });
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`\n📝 LXP Toolkit → http://localhost:${PORT}`);
     console.log(`   data: ${dataDir()}`);

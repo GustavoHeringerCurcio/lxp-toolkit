@@ -551,3 +551,44 @@ export interface ExamOverview {
   unclassified: number;
   totalItems: number;
 }
+
+// -- Notifications (Discord webhook + Bark) ---------------------------------
+
+export type NotificationChannel = "discord" | "bark";
+
+export interface NotificationChannelResultDto {
+  channel: NotificationChannel;
+  ok: boolean;
+  error?: string;
+}
+
+/** Browser-safe notification settings: secrets are only shown masked. */
+export interface NotificationConfigDto {
+  discordEnabled: boolean;
+  discordConfigured: boolean;
+  discordHint: string | null;
+  barkEnabled: boolean;
+  barkConfigured: boolean;
+  barkHint: string | null;
+  notifyNew: boolean;
+  notifyDueSoon: boolean;
+  notifyDone: boolean;
+  notifyExpired: boolean;
+  baselineAt: string | null;
+  updatedAt: string | null;
+  lastEventAt: string | null;
+  lastError: string | null;
+}
+
+export interface NotificationSaveInput {
+  discordEnabled?: boolean;
+  discordWebhookUrl?: string | null;
+  clearDiscordWebhook?: boolean;
+  barkEnabled?: boolean;
+  barkDeviceKey?: string | null;
+  clearBarkDeviceKey?: boolean;
+  notifyNew?: boolean;
+  notifyDueSoon?: boolean;
+  notifyDone?: boolean;
+  notifyExpired?: boolean;
+}

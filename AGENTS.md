@@ -71,6 +71,10 @@ Full detail: `agent-docs/10-deployment.md`.
   more) in `REFRESH_TZ`, quiet hours `REFRESH_QUIET_START`-`REFRESH_QUIET_END` (22:00-10:30), and
   retries (60 min, max 3/day). Manual **Atualizar** shares the same controller and bypasses quiet
   hours. History lives in `refresh_run` (migration `0018`); Docker tuning is in a root `.env`.
+- **Notifications:** `notification_config` + `notification_event` (migration `0020`) store per-student
+  Discord webhook / Bark channels, four event toggles (new, <24h, done, expired) and an idempotency
+  ledger. The scanner runs at server boot and after every refresh (no background timer); successful
+  sends also fire an immediate "done" alert. Secrets stay server-side and are returned masked.
 - **God's Eye (hidden topics):** the portal's topic-detail endpoint serves content by id even when
   the topic is absent from the student's content tree. `npm run dump` harvests those topics
   (`content.ts::harvestHiddenTopics`, cached in `scraped/raw/hidden-index.json`) and appends them

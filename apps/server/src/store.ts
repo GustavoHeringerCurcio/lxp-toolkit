@@ -32,6 +32,11 @@ import type {
   ProjectSourceFileStatus,
   ProjectSourceState,
   QuizSelection,
+  NotificationConfig,
+  NotificationEventKind,
+  NotificationEventRecord,
+  NotificationItem,
+  NotificationStatus,
   SubmissionEntry,
   Submissions,
   UploadFlavor,
@@ -1361,4 +1366,208 @@ export async function projectSourceText(maxChars: number): Promise<string> {
     total += block.length;
   }
   return chunks.join("\n\n");
+}
+
+// -- Notifications (Discord webhook + Bark) ---------------------------------
+
+interface NotificationConfigRow {
+  discord_enabled: boolean;
+  discord_webhook_url: string | null;
+  bark_enabled: boolean;
+  bark_device_key: string | null;
+  notify_new: boolean;
+  notify_due_soon: boolean;
+  notify_done: boolean;
+  notify_expired: boolean;
+  baseline_at: Date | string;
+  updated_at: Date | string;
+}
+
+function toNotificationConfig(row: NotificationConfigRow): NotificationConfig {
+  return {
+    discordEnabled: row.discord_enabled,
+    discordWebhookUrl: row.discord_webhook_url,
+    barkEnabled: row.bark_enabled,
+    barkDeviceKey: row.bark_device_key,
+    notifyNew: row.notify_new,
+    notifyDueSoon: row.notify_due_soon,
+    notifyDone: row.notify_done,
+    notifyExpired: row.notify_expired,
+    baselineAt: iso(row.baseline_at),
+    updatedAt: iso(row.updated_at),
+  };
+}
+
+/** The student's notification configuration, or null when never saved. */
+export async function getNotificationConfig(): Promise<NotificationConfig | null> {
+  const studentId = await getStudentId();
+  const rows = await query<NotificationConfigRow>(
+    `SELECT discord_enabled, discord_webhook_url, bark_enabled, bark_device_key,
+            notify_new, notify_due_soon, notify_done, notify_expired,
+            baseline_at, updated_at
+       FROM notification_config WHERE student_id = $1`,
+    [studentId],
+  );
+  return rows[0] ? toNotificationConfig(rows[0]) : null;
+}
+
+/** Upsert the full notification configuration (secrets included). */
+export async function saveNotificationConfig(cfg: NotificationConfig): Promise<void> {
+  const studentId = await getStudentId();
+  await query(
+    `INSERT INTO notification_config(
+       student_id, discord_enabled, discord_webhook_url, bark_enabled, bark_device_key,
+       notify_new, notify_due_soon, notify_done, notify_expired, baseline_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
+     ON CONFLICT (student_id) DO UPDATE SET
+       discord_enabled = EXCLUDED.discord_enabled,
+       discord_webhook_url = EXCLUDED.discord_webhook_url,
+       bark_enabled = EXCLUDED.bark_enabled,
+       bark_device_key = EXCLUDED.bark_device_key,
+       notify_new = EXCLUDED.notify_new,
+       notify_due_soon = EXCLUDED.notify_due_soon,
+       notify_done = EXCLUDED.notify_done,
+       notify_expired = EXCLUDED.notify_expired,
+       baseline_at = EXCLUDED.baseline_at,
+       updated_at = now()`,
+    [
+      studentId,
+      cfg.discordEnabled,
+      cfg.discordWebhookUrl,
+      cfg.barkEnabled,
+      cfg.barkDeviceKey,
+      cfg.notifyNew,
+      cfg.notifyDueSoon,
+      cfg.notifyDone,
+      cfg.notifyExpired,
+      cfg.baselineAt,
+    ],
+  );
+}
+
+/**
+ * Atomically claim an event before sending it. Returns the ledger id, or null
+ * when another scan already claimed the same occurrence.
+ */
+export async function claimNotificationEvent(
+  kind: NotificationEventKind,
+  eventKey: string,
+  contentItemId: number | null,
+): Promise<number | null> {
+  const studentId = await getStudentId();
+  const rows = await query<{ id: string }>(
+    `INSERT INTO notification_event(student_id, content_item_id, kind, event_key, status)
+     VALUES ($1,$2,$3,$4,'skipped')
+     ON CONFLICT (student_id, kind, event_key) DO NOTHING
+     RETURNING id`,
+    [studentId, contentItemId, kind, eventKey],
+  );
+  return rows[0] ? Number(rows[0].id) : null;
+}
+
+/** Record the outcome of a claimed event. */
+export async function finishNotificationEvent(
+  id: number,
+  status: NotificationStatus,
+  detail: string | null,
+): Promise<void> {
+  await query("UPDATE notification_event SET status = $2, detail = $3 WHERE id = $1", [
+    id,
+    status,
+    detail,
+  ]);
+}
+
+/** Newest ledger row for the settings UI (last send + last error). */
+export async function getNotificationSummary(): Promise<{
+  lastEventAt: string | null;
+  lastError: string | null;
+}> {
+  const studentId = await getStudentId();
+  const rows = await query<{ status: string; detail: string | null; created_at: Date | string }>(
+    `SELECT status, detail, created_at FROM notification_event
+      WHERE student_id = $1 AND kind <> 'test'
+      ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [studentId],
+  );
+  const row = rows[0];
+  return {
+    lastEventAt: row ? iso(row.created_at) : null,
+    lastError: row && row.status === "failed" ? row.detail : null,
+  };
+}
+
+interface NotificationItemRow {
+  id: string;
+  title: string;
+  course_name: string;
+  module_name: string | null;
+  has_deadline: boolean;
+  deadline_at: Date | string | null;
+  done: boolean;
+  origin: string;
+  created_at: Date | string;
+  done_captured_at: Date | string | null;
+  prev_done: boolean | null;
+  raw_json: { kind?: string; isRecordProgress?: boolean } | null;
+}
+
+const NOTIFICATION_ITEM_SQL = `
+  SELECT v.id, v.title, v.course_name, v.module_name,
+         v.has_deadline, v.deadline_at, v.origin,
+         COALESCE(st.done, false) OR COALESCE(ia.manual_status = 'done', false) AS done,
+         ci.created_at,
+         st.captured_at AS done_captured_at,
+         prev.done AS prev_done,
+         v.raw_json
+    FROM v_exercise_current v
+    JOIN content_item ci ON ci.id = v.id
+    LEFT JOIN item_annotation ia
+      ON ia.content_item_id = v.id AND ia.student_id = $1
+    LEFT JOIN LATERAL (
+      SELECT done, captured_at FROM item_state
+       WHERE content_item_id = v.id
+       ORDER BY captured_at DESC, id DESC LIMIT 1
+    ) st ON true
+    LEFT JOIN LATERAL (
+      SELECT done FROM item_state
+       WHERE content_item_id = v.id
+       ORDER BY captured_at DESC, id DESC OFFSET 1 LIMIT 1
+    ) prev ON true
+   WHERE v.origin = 'tree'`;
+
+/** All tree items (with the fields the notification scanner needs). */
+export async function listNotificationItems(): Promise<NotificationItem[]> {
+  const studentId = await getStudentId();
+  const rows = await query<NotificationItemRow>(`${NOTIFICATION_ITEM_SQL} ORDER BY v.id`, [
+    studentId,
+  ]);
+  return rows.map(toNotificationItem);
+}
+
+function toNotificationItem(r: NotificationItemRow): NotificationItem {
+  return {
+    id: Number(r.id),
+    title: r.title,
+    courseName: r.course_name,
+    moduleName: r.module_name,
+    deadlineAt: r.deadline_at ? iso(r.deadline_at) : null,
+    done: r.done,
+    origin: r.origin,
+    createdAt: iso(r.created_at),
+    doneCapturedAt: r.done_captured_at ? iso(r.done_captured_at) : null,
+    prevDone: r.prev_done,
+    rawKind: r.raw_json?.kind ?? null,
+    isRecordProgress: r.raw_json?.isRecordProgress === true,
+  };
+}
+
+/** One item for an immediate "done" notification. */
+export async function getNotificationItem(id: number): Promise<NotificationItem | null> {
+  const studentId = await getStudentId();
+  const rows = await query<NotificationItemRow>(`${NOTIFICATION_ITEM_SQL} AND v.id = $2 LIMIT 1`, [
+    studentId,
+    id,
+  ]);
+  return rows[0] ? toNotificationItem(rows[0]) : null;
 }

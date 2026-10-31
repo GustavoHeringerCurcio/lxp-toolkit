@@ -619,3 +619,65 @@ export interface SubmissionEntry {
   confirmationAt?: string;
 }
 export type Submissions = Record<string, SubmissionEntry[]>;
+
+// -- Notifications (Discord webhook + Bark) ---------------------------------
+
+/** What triggered a notification. `test` is the manual "send test" action. */
+export type NotificationEventKind = "new" | "due_soon" | "done" | "expired" | "test";
+
+/** Outcome recorded in the `notification_event` ledger. */
+export type NotificationStatus = "sent" | "failed" | "skipped";
+
+export type NotificationChannel = "discord" | "bark";
+
+export interface NotificationChannelResult {
+  channel: NotificationChannel;
+  ok: boolean;
+  error?: string;
+}
+
+/** Full per-student notification configuration (secrets included; server-only). */
+export interface NotificationConfig {
+  discordEnabled: boolean;
+  discordWebhookUrl: string | null;
+  barkEnabled: boolean;
+  barkDeviceKey: string | null;
+  notifyNew: boolean;
+  notifyDueSoon: boolean;
+  notifyDone: boolean;
+  notifyExpired: boolean;
+  /** Start of the notification window; events before this are never replayed. */
+  baselineAt: string;
+  updatedAt: string;
+}
+
+/** One row of the idempotency ledger. */
+export interface NotificationEventRecord {
+  id: number;
+  contentItemId: number | null;
+  kind: NotificationEventKind;
+  eventKey: string;
+  status: NotificationStatus;
+  detail: string | null;
+  createdAt: string;
+}
+
+/** An actionable item as seen by the notification scanner. */
+export interface NotificationItem {
+  id: number;
+  title: string;
+  courseName: string;
+  moduleName: string | null;
+  deadlineAt: string | null;
+  done: boolean;
+  origin: string;
+  createdAt: string;
+  /** When the latest item_state snapshot was captured (null when none). */
+  doneCapturedAt?: string | null;
+  /** Done value from the previous snapshot (null when there was none). */
+  prevDone?: boolean | null;
+  /** Raw portal content kind (`file_upload`, `quiz`, `reading`, ...). */
+  rawKind?: string | null;
+  /** Portal records progress for this item (makes a reading "markable"). */
+  isRecordProgress?: boolean;
+}

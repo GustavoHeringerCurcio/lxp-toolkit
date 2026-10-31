@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  BellRing,
   Bug,
   Check,
   Building2,
@@ -15,12 +16,21 @@ import {
   Puzzle,
   RotateCcw,
   Save,
+  Send,
   SlidersHorizontal,
   Sun,
   UserRound,
   Wand2,
 } from "lucide-react";
-import { saveAiConfig, saveProfile } from "@/api";
+import {
+  fetchNotificationConfig,
+  fmtVersionDate,
+  saveAiConfig,
+  saveNotificationConfig,
+  saveProfile,
+  testNotificationConfig,
+} from "@/api";
+import { BarkIcon, DiscordIcon } from "@/components/icons/notification-icons";
 import { useAppData } from "@/lib/app-state";
 import { BackLink } from "@/components/app-sidebar";
 import { OrganizationSection } from "@/components/organization-section";
@@ -39,15 +49,23 @@ import { useT } from "@/lib/i18n";
 import { useTheme, type Theme } from "@/lib/theme";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { cn } from "@/lib/utils";
-import type { AbilitySettings, AiActivitySections, AiModels, AiProfile, AiStyle } from "@/types";
+import type {
+  AbilitySettings,
+  AiActivitySections,
+  AiModels,
+  AiProfile,
+  AiStyle,
+  NotificationConfigDto,
+  NotificationSaveInput,
+} from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-type SettingsTab = "personal" | "ai" | "exams" | "advanced" | "organizacao";
+type SettingsTab = "personal" | "notifications" | "ai" | "exams" | "advanced" | "organizacao";
 
-const TABS: SettingsTab[] = ["personal", "ai", "exams", "advanced", "organizacao"];
+const TABS: SettingsTab[] = ["personal", "notifications", "ai", "exams", "advanced", "organizacao"];
 
 const DEFAULT_MODELS: AiModels = {
   generation: "gpt-4o",
@@ -113,6 +131,53 @@ function Card({ icon, title, children }: { icon: ReactNode; title: string; child
       </div>
       <div className="space-y-4 p-4">{children}</div>
     </section>
+  );
+}
+
+function ChannelCard({
+  icon,
+  label,
+  hint,
+  checked,
+  onChange,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border bg-card/60 transition-colors",
+        checked ? "border-brand/50 bg-brand/5" : "border-border",
+      )}
+    >
+      <label className="flex cursor-pointer items-start gap-3 p-3">
+        <span
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-lg border",
+            checked ? "border-brand/40 bg-brand/10 text-brand" : "border-border bg-muted/40 text-muted-foreground",
+          )}
+        >
+          {icon}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-foreground/90">{label}</span>
+          <span className="mt-0.5 block text-[11px] text-muted-foreground">{hint}</span>
+        </span>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(ev) => onChange(ev.target.checked)}
+          className="mt-1.5 size-4 shrink-0 accent-brand"
+        />
+      </label>
+      {checked && children && <div className="space-y-2 border-t border-border/60 p-3">{children}</div>}
+    </div>
   );
 }
 
@@ -193,6 +258,14 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [notif, setNotif] = useState<NotificationConfigDto | null>(null);
+  const [discordUrl, setDiscordUrl] = useState("");
+  const [barkKey, setBarkKey] = useState("");
+  const [clearDiscord, setClearDiscord] = useState(false);
+  const [clearBark, setClearBark] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [notifMsg, setNotifMsg] = useState<string | null>(null);
+  const [notifErr, setNotifErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!cfg) return;
@@ -211,6 +284,20 @@ export function SettingsPage() {
     setReadAttachments(cfg.readAttachments !== false);
     setAbilities({ ...cfg.abilities });
   }, [cfg]);
+
+  useEffect(() => {
+    let alive = true;
+    fetchNotificationConfig()
+      .then((value) => {
+        if (alive) setNotif(value);
+      })
+      .catch((x) => {
+        if (alive) setNotifErr(x instanceof Error ? x.message : String(x));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const model = models.generation;
   const selectedModel = findModel(model);
@@ -252,6 +339,59 @@ export function SettingsPage() {
     setErr(null);
   };
 
+  const patchNotif = (patch: Partial<NotificationConfigDto>) => {
+    setNotif((prev) => (prev ? { ...prev, ...patch } : prev));
+    setNotifMsg(null);
+    setNotifErr(null);
+  };
+
+  const persistNotifications = async (): Promise<NotificationConfigDto | null> => {
+    if (!notif) return null;
+    const input: NotificationSaveInput = {
+      discordEnabled: notif.discordEnabled,
+      barkEnabled: notif.barkEnabled,
+      notifyNew: notif.notifyNew,
+      notifyDueSoon: notif.notifyDueSoon,
+      notifyDone: notif.notifyDone,
+      notifyExpired: notif.notifyExpired,
+    };
+    if (clearDiscord) input.clearDiscordWebhook = true;
+    else if (discordUrl.trim()) input.discordWebhookUrl = discordUrl.trim();
+    if (clearBark) input.clearBarkDeviceKey = true;
+    else if (barkKey.trim()) input.barkDeviceKey = barkKey.trim();
+    const saved = await saveNotificationConfig(input);
+    setNotif(saved);
+    setDiscordUrl("");
+    setBarkKey("");
+    setClearDiscord(false);
+    setClearBark(false);
+    return saved;
+  };
+
+  const testNotifications = async () => {
+    setTesting(true);
+    setNotifMsg(null);
+    setNotifErr(null);
+    try {
+      await persistNotifications();
+      const result = await testNotificationConfig();
+      const failed = result.channels.filter((c) => !c.ok);
+      if (failed.length === 0) {
+        setNotifMsg(t("settings.notif.testOk"));
+      } else {
+        setNotifErr(
+          failed
+            .map((c) => `${c.channel === "discord" ? "Discord" : "Bark"}: ${c.error ?? t("settings.notif.testFail")}`)
+            .join(" · "),
+        );
+      }
+    } catch (x) {
+      setNotifErr(x instanceof Error ? x.message : String(x));
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const save = async () => {
     setBusy(true);
     setMsg(null);
@@ -276,6 +416,7 @@ export function SettingsPage() {
         abilities,
       });
       await saveProfile(profile);
+      await persistNotifications();
       patchConfig({
         model: nextModel,
         models: nextModels,
@@ -318,7 +459,7 @@ export function SettingsPage() {
       <div
         role="tablist"
         aria-label={t("settings.tabsAria")}
-        className="flex w-fit items-center gap-0.5 rounded-full border bg-card p-1"
+        className="flex w-fit flex-wrap items-center gap-0.5 rounded-full border bg-card p-1"
       >
         {TABS.map((s) => (
           <button
@@ -389,6 +530,173 @@ export function SettingsPage() {
                 ]}
               />
             </Field>
+          </Card>
+        </>
+      )}
+
+      {tab === "notifications" && (
+        <>
+          <Card icon={<BellRing className="size-4 text-brand" aria-hidden />} title={t("settings.notif.channels")}>
+            <p className="text-xs text-muted-foreground">{t("settings.notif.channelsIntro")}</p>
+            {!notif ? (
+              <p className="text-xs text-muted-foreground">{t("settings.notif.loading")}</p>
+            ) : (
+              <>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <ChannelCard
+                    icon={<DiscordIcon className="size-5" />}
+                    label="Discord"
+                    hint={t("settings.notif.discordHint")}
+                    checked={notif.discordEnabled}
+                    onChange={(v) => patchNotif({ discordEnabled: v })}
+                  >
+                    <Field label={t("settings.notif.discordWebhook")} hint={t("settings.notif.discordWebhookHint")}>
+                      <Input
+                        type="password"
+                        autoComplete="off"
+                        spellCheck={false}
+                        value={discordUrl}
+                        onChange={(ev) => {
+                          setDiscordUrl(ev.target.value);
+                          setClearDiscord(false);
+                          setNotifMsg(null);
+                          setNotifErr(null);
+                        }}
+                        placeholder={
+                          notif.discordConfigured
+                            ? t("settings.notif.configured", { hint: notif.discordHint ?? "…" })
+                            : t("settings.notif.discordPlaceholder")
+                        }
+                      />
+                    </Field>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {notif.discordConfigured ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setClearDiscord(true);
+                            setDiscordUrl("");
+                            patchNotif({ discordConfigured: false, discordHint: null, discordEnabled: false });
+                          }}
+                        >
+                          {t("settings.notif.remove")}
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">
+                          {t("settings.notif.notConfigured")}
+                        </span>
+                      )}
+                    </div>
+                  </ChannelCard>
+
+                  <ChannelCard
+                    icon={<BarkIcon className="size-5" />}
+                    label="Bark"
+                    hint={t("settings.notif.barkHint")}
+                    checked={notif.barkEnabled}
+                    onChange={(v) => patchNotif({ barkEnabled: v })}
+                  >
+                    <Field label={t("settings.notif.barkDeviceKey")} hint={t("settings.notif.barkDeviceKeyHint")}>
+                      <Input
+                        type="password"
+                        autoComplete="off"
+                        spellCheck={false}
+                        value={barkKey}
+                        onChange={(ev) => {
+                          setBarkKey(ev.target.value);
+                          setClearBark(false);
+                          setNotifMsg(null);
+                          setNotifErr(null);
+                        }}
+                        placeholder={
+                          notif.barkConfigured
+                            ? t("settings.notif.configured", { hint: notif.barkHint ?? "…" })
+                            : t("settings.notif.barkPlaceholder")
+                        }
+                      />
+                    </Field>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {notif.barkConfigured ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setClearBark(true);
+                            setBarkKey("");
+                            patchNotif({ barkConfigured: false, barkHint: null, barkEnabled: false });
+                          }}
+                        >
+                          {t("settings.notif.remove")}
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">
+                          {t("settings.notif.notConfigured")}
+                        </span>
+                      )}
+                    </div>
+                  </ChannelCard>
+                </div>
+
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={testNotifications}
+                    disabled={testing || busy}
+                  >
+                    {testing ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
+                    {testing ? t("settings.notif.testing") : t("settings.notif.test")}
+                  </Button>
+                  <Feedback msg={notifMsg} err={notifErr} />
+                  {notif.lastEventAt && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {t("settings.notif.lastEvent", { when: fmtVersionDate(notif.lastEventAt, locale) })}
+                    </p>
+                  )}
+                  {notif.lastError && (
+                    <p className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+                      {notif.lastError}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </Card>
+
+          <Card icon={<BellRing className="size-4 text-brand" aria-hidden />} title={t("settings.notif.events")}>
+            <p className="text-xs text-muted-foreground">{t("settings.notif.eventsIntro")}</p>
+            {notif && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Toggle
+                  label={t("settings.notif.new")}
+                  hint={t("settings.notif.newHint")}
+                  checked={notif.notifyNew}
+                  onChange={(v) => patchNotif({ notifyNew: v })}
+                />
+                <Toggle
+                  label={t("settings.notif.dueSoon")}
+                  hint={t("settings.notif.dueSoonHint")}
+                  checked={notif.notifyDueSoon}
+                  onChange={(v) => patchNotif({ notifyDueSoon: v })}
+                />
+                <Toggle
+                  label={t("settings.notif.done")}
+                  hint={t("settings.notif.doneHint")}
+                  checked={notif.notifyDone}
+                  onChange={(v) => patchNotif({ notifyDone: v })}
+                />
+                <Toggle
+                  label={t("settings.notif.expired")}
+                  hint={t("settings.notif.expiredHint")}
+                  checked={notif.notifyExpired}
+                  onChange={(v) => patchNotif({ notifyExpired: v })}
+                />
+              </div>
+            )}
           </Card>
         </>
       )}
