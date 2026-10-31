@@ -133,6 +133,24 @@ Only the static UI and the thin proxy are serverless-friendly.
 
 ## 8. Cron / auto-update
 
+**Local Docker (desktop):** the `app` process runs an in-process scheduler
+(`src/refresh-scheduler.ts`, enabled with `AUTO_REFRESH=1` in the compose env). It persists every
+finished run in `refresh_run` and uses that history to implement:
+
+- **boot catch-up** — the first start of the day refreshes if no success was recorded today
+  (the desktop is usually off overnight), after `REFRESH_BOOT_DELAY_SECONDS` (120);
+- **fixed slots** — `REFRESH_AT` (`11:00`, or a list like `11:00,18:00`) in `REFRESH_TZ`;
+  one success per slot, and an early catch-up satisfies the first slot;
+- **quiet hours** — automatic runs wait between `REFRESH_QUIET_START`/`REFRESH_QUIET_END`
+  (22:00–10:30); the manual **Atualizar** button bypasses them;
+- **retry/backoff** — `REFRESH_RETRY_MINUTES` (60), capped at `REFRESH_MAX_ATTEMPTS` (3/day).
+
+The scheduler and the **Atualizar** button share the same `refresh.ts` controller, so they never
+overlap. Tuning for Docker lives in a gitignored root `.env` (Compose interpolation); host runs use
+`apps/server/.env`.
+
+**Production VM (always on):**
+
 - `deploy/refresh.service` (oneshot) + `deploy/refresh.timer` (`OnCalendar=*-*-* 06:00:00`,
   `Persistent=true`, `RandomizedDelaySec=30m`).
 - The unit `curl`s `POST http://127.0.0.1:4174/api/refresh` with the bearer token from

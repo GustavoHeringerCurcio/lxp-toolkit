@@ -65,6 +65,12 @@ Full detail: `agent-docs/10-deployment.md`.
   preflight fails before scraping when the DB is unreachable). The content tree is
   the only source for the catalog; the gradebook is dumped separately for the human-readable
   `scraped/grades-*.md` surfaces, not merged into the task list.
+- **Daily auto-refresh:** the `app` process schedules refreshes (`src/refresh-scheduler.ts`) when
+  `AUTO_REFRESH=1` (Docker Compose default). It runs a **boot catch-up** on the first start of the
+  day when `refresh_run` has no `ok` row today, plus fixed `REFRESH_AT` slots (`11:00`; list for
+  more) in `REFRESH_TZ`, quiet hours `REFRESH_QUIET_START`-`REFRESH_QUIET_END` (22:00-10:30), and
+  retries (60 min, max 3/day). Manual **Atualizar** shares the same controller and bypasses quiet
+  hours. History lives in `refresh_run` (migration `0018`); Docker tuning is in a root `.env`.
 - **God's Eye (hidden topics):** the portal's topic-detail endpoint serves content by id even when
   the topic is absent from the student's content tree. `npm run dump` harvests those topics
   (`content.ts::harvestHiddenTopics`, cached in `scraped/raw/hidden-index.json`) and appends them

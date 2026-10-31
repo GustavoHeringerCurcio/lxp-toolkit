@@ -153,6 +153,40 @@ frontend or server code, rebuild with `docker compose up -d --build`. Ports are 
 `127.0.0.1` only. If host port `5434` is already taken by another Postgres, override it:
 `LXP_DB_PORT=5435 docker compose up -d`.
 
+### Automatic daily refresh
+
+The `app` container refreshes the portal content by itself, then rebuilds the activity list.
+The manual **Atualizar** button keeps working and never overlaps a scheduled run.
+
+- **First start of the day is the trigger.** If the containers were off when the daily time
+  passed, the next start runs the catch-up after a short delay (`REFRESH_BOOT_DELAY_SECONDS`,
+  default 120s). Restarting the containers later the same day does **not** scrape again.
+- **Fallback while the machine stays on:** `REFRESH_AT` (default `11:00`,
+  `America/Sao_Paulo`). Set a comma-separated list for more than one run/day, e.g.
+  `REFRESH_AT=11:00,18:00`.
+- **Quiet hours:** automatic runs are deferred between `REFRESH_QUIET_START` (22:00) and
+  `REFRESH_QUIET_END` (10:30); set either to empty to disable the window. The **Atualizar**
+  button always works.
+- **Failures** retry after `REFRESH_RETRY_MINUTES` (60), up to `REFRESH_MAX_ATTEMPTS` (3/day).
+- The last run is persisted in Postgres (`refresh_run`), which is what makes the catch-up
+  decision survive container restarts.
+
+Configure it from a **root `.env`** next to `docker-compose.yml` (gitignored; Docker Compose
+reads it for interpolation) and restart the containers:
+
+```dotenv
+AUTO_REFRESH=1
+REFRESH_AT=11:00
+REFRESH_TZ=America/Sao_Paulo
+REFRESH_BOOT_DELAY_SECONDS=120
+REFRESH_QUIET_START=22:00
+REFRESH_QUIET_END=10:30
+```
+
+To switch to two refreshes per day: `REFRESH_AT=11:00,18:00`. To disable automatic runs:
+`AUTO_REFRESH=0`. For host runs (`npm run dev` / `npm run web`) the scheduler is off by default;
+set `AUTO_REFRESH=1` in `apps/server/.env` to enable it there.
+
 ### Fresh clone
 
 Everything personal (`scraped/`, `.env`, `data/`) is gitignored, so a clone starts clean:
