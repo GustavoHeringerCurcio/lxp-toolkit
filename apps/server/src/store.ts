@@ -1254,6 +1254,88 @@ export async function deleteProjectSourceFile(id: number): Promise<boolean> {
   return rows.length > 0;
 }
 
+export type RefreshRunSource = "manual" | "scheduled" | "boot";
+export type RefreshRunStatus = "ok" | "failed";
+
+export interface RefreshRunRecord {
+  source: RefreshRunSource;
+  status: RefreshRunStatus;
+  startedAt: string;
+  finishedAt: string;
+  error: string | null;
+  warning: string | null;
+}
+
+export interface RefreshScheduleState {
+  /** Finished time of the most recent successful run, if any. */
+  lastSuccessAt: string | null;
+  /** Finished time of the most recent run (success or failure), if any. */
+  lastAttemptAt: string | null;
+  /** Most recent runs, newest first (bounded so the scheduler can inspect the day). */
+  recent: RefreshRunRecord[];
+}
+
+interface RefreshRunRow {
+  source: string;
+  status: string;
+  started_at: Date | string;
+  finished_at: Date | string;
+  error: string | null;
+  warning: string | null;
+}
+
+/** Persist the outcome of a refresh run (manual or scheduled). */
+export async function recordRefreshRun(run: RefreshRunRecord): Promise<void> {
+  await query(
+    `INSERT INTO refresh_run(source, status, started_at, finished_at, error, warning)
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [
+      run.source,
+      run.status,
+      run.startedAt,
+      run.finishedAt,
+      run.error ?? null,
+      run.warning ?? null,
+    ],
+  );
+}
+
+/**
+ * Read the recent refresh history for the scheduler. Returns the last success
+ * and last attempt plus the recent rows so the scheduler can work out which
+ * daily slot (if any) is still due.
+ */
+export async function getRefreshScheduleState(limit = 30): Promise<RefreshScheduleState> {
+  const [rows, successRows] = await Promise.all([
+    query<RefreshRunRow>(
+      `SELECT source, status, started_at, finished_at, error, warning
+         FROM refresh_run
+        ORDER BY finished_at DESC, id DESC
+        LIMIT $1`,
+      [limit],
+    ),
+    query<{ finished_at: Date | string }>(
+      `SELECT finished_at FROM refresh_run
+        WHERE status = 'ok'
+        ORDER BY finished_at DESC, id DESC
+        LIMIT 1`,
+    ),
+  ]);
+  const recent: RefreshRunRecord[] = rows.map((r) => ({
+    source: r.source as RefreshRunSource,
+    status: r.status as RefreshRunStatus,
+    startedAt: iso(r.started_at),
+    finishedAt: iso(r.finished_at),
+    error: r.error,
+    warning: r.warning,
+  }));
+  return {
+    lastSuccessAt: successRows[0] ? iso(successRows[0].finished_at) : null,
+    lastAttemptAt: recent[0]?.finishedAt ?? null,
+    recent,
+  };
+}
+
 /** Concatenate extracted text from the student's project files, capped. */
 export async function projectSourceText(maxChars: number): Promise<string> {
   const studentId = await getStudentId();

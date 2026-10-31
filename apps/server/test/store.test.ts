@@ -5,8 +5,10 @@ import {
   clearAnswerHistory,
   getAnswers,
   getOverrides,
+  getRefreshScheduleState,
   getStudentId,
   lastSubmission,
+  recordRefreshRun,
   restoreAnswerVersion,
   saveAiRequest,
   saveAnswerVersion,
@@ -100,5 +102,27 @@ describe.skipIf(!enabled)("store (Postgres)", () => {
     const last = await lastSubmission(ITEM);
     expect(last?.status).toBe("ok");
     expect(last?.detail).toBe("enviado");
+  });
+
+  it("registra refresh runs e expõe o último sucesso", async () => {
+    const startedAt = "2099-01-02T03:04:05.000Z";
+    const finishedAt = "2099-01-02T03:05:06.000Z";
+    await recordRefreshRun({
+      source: "manual",
+      status: "ok",
+      startedAt,
+      finishedAt,
+      error: null,
+      warning: "parcial",
+    });
+    try {
+      const state = await getRefreshScheduleState(5);
+      expect(state.lastSuccessAt).toBe(finishedAt);
+      expect(state.recent[0]?.finishedAt).toBe(finishedAt);
+      expect(state.recent[0]?.source).toBe("manual");
+      expect(state.recent[0]?.warning).toBe("parcial");
+    } finally {
+      await query("DELETE FROM refresh_run WHERE finished_at = $1", [finishedAt]);
+    }
   });
 });
