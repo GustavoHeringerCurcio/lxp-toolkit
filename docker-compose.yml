@@ -50,6 +50,22 @@ services:
       PORT: "4174"
       # Chromium cannot use its sandbox inside a normal Docker container.
       PLAYWRIGHT_NO_SANDBOX: "true"
+      # Daily auto-refresh. The desktop is off overnight, so the first start of
+      # the day is the real trigger (boot catch-up); REFRESH_AT is the fallback
+      # for days the machine stays on. Toggle these in a root .env (gitignored)
+      # without editing this file, e.g.:
+      #   REFRESH_AT=11:00,18:00   # two refreshes per day
+      #   AUTO_REFRESH=0           # disable automatic refreshes
+      AUTO_REFRESH: "${AUTO_REFRESH:-1}"
+      REFRESH_AT: "${REFRESH_AT:-11:00}"
+      REFRESH_TZ: "${REFRESH_TZ:-America/Sao_Paulo}"
+      REFRESH_BOOT_DELAY_SECONDS: "${REFRESH_BOOT_DELAY_SECONDS:-120}"
+      # Single-dash interpolation so an empty value disables the quiet window.
+      REFRESH_QUIET_START: "${REFRESH_QUIET_START-22:00}"
+      REFRESH_QUIET_END: "${REFRESH_QUIET_END-10:30}"
+      REFRESH_RETRY_MINUTES: "${REFRESH_RETRY_MINUTES:-60}"
+      REFRESH_MAX_ATTEMPTS: "${REFRESH_MAX_ATTEMPTS:-3}"
+      REFRESH_HEADFUL_RETRY: "${REFRESH_HEADFUL_RETRY:-0}"
     volumes:
       - ./scraped:/data/scraped
       - ./apps/server/data:/app/apps/server/data

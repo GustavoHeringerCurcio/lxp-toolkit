@@ -46,6 +46,9 @@ services:
       OUT_DIR: /data/scraped
       PORT: "4174"
       TOOLKIT_TOKEN: ${TOOLKIT_TOKEN:-}
+      # The VM is always on and uses deploy/refresh.timer; keep the in-process
+      # desktop scheduler off here to avoid running twice.
+      AUTO_REFRESH: "0"
       # Chromium cannot use its sandbox inside the container; the scraper and
       # the diagram renderer both honor this flag.
       PLAYWRIGHT_NO_SANDBOX: "true"
