@@ -19,6 +19,7 @@ import {
   RefreshProvider,
   ContentRefreshBanner,
   ContentRefreshButton,
+  LastRefresh,
   usePortalRefresh,
 } from "@/components/content-refresh";
 import { AgoraPage } from "@/pages/agora";
@@ -105,6 +106,7 @@ function Shell() {
             >
               <Settings2 />
             </Link>
+            <LastRefresh state={refreshState} />
             <ContentRefreshButton state={refreshState} onStart={startRefresh} />
             <LanguageToggle />
             <ThemeToggle />

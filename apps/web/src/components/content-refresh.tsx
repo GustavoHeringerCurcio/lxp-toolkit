@@ -147,6 +147,50 @@ export function usePortalRefresh(): PortalRefreshValue {
   return ctx;
 }
 
+/** Default clock reference for the last-refresh label. */
+export const DEFAULT_REFRESH_TZ = "America/Sao_Paulo";
+
+/** Format an ISO timestamp in the scheduler's timezone (São Paulo by default). */
+export function formatLastRefresh(
+  iso: string | null | undefined,
+  locale: string,
+  timeZone: string = DEFAULT_REFRESH_TZ,
+): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  let zone = timeZone;
+  try {
+    new Intl.DateTimeFormat(locale, { timeZone: zone }).format(date);
+  } catch {
+    zone = DEFAULT_REFRESH_TZ;
+  }
+  return new Intl.DateTimeFormat(locale, {
+    timeZone: zone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+}
+
+/** Small header label with the last successful refresh date/time. */
+export function LastRefresh({ state }: { state: RefreshStatus }) {
+  const { t, locale } = useT();
+  const timeZone = state.auto?.timezone || DEFAULT_REFRESH_TZ;
+  const when = formatLastRefresh(state.lastSuccessAt, locale, timeZone) ?? t("refresh.never");
+  return (
+    <span
+      className="hidden shrink-0 text-[11px] text-muted-foreground lg:inline"
+      title={t("refresh.lastAtTitle", { when, tz: timeZone })}
+    >
+      {t("refresh.lastAt", { when })}
+    </span>
+  );
+}
+
 export function ContentRefreshButton({
   state,
   onStart,
@@ -154,11 +198,10 @@ export function ContentRefreshButton({
   state: RefreshStatus;
   onStart: () => void;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const auto = state.auto;
-  const last = state.lastSuccessAt
-    ? new Date(state.lastSuccessAt).toLocaleString()
-    : t("refresh.never");
+  const timeZone = auto?.timezone || DEFAULT_REFRESH_TZ;
+  const last = formatLastRefresh(state.lastSuccessAt, locale, timeZone) ?? t("refresh.never");
   const title = auto?.enabled
     ? t("refresh.buttonTitleAuto", { slots: auto.slots.join(", "), last })
     : t("refresh.buttonTitle");

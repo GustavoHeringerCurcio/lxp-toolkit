@@ -708,6 +708,8 @@ export const en: Dict = {
   "refresh.failed": "Failed to refresh: {{error}}",
   "refresh.buttonTitleAuto": "Automatic: {{slots}} · last {{last}}",
   "refresh.never": "never",
+  "refresh.lastAt": "Updated: {{when}}",
+  "refresh.lastAtTitle": "Last refresh: {{when}} ({{tz}})",
   "refresh.warning": "Partial refresh: {{warning}}",
 
   // server-provided refresh steps (translated client-side)
@@ -749,7 +751,7 @@ export const en: Dict = {
 
   // design page
   "design.system": "System",
-  "design.folio": "Design · Folio",
+  "design.folio": "Design - Mono",
   "design.brand": "Brand",
   "design.subjects": "Subject identity",
   "design.intro": "Living guide to the design system. The source of truth is",

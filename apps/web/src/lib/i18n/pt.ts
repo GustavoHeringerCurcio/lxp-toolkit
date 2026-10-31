@@ -713,6 +713,8 @@ export const pt = {
   "refresh.failed": "Falha ao atualizar: {{error}}",
   "refresh.buttonTitleAuto": "Atualização automática: {{slots}} · última {{last}}",
   "refresh.never": "nunca",
+  "refresh.lastAt": "Atualizado: {{when}}",
+  "refresh.lastAtTitle": "Última atualização: {{when}} ({{tz}})",
   "refresh.warning": "Atualização parcial: {{warning}}",
 
   // server-provided refresh steps (translated client-side)
@@ -754,7 +756,7 @@ export const pt = {
 
   // design page
   "design.system": "Sistema",
-  "design.folio": "Design · Folio",
+  "design.folio": "Design - Mono",
   "design.brand": "Marca",
   "design.subjects": "Identidade por matéria",
   "design.intro":

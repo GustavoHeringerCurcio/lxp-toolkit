@@ -4,6 +4,8 @@ import { LangProvider } from "@/lib/i18n";
 import {
   ContentRefreshBanner,
   ContentRefreshButton,
+  LastRefresh,
+  formatLastRefresh,
   useContentRefresh,
 } from "@/components/content-refresh";
 import type { RefreshScheduleStatus, RefreshStatus } from "@/api";
@@ -282,6 +284,42 @@ describe("ContentRefreshButton", () => {
     );
 
     expect(screen.getByRole("button").getAttribute("title")).toContain("11:00, 18:00");
+  });
+});
+
+describe("formatLastRefresh", () => {
+  it("converte UTC para o fuso de São Paulo", () => {
+    const formatted = formatLastRefresh("2026-10-31T00:42:45.728Z", "pt-BR");
+    expect(formatted).toContain("30/10/2026");
+    expect(formatted).toContain("21:42");
+  });
+
+  it("retorna null para ausente ou inválido", () => {
+    expect(formatLastRefresh(null, "pt-BR")).toBeNull();
+    expect(formatLastRefresh("not-a-date", "pt-BR")).toBeNull();
+  });
+});
+
+describe("LastRefresh", () => {
+  afterEach(cleanup);
+
+  it("mostra a última atualização no fuso de São Paulo", () => {
+    localStorage.setItem("pauta-lang", "pt");
+    render(
+      <LangProvider>
+        <LastRefresh
+          state={status({
+            auto: schedule(),
+            lastSuccessAt: "2026-10-31T00:42:45.728Z",
+          })}
+        />
+      </LangProvider>,
+    );
+
+    const label = screen.getByText(/Atualizado:/);
+    expect(label.textContent).toContain("30/10/2026");
+    expect(label.textContent).toContain("21:42");
+    expect(label.getAttribute("title")).toContain("America/Sao_Paulo");
   });
 });
 
