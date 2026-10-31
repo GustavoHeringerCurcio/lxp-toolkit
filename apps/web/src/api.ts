@@ -299,6 +299,18 @@ export async function setActivityAbility(
   return body.abilities ?? {};
 }
 
+export interface RefreshScheduleStatus {
+  enabled: boolean;
+  slots: string[];
+  timezone: string;
+  quietHours: { start: string; end: string } | null;
+  bootDelaySeconds: number;
+  lastCheckAt: string | null;
+  lastSuccessAt: string | null;
+  nextSlot: string | null;
+  lastDecision: string | null;
+}
+
 export interface RefreshStatus {
   running: boolean;
   step: string;
@@ -308,6 +320,10 @@ export interface RefreshStatus {
   startedAt: string | null;
   finishedAt: string | null;
   log?: string;
+  /** Finished time of the most recent successful refresh (from Postgres). */
+  lastSuccessAt?: string | null;
+  /** Daily scheduler configuration and last decision. */
+  auto?: RefreshScheduleStatus;
 }
 
 /** Ask the server to scrape fresh portal content and rebuild the list. */

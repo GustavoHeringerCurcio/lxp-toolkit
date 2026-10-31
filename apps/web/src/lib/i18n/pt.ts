@@ -711,6 +711,8 @@ export const pt = {
   "refresh.updating": "Atualizando…",
   "refresh.update": "Atualizar",
   "refresh.failed": "Falha ao atualizar: {{error}}",
+  "refresh.buttonTitleAuto": "Atualização automática: {{slots}} · última {{last}}",
+  "refresh.never": "nunca",
   "refresh.warning": "Atualização parcial: {{warning}}",
 
   // server-provided refresh steps (translated client-side)

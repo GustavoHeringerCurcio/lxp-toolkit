@@ -6,7 +6,7 @@ import {
   ContentRefreshButton,
   useContentRefresh,
 } from "@/components/content-refresh";
-import type { RefreshStatus } from "@/api";
+import type { RefreshScheduleStatus, RefreshStatus } from "@/api";
 
 vi.mock("@/api", () => ({
   startContentRefresh: vi.fn(),
@@ -25,6 +25,21 @@ function status(over: Partial<RefreshStatus> = {}): RefreshStatus {
     error: null,
     startedAt: null,
     finishedAt: null,
+    ...over,
+  };
+}
+
+function schedule(over: Partial<RefreshScheduleStatus> = {}): RefreshScheduleStatus {
+  return {
+    enabled: true,
+    slots: ["11:00"],
+    timezone: "America/Sao_Paulo",
+    quietHours: { start: "22:00", end: "10:30" },
+    bootDelaySeconds: 120,
+    lastCheckAt: null,
+    lastSuccessAt: null,
+    nextSlot: "11:00",
+    lastDecision: null,
     ...over,
   };
 }
@@ -153,6 +168,83 @@ describe("useContentRefresh", () => {
     expect(screen.getByTestId("error").textContent).toBe("offline");
     expect(onDone).not.toHaveBeenCalled();
   });
+
+  it("recarrega quando um refresh de fundo termina entre polls", async () => {
+    statusMock
+      .mockResolvedValueOnce(status({ lastSuccessAt: "2026-10-30T10:00:00.000Z" }))
+      .mockResolvedValueOnce(status({ lastSuccessAt: "2026-10-30T11:00:00.000Z" }))
+      .mockResolvedValue(status({ lastSuccessAt: "2026-10-30T11:00:00.000Z" }));
+    const onDone = vi.fn();
+
+    renderHarness(onDone);
+    await act(async () => {});
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(onDone).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("adota um refresh de fundo e recarrega ao terminar", async () => {
+    statusMock
+      .mockResolvedValueOnce(status({ lastSuccessAt: "2026-10-30T10:00:00.000Z" }))
+      .mockResolvedValueOnce(
+        status({ running: true, step: "Buscando", lastSuccessAt: "2026-10-30T10:00:00.000Z" }),
+      )
+      .mockResolvedValueOnce(
+        status({ running: true, step: "Buscando", lastSuccessAt: "2026-10-30T10:00:00.000Z" }),
+      )
+      .mockResolvedValueOnce(
+        status({ running: false, step: "Concluído", lastSuccessAt: "2026-10-30T11:00:00.000Z" }),
+      );
+    const onDone = vi.fn();
+
+    renderHarness(onDone);
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
+    expect(screen.getByTestId("running").textContent).toBe("true");
+    expect(screen.getByTestId("step").textContent).toBe("Buscando");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("running").textContent).toBe("false");
+  });
+
+  it("não recarrega de novo depois de um refresh manual", async () => {
+    statusMock
+      .mockResolvedValueOnce(status({ lastSuccessAt: "2026-10-30T10:00:00.000Z" }))
+      .mockResolvedValueOnce(status({ running: true }))
+      .mockResolvedValueOnce(
+        status({ running: false, lastSuccessAt: "2026-10-30T11:00:00.000Z" }),
+      )
+      .mockResolvedValue(status({ running: false, lastSuccessAt: "2026-10-30T11:00:00.000Z" }));
+    startMock.mockResolvedValue(undefined);
+    const onDone = vi.fn();
+
+    renderHarness(onDone);
+    await act(async () => {});
+    fireEvent.click(screen.getByText("go"));
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    expect(onDone).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("ContentRefreshButton", () => {
@@ -174,6 +266,22 @@ describe("ContentRefreshButton", () => {
     );
     expect(screen.getByRole("button")).toBeEnabled();
     expect(screen.getByText("Atualizar")).toBeInTheDocument();
+  });
+
+  it("mostra o horário automático e a última atualização no título", () => {
+    render(
+      <LangProvider>
+        <ContentRefreshButton
+          state={status({
+            auto: schedule({ slots: ["11:00", "18:00"] }),
+            lastSuccessAt: "2026-10-30T11:00:00.000Z",
+          })}
+          onStart={() => {}}
+        />
+      </LangProvider>,
+    );
+
+    expect(screen.getByRole("button").getAttribute("title")).toContain("11:00, 18:00");
   });
 });
 

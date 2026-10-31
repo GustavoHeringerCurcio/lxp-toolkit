@@ -32,6 +32,10 @@ export function useContentRefresh(onDone: () => void) {
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   const activeRef = useRef(false);
+  // Baseline for the background watcher: a changed `lastSuccessAt` means an
+  // automatic run finished and the open tab should reload its data.
+  const seenReadyRef = useRef(false);
+  const seenSuccessRef = useRef<string | null>(null);
 
   const poll = useCallback(async () => {
     for (;;) {
@@ -51,6 +55,7 @@ export function useContentRefresh(onDone: () => void) {
       setState(next);
       if (!next.running) {
         activeRef.current = false;
+        if (next.lastSuccessAt !== undefined) seenSuccessRef.current = next.lastSuccessAt;
         if (!next.error) onDoneRef.current();
         return;
       }
@@ -73,19 +78,45 @@ export function useContentRefresh(onDone: () => void) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const check = async (): Promise<void> => {
       try {
         const s = await fetchRefreshStatus();
-        if (cancelled || !s.running) return;
-        activeRef.current = true;
-        setState(s);
-        await poll();
+        if (cancelled) return;
+        const first = !seenReadyRef.current;
+        if (first) {
+          seenReadyRef.current = true;
+          seenSuccessRef.current = s.lastSuccessAt ?? null;
+        }
+        if (s.running && !activeRef.current) {
+          // A background (scheduled) run is in progress: adopt it and show the
+          // same progress banner the manual flow uses.
+          activeRef.current = true;
+          setState(s);
+          await poll();
+        } else if (!s.running && !activeRef.current) {
+          const prev = seenSuccessRef.current;
+          const next = s.lastSuccessAt ?? null;
+          if (next !== prev) {
+            seenSuccessRef.current = next;
+            if (next) onDoneRef.current();
+          }
+          // Populate the header tooltip with the scheduler slots/last run
+          // without forcing a re-render on every idle poll.
+          if (first) setState({ ...s, running: false });
+        }
       } catch {
-        // rota indisponível ou servidor offline: ignora
+        // rota indisponA-vel ou servidor offline: tenta de novo no próximo ciclo
+      } finally {
+        if (!cancelled) timer = setTimeout(() => void check(), 60_000);
       }
-    })();
+    };
+
+    void check();
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [poll]);
 
@@ -124,13 +155,20 @@ export function ContentRefreshButton({
   onStart: () => void;
 }) {
   const { t } = useT();
+  const auto = state.auto;
+  const last = state.lastSuccessAt
+    ? new Date(state.lastSuccessAt).toLocaleString()
+    : t("refresh.never");
+  const title = auto?.enabled
+    ? t("refresh.buttonTitleAuto", { slots: auto.slots.join(", "), last })
+    : t("refresh.buttonTitle");
   return (
     <Button
       variant="ghost"
       size="sm"
       onClick={onStart}
       disabled={state.running}
-      title={t("refresh.buttonTitle")}
+      title={title}
       aria-label={t("refresh.buttonAria")}
     >
       {state.running ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}

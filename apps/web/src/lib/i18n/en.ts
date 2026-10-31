@@ -706,6 +706,8 @@ export const en: Dict = {
   "refresh.updating": "Updating…",
   "refresh.update": "Refresh",
   "refresh.failed": "Failed to refresh: {{error}}",
+  "refresh.buttonTitleAuto": "Automatic: {{slots}} · last {{last}}",
+  "refresh.never": "never",
   "refresh.warning": "Partial refresh: {{warning}}",
 
   // server-provided refresh steps (translated client-side)
