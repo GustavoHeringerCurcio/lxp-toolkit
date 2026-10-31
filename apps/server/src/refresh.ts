@@ -25,15 +25,37 @@ export interface RefreshConfig {
   /** Injectable for tests; defaults to the real `spawnCommand`. */
   spawn?: (command: string, args: string[], options?: SpawnOptions) => ChildProcess;
   env?: NodeJS.ProcessEnv;
+  /**
+   * Called once per finished run (success or failure) with a snapshot of the
+   * final state. The server uses it to persist `refresh_run` rows.
+   */
+  onFinish?: (state: RefreshState, source: RefreshSource) => void | Promise<void>;
+  /**
+   * Retry headful when the portal demands a reCAPTCHA. Defaults to `true`
+   * (useful on a desktop); the container sets it to `false` because there is
+   * no display to show the browser window.
+   */
+  headfulRetry?: boolean;
+}
+
+/** Who triggered a run. Persisted with the `refresh_run` history row. */
+export type RefreshSource = "manual" | "scheduled" | "boot";
+
+/**
+ * Whether the headful reCAPTCHA retry is enabled for a raw env value.
+ * Defaults to enabled; `0`, `false`, `no` and `off` disable it.
+ */
+export function headfulRetryEnabled(value: string | undefined): boolean {
+  return !/^(0|false|no|off)$/i.test(value?.trim() ?? "");
 }
 
 export interface RefreshController {
   /** Kick off a run. Returns `false` when one is already in progress. */
-  start(): boolean;
+  start(source?: RefreshSource): boolean;
   /** Live state (mutated in place; safe to serialize). */
   status(): RefreshState;
   /** Awaitable run, used by tests. */
-  run(): Promise<void>;
+  run(source?: RefreshSource): Promise<void>;
 }
 
 const defaultNpm = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -107,7 +129,7 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
       : "A varredura do Olho de Deus foi parcial. Rode a atualização novamente para completar.";
   }
 
-  async function run(): Promise<void> {
+  async function run(source: RefreshSource = "manual"): Promise<void> {
     if (state.running) return;
     state.running = true;
     state.step = "Iniciando…";
@@ -156,7 +178,7 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
     } catch (err) {
       // If the portal demanded a reCAPTCHA, retry the scrape once headful so the
       // user can solve it in the browser window (the run auto-continues).
-      if (!headfulRetryUsed && /reCAPTCHA/i.test(state.log)) {
+      if (config.headfulRetry !== false && !headfulRetryUsed && /reCAPTCHA/i.test(state.log)) {
         headfulRetryUsed = true;
         appendLog("\nreCAPTCHA detectado — abrindo o navegador para você resolver…\n");
         try {
@@ -173,15 +195,27 @@ export function createRefreshController(config: RefreshConfig): RefreshControlle
         state.step = "Falhou";
       }
     } finally {
-      state.running = false;
       state.finishedAt = new Date().toISOString();
+      // Persist before clearing `running`, so a scheduler tick cannot observe
+      // an unrecorded run and start a duplicate in the few milliseconds the
+      // DB write takes.
+      if (config.onFinish) {
+        try {
+          await config.onFinish({ ...state, running: false }, source);
+        } catch (err) {
+          console.error(
+            `[refresh] onFinish: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+      state.running = false;
     }
   }
 
   return {
-    start(): boolean {
+    start(source: RefreshSource = "manual"): boolean {
       if (state.running) return false;
-      void run();
+      void run(source);
       return true;
     },
     status(): RefreshState {

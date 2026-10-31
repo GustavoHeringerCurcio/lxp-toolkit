@@ -1,7 +1,11 @@
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
-import { createRefreshController, type RefreshConfig } from "../src/refresh.js";
+import {
+  createRefreshController,
+  headfulRetryEnabled,
+  type RefreshConfig,
+} from "../src/refresh.js";
 
 interface SpawnSpec {
   stdout?: string;
@@ -181,5 +185,65 @@ describe("createRefreshController", () => {
     expect(state.running).toBe(false);
     expect(state.step).toBe("Falhou");
     expect(state.error).toMatch(/spawn EINVAL/);
+  });
+
+  it("não tenta headful quando desabilitado", async () => {
+    const { spawn, calls } = createFakeSpawn([
+      { code: 0 },
+      { stdout: "erro: reCAPTCHA exigido", code: 1 },
+    ]);
+    const controller = createRefreshController({
+      repoRoot: "C:/repo",
+      assistantDir: "C:/repo/apps/server",
+      npm: "npm",
+      env: {},
+      spawn,
+      headfulRetry: false,
+    });
+
+    await controller.run();
+
+    expect(calls).toHaveLength(2);
+    expect(controller.status().step).toBe("Falhou");
+    expect(controller.status().error).toMatch(/reCAPTCHA/);
+  });
+
+  it("chama onFinish com o snapshot final e a origem", async () => {
+    const { spawn } = createFakeSpawn([
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+      { code: 0 },
+    ]);
+    const finished: { source: string; running: boolean; error: string | null }[] = [];
+    const controller = createRefreshController({
+      repoRoot: "C:/repo",
+      assistantDir: "C:/repo/apps/server",
+      npm: "npm",
+      env: {},
+      spawn,
+      onFinish: (state, source) => {
+        finished.push({ source, running: state.running, error: state.error });
+      },
+    });
+
+    await controller.run("scheduled");
+
+    expect(finished).toEqual([{ source: "scheduled", running: false, error: null }]);
+  });
+});
+
+describe("headfulRetryEnabled", () => {
+  it("defaults to enabled", () => {
+    expect(headfulRetryEnabled(undefined)).toBe(true);
+    expect(headfulRetryEnabled("")).toBe(true);
+    expect(headfulRetryEnabled("1")).toBe(true);
+  });
+
+  it("accepts the common false spellings", () => {
+    for (const value of ["0", "false", "FALSE", "no", "off", " off "]) {
+      expect(headfulRetryEnabled(value), value).toBe(false);
+    }
   });
 });
