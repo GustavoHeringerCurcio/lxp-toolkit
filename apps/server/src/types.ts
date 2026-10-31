@@ -359,6 +359,11 @@ export interface AiConfig {
   max_output_tokens?: number;
   /** Auto-detect project context for answerable activities (default true). */
   projectAutoDetect?: boolean;
+  /**
+   * Send PDFs/images to the generation model so it can see diagrams and
+   * scanned pages (default true). Text extraction remains the fallback.
+   */
+  readAttachments?: boolean;
   /** Structured writing rules (system message). */
   style: AiStyle;
   /** Which activity sections are included in the user message. */

@@ -283,6 +283,8 @@ export interface AiConfigDto {
   activitySections: AiActivitySections;
   /** Auto-detect project context for answerable activities. */
   projectAutoDetect: boolean;
+  /** Send PDFs/images to the model so it can read diagrams and scans. */
+  readAttachments: boolean;
   /** Global AI ability switches. */
   abilities: AbilitySettings;
   /** Ability registry (labels/descriptions for the UI). */

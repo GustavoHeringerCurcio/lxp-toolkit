@@ -682,6 +682,7 @@ const server = createServer(async (req, res) => {
         style: cfg.style,
         activitySections: cfg.activitySections,
         projectAutoDetect: cfg.projectAutoDetect ?? true,
+        readAttachments: cfg.readAttachments ?? true,
         abilities: cfg.abilities,
         abilityRegistry: ABILITY_REGISTRY,
         profile: await getProfile(),
@@ -1411,6 +1412,9 @@ const server = createServer(async (req, res) => {
         if (typeof b.projectAutoDetect === "boolean") {
           next.projectAutoDetect = b.projectAutoDetect;
         }
+        if (typeof b.readAttachments === "boolean") {
+          next.readAttachments = b.readAttachments;
+        }
         if (b.abilities && typeof b.abilities === "object" && !Array.isArray(b.abilities)) {
           next.abilities = mergeAbilities({ ...next.abilities, ...(b.abilities as Record<string, unknown>) });
         }
@@ -1425,6 +1429,7 @@ const server = createServer(async (req, res) => {
           style: next.style,
           activitySections: next.activitySections,
           projectAutoDetect: next.projectAutoDetect ?? true,
+          readAttachments: next.readAttachments ?? true,
         });
       }
       if (url === "/api/gate") {

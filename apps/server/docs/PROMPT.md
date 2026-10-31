@@ -75,6 +75,13 @@ Observações do aluno:
 `{arquivos}`, `{questoes}`, `{observacoes}`.
 
 - `{arquivos}` recebe o texto extraído do PDF/anexo (até 30.000 caracteres).
+- **Anexos com visão (`readAttachments`, padrão ligado):** PDFs e imagens vão também como
+  content parts (`file` / `image_url`), para o modelo ver páginas, diagramas, gráficos e
+  escaneados. Documentos Office são convertidos em PDF (LibreOffice) antes de anexar. Quando um
+  arquivo é anexado, seu texto extraído sai de `{arquivos}` (evita duplicação) e vira uma linha
+  "(Arquivo anexado ao modelo: texto e páginas, incluindo diagramas e imagens.)". Limites:
+  4 anexos, 10 MB por arquivo, 40 MB no total. Se o modelo recusar arquivos, a chamada é
+  repetida só com texto (fallback automático). Base64 nunca é gravado em `ai_run`/debug logs.
 - `{questoes}` só é preenchido em questionários.
 
 ## Como editar
@@ -86,6 +93,10 @@ Observações do aluno:
 - Os mesmos textos têm cópia em `apps/server/src/config.ts` (`DEFAULT_STYLE`,
   `DEFAULT_ACTIVITY_SECTIONS`) e em `apps/web/src/lib/prompt-preview.ts`. Ao mudar um, mude o
   outro para não divergir.
+- **Mantenha o modal "(i) O que a IA vê" atualizado.** A lista do usuário está em
+  `apps/web/src/lib/ai-capabilities.ts` (+ chaves `aiInfo.*` em `pt.ts`/`en.ts`). Toda nova
+  fonte de entrada, tipo de anexo ou habilidade da IA precisa aparecer lá; o cabeçalho do
+  arquivo tem o aviso `KEEP THIS UPDATED`.
 
 ## Regras de ouro
 

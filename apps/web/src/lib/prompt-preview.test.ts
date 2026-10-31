@@ -157,7 +157,11 @@ describe("buildVars", () => {
     });
     const vars = buildVars(e, { nome: "Maria", matricula: "1" });
     expect(vars.arquivos).toContain("--- Arquivo: roteiro.pdf ---");
+    expect(vars.arquivos).toContain("Arquivo anexado ao modelo");
     expect(vars.arquivos).toContain("Links dos arquivos no portal:");
+
+    const textOnly = buildVars(e, { nome: "Maria", matricula: "1" }, "", DEFAULT_ACTIVITY_SECTIONS, false);
+    expect(textOnly.arquivos).toContain("texto do PDF é extraído no momento do envio");
   });
 
   it("fórum → serializa posts com autor e texto limpo, pulando deletados", () => {
@@ -228,6 +232,16 @@ describe("renderPreviewMessage", () => {
     );
     expect(out).toContain('Formato da resposta: uma linha por questão, no formato "Q<id>: <letra>"');
     expect(out).toContain("Exemplo: Q7: B");
+  });
+
+  it("anexa a instrução de leitura de diagramas quando há arquivos", () => {
+    const out = renderPreviewMessage(
+      DEFAULT_STYLE,
+      DEFAULT_ACTIVITY_SECTIONS,
+      makeExercise({ files: [{ name: "bdi.pdf", relPath: "a.pdf", remoteUrl: "" }] }),
+      { nome: "Maria", matricula: "1" },
+    );
+    expect(out).toContain("Leia também as páginas, diagramas");
   });
 
   it("fórum adiciona a instrução de publicação única", () => {

@@ -582,6 +582,7 @@ interface AiConfigRow {
   style_json: unknown;
   sections_json: unknown;
   project_auto_detect: boolean | null;
+  read_attachments: boolean | null;
   models_json: unknown;
   abilities_json: unknown;
 }
@@ -595,7 +596,7 @@ function toAiModels(value: unknown, generation: string): AiModels {
 export async function getAiConfig(): Promise<AiConfig> {
   const studentId = await getStudentId();
   const rows = await query<AiConfigRow>(
-    "SELECT provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect, models_json, abilities_json FROM ai_config WHERE student_id = $1",
+    "SELECT provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect, read_attachments, models_json, abilities_json FROM ai_config WHERE student_id = $1",
     [studentId],
   );
   const row = rows[0];
@@ -612,6 +613,7 @@ export async function getAiConfig(): Promise<AiConfig> {
     temperature: row.temperature ?? 0.7,
     max_output_tokens: row.max_output_tokens ?? undefined,
     projectAutoDetect: row.project_auto_detect ?? true,
+    readAttachments: row.read_attachments ?? true,
     style: { ...DEFAULT_STYLE, ...((row.style_json as Partial<AiConfig["style"]>) ?? {}) },
     activitySections: {
       ...DEFAULT_ACTIVITY_SECTIONS,
@@ -625,8 +627,8 @@ export async function saveAiConfig(cfg: AiConfig): Promise<void> {
   const studentId = await getStudentId();
   const models = toAiModels(cfg.models, cfg.models?.generation ?? cfg.model);
   await query(
-    `INSERT INTO ai_config(student_id, provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect, models_json, abilities_json, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
+    `INSERT INTO ai_config(student_id, provider, model, temperature, max_output_tokens, style_json, sections_json, project_auto_detect, read_attachments, models_json, abilities_json, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
      ON CONFLICT (student_id) DO UPDATE SET
        provider = EXCLUDED.provider,
        model = EXCLUDED.model,
@@ -635,6 +637,7 @@ export async function saveAiConfig(cfg: AiConfig): Promise<void> {
        style_json = EXCLUDED.style_json,
        sections_json = EXCLUDED.sections_json,
        project_auto_detect = EXCLUDED.project_auto_detect,
+       read_attachments = EXCLUDED.read_attachments,
        models_json = EXCLUDED.models_json,
        abilities_json = EXCLUDED.abilities_json,
        updated_at = now()`,
@@ -647,6 +650,7 @@ export async function saveAiConfig(cfg: AiConfig): Promise<void> {
       JSON.stringify(cfg.style),
       JSON.stringify(cfg.activitySections),
       cfg.projectAutoDetect ?? true,
+      cfg.readAttachments ?? true,
       JSON.stringify(models),
       JSON.stringify(mergeAbilities(cfg.abilities)),
     ],

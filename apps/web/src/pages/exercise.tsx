@@ -8,6 +8,7 @@ import {
   Download,
   ExternalLink,
   History,
+  Info,
   Loader2,
   Maximize2,
   MessagesSquare,
@@ -48,6 +49,7 @@ import { BackLink } from "@/components/app-sidebar";
 import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
 import { ProfessorTag, SubjectLabel } from "@/components/identity";
 import { AiRequestPanel } from "@/components/ai-request-panel";
+import { AiInfoDialog } from "@/components/ai-info-dialog";
 import { ProjectPanel } from "@/components/project-panel";
 import { GatePanel } from "@/components/gate-panel";
 import { AbilityPanel } from "@/components/ability-panel";
@@ -796,6 +798,7 @@ export function ExercisePage() {
   const [params, setParams] = useSearchParams();
   const [regenToken, setRegenToken] = useState(0);
   const [focus, setFocus] = useState(false);
+  const [aiInfoOpen, setAiInfoOpen] = useState(false);
   const headerCard = useCardCollapse("resumo");
   const reviewedRef = useRef<number | null>(null);
 
@@ -942,6 +945,17 @@ export function ExercisePage() {
               id="arquivos"
               title={t("exercise.files")}
               badge={<span className="text-xs font-normal text-muted-foreground">({e.remoteFiles.length})</span>}
+              actions={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setAiInfoOpen(true)}
+                  aria-label={t("exercise.aiInfo")}
+                  title={t("exercise.aiInfo")}
+                >
+                  <Info aria-hidden />
+                </Button>
+              }
               bodyClassName="flex flex-col gap-3 p-4"
             >
               {e.remoteFiles.map((f) => (
@@ -949,6 +963,7 @@ export function ExercisePage() {
               ))}
             </CollapsibleCard>
           )}
+          <AiInfoDialog open={aiInfoOpen} onOpenChange={setAiInfoOpen} />
 
           {e.kind === "quiz" && e.questions.length > 0 && (
             <CollapsibleCard

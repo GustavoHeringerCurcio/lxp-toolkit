@@ -454,6 +454,13 @@ export const en: Dict = {
   "exercise.collapseDetails": "Collapse details",
   "exercise.instructions": "Instructions",
   "exercise.files": "Files",
+  "exercise.aiInfo": "What the AI sees",
+  "exercise.aiInfoTitle": "What the AI sees in this activity",
+  "exercise.aiInfoIntro":
+    "Transparency: this list describes what the AI receives and does. It is maintained by hand — update it whenever a new capability is added.",
+  "exercise.aiInfoOff":
+    "PDF and image reading is off in Settings (AI › Content sent). Extracted text is still sent.",
+  "exercise.aiInfoKeepUpdated": "Hand-maintained list: update it when adding new AI capabilities.",
 
   // forum thread
   "forum.title": "Posts",
@@ -462,6 +469,63 @@ export const en: Dict = {
   "forum.notLoaded": "No posts loaded — refresh the content to sync the topic.",
   "forum.edited": "edited",
   "exercise.questions": "Questions",
+
+  "aiInfo.group.reads": "What it reads from the files",
+  "aiInfo.group.receives": "What else it receives",
+  "aiInfo.group.does": "What it does",
+  "aiInfo.group.doesNot": "What it does not do",
+  "aiInfo.group.limits": "Practical limits",
+
+  "aiInfo.pdf.title": "PDF (text + pages)",
+  "aiInfo.pdf.detail":
+    "Reads the text and the images of every page: diagrams, charts, tables and scanned pages.",
+  "aiInfo.images.title": "Images",
+  "aiInfo.images.detail": "Attached PNG, JPG, WEBP and GIF files are sent as high-resolution images.",
+  "aiInfo.office.title": "Office documents",
+  "aiInfo.office.detail":
+    "DOCX, PPTX, XLSX, ODT and similar are converted to PDF and sent with images and diagrams preserved.",
+  "aiInfo.text.title": "Text and HTML",
+  "aiInfo.text.detail": "TXT, MD, CSV and HTML are sent as text (up to 30,000 characters per file).",
+
+  "aiInfo.instructions.title": "Instructions, type and module",
+  "aiInfo.instructions.detail": "The activity text and the course context.",
+  "aiInfo.questions.title": "Questions and options",
+  "aiInfo.questions.detail": "For quizzes, every question and option listed in the activity.",
+  "aiInfo.forum.title": "Forum posts",
+  "aiInfo.forum.detail": "For forums, the professor's question and the replies already posted.",
+  "aiInfo.notes.title": "Your notes and extra instructions",
+  "aiInfo.notes.detail": "The activity notes and the “What the AI receives” field.",
+  "aiInfo.identity.title": "Your name and student ID",
+  "aiInfo.identity.detail": "When the format asks for identification (not used for quizzes).",
+  "aiInfo.project.title": "Project context",
+  "aiInfo.project.detail":
+    "When enabled, the course main project (README, files and notes) to ground the answer.",
+
+  "aiInfo.answer.title": "Writes the answer",
+  "aiInfo.answer.detail": "In the format requested by the activity and your style rules.",
+  "aiInfo.diagram.title": "UML diagram",
+  "aiInfo.diagram.detail": "When the ability is enabled, generates a use-case diagram from the text.",
+  "aiInfo.gate.title": "Draft review",
+  "aiInfo.gate.detail": "A quality check warns when the answer looks incomplete or off-topic.",
+
+  "aiInfo.internet.title": "Does not access the internet",
+  "aiInfo.internet.detail": "The model answers only with what was sent to it.",
+  "aiInfo.links.title": "Does not open portal links",
+  "aiInfo.links.detail": "Attachment links appear as text, but the AI does not open them.",
+  "aiInfo.audio.title": "Does not read audio or video",
+  "aiInfo.audio.detail": "Only text, PDF and images enter the context.",
+  "aiInfo.login.title": "Does not log in or send anything by itself",
+  "aiInfo.login.detail": "Submission to the portal only happens when you click send.",
+
+  "aiInfo.chars.title": "30,000 characters per text file",
+  "aiInfo.chars.detail": "Beyond that the text is truncated; attached PDFs and images are not cut.",
+  "aiInfo.attachments.title": "Up to 4 attachments of 10 MB",
+  "aiInfo.attachments.detail": "Larger files or files beyond the limit keep only the extracted text.",
+  "aiInfo.cost.title": "Higher token cost",
+  "aiInfo.cost.detail": "PDFs and images count as extra input to the API.",
+  "aiInfo.model.title": "Requires a vision model",
+  "aiInfo.model.detail":
+    "E.g. gpt-4o. If the selected model rejects files, the AI falls back to the extracted text automatically.",
 
   // file preview
   "files.previewUnavailable": "preview unavailable · open",
@@ -519,6 +583,9 @@ export const en: Dict = {
   "settings.projectContextIntro": "The AI detects when an activity asks for a project (theme, actors, requirements) and uses that context to fill the draft.",
   "settings.projectAutoDetect": "Detect project automatically",
   "settings.projectAutoDetectHint": "Analyzes the activity when you open it, using the cheapest model. Turn off to fill the context manually.",
+  "settings.readAttachments": "Read PDFs and images (diagrams)",
+  "settings.readAttachmentsHint":
+    "Sends PDF pages and images to the model so it can read diagrams, charts and scans. Increases token cost.",
   "settings.abilities": "AI abilities",
   "settings.abilitiesIntro": "Tools the AI can use on activities. Each activity can toggle them individually.",
   "ability.uml_diagram": "UML diagram",
@@ -672,7 +739,7 @@ export const en: Dict = {
   "aiPanel.removedMsg": "Instructions removed.",
   "aiPanel.previewTitle": "Message preview (system + user)",
   "aiPanel.previewNote":
-    "The text of PDFs and Office files is extracted on the server and inserted into {{arquivos}} at submission time.",
+    "Text is extracted on the server. PDFs and images are also attached (pages and diagrams) when “Read PDFs and images” is on.",
 
   // error / empty states
   "errors.loadTitle": "We could not load your tasks.",

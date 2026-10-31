@@ -198,7 +198,8 @@ Rules to preserve:
 | File | Role |
 |---|---|
 | `prompt.ts` | Builds the two messages: `system` (structured `style` rules + abilities + project block + extra instructions) and `user` (the activity content). Exposes `humanizeQuizAnswer`, `parseQuizSelections`, `composeGhostAnswer`. |
-| `ai.ts` | Calls OpenAI with streaming; returns text + provenance (model, tokens, prompt hash). Also `cheapJsonCompletion` for detection. |
+| `ai.ts` | Calls OpenAI with streaming; returns text + provenance (model, tokens, prompt hash). Also `cheapJsonCompletion` for detection. When `readAttachments` is on, PDFs/images are sent as `file`/`image_url` content parts (vision) and the call retries text-only if the model rejects files; base64 is redacted from `ai_run`/debug prompts. |
+| `attachments.ts` | Builds the vision content parts: PDFs as `file`, Office→PDF (LibreOffice), images as `image_url`; caps 4 files / 10 MB each / 40 MB total. |
 | `classify.ts` | Lazy AI review of ambiguous uploads. |
 | `gate.ts` | `analyzeDraftQuality` — advisory quality gate over a draft. |
 | `training.ts` | Builds the per-subject knowledge pack (catalog + bank + `content_text`) and generates practice quizzes / streamed study guides. The subject picker flags real subjects (professor-linked or substantial tree) vs exam/phantom modules; hidden God's-Eye topics are included only when unique or question-bearing (duplicate readings dropped). |
@@ -216,6 +217,11 @@ records an `ai_run` → runs the gate detached (streamed to the client as a `gat
 
 Prompt rules are documented in `apps/server/docs/PROMPT.md`. `DEFAULT_STYLE` exists in **two**
 places (`apps/server/src/config.ts` and `apps/web/src/lib/prompt-preview.ts`) — keep them in sync.
+
+The Files-card **(i) "O que a IA vê"** modal is user-facing documentation of the AI contract.
+Its rows live in `apps/web/src/lib/ai-capabilities.ts` (header: `KEEP THIS UPDATED`) with
+`aiInfo.*` strings in PT/EN. Add a row whenever the AI gains a new input source, attachment type
+or ability (`prompt.ts` / `ai.ts` / `attachments.ts` / `abilities.ts`).
 
 ---
 

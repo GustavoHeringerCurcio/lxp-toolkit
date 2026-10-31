@@ -2,6 +2,7 @@ import type { AiActivitySections, AiProfile, AiStyle, Exercise, ForumPost, QuizQ
 import { DEFAULT_ACTIVITY_SECTIONS } from "./config.js";
 import { kindLabel } from "./kind.js";
 import { extractFileText } from "./pdf.js";
+import type { AiAttachmentPart, SkippedAttachment } from "./attachments.js";
 import { findTemplateDocx, type TemplateField } from "./template.js";
 import { buildTemplateFillContract, formatDateBr } from "./usecase.js";
 
@@ -190,12 +191,28 @@ export function buildActivityPrompt(vars: PromptVars, sections: AiActivitySectio
   return blocks.join("\n\n");
 }
 
+/**
+ * Instruction appended when files are attached to the message. Kept in one
+ * place so the UI preview (`apps/web/src/lib/prompt-preview.ts`) can mirror it.
+ */
+export const ATTACHMENT_NOTE =
+  "Obs.: os PDFs/imagens anexados ao final desta mensagem fazem parte da atividade. " +
+  "Leia também as páginas, diagramas, figuras e conteúdo escaneado deles, não só o texto.";
+
+export interface AttachmentTextInfo {
+  /** Local names actually attached to the model (their text is not duplicated). */
+  attached?: Set<string>;
+  /** Names that could not be attached, mapped to a short reason. */
+  skipped?: Map<string, string>;
+}
+
 /** Build the placeholder values for one exercise (extracts PDF text on the server). */
 export async function buildPromptVars(
   e: Exercise,
   profile: AiProfile,
   notes = "",
   sections: AiActivitySections = DEFAULT_ACTIVITY_SECTIONS,
+  attachmentInfo: AttachmentTextInfo = {},
 ): Promise<PromptVars> {
   const tipo =
     e.kind === "upload"
@@ -212,6 +229,16 @@ export async function buildPromptVars(
     const chunks: string[] = [];
     for (const f of e.files) {
       chunks.push(`--- Arquivo: ${f.name} ---`);
+      // Attached files already reach the model as text + page images, so their
+      // extracted text is not duplicated here.
+      if (attachmentInfo.attached?.has(f.name)) {
+        chunks.push("(Arquivo anexado ao modelo: texto e páginas, incluindo diagramas e imagens.)");
+        continue;
+      }
+      const skippedReason = attachmentInfo.skipped?.get(f.name);
+      if (skippedReason) {
+        chunks.push(`(Não anexado ao modelo: ${skippedReason}; usando o texto extraído abaixo.)`);
+      }
       const text = await extractFileText(f.absPath);
       if (text) {
         const max = 30_000;
@@ -291,9 +318,11 @@ export async function buildPromptVars(
   };
 }
 
+export type ChatContentPart = { type: "text"; text: string } | AiAttachmentPart;
+
 export interface ChatMessage {
   role: "system" | "user";
-  content: string;
+  content: string | ChatContentPart[];
 }
 
 /**
@@ -309,12 +338,24 @@ export async function buildMessages(
   sections: AiActivitySections,
   extraInstructions = "",
   notes = "",
-  opts: { wantsTemplate?: boolean; templateFields?: string[]; projectBlock?: string } = {},
+  opts: {
+    wantsTemplate?: boolean;
+    templateFields?: string[];
+    projectBlock?: string;
+    /** PDFs/images to attach so the model sees diagrams and scans. */
+    attachments?: AiAttachmentPart[];
+    attachedNames?: Set<string>;
+    skippedAttachments?: SkippedAttachment[];
+  } = {},
 ): Promise<ChatMessage[]> {
   // Ghost/print tasks have no question: never send them to the model.
   if (e.flavor !== "question") return [];
 
-  const vars = await buildPromptVars(e, profile, notes, sections);
+  const attachments = opts.attachments ?? [];
+  const vars = await buildPromptVars(e, profile, notes, sections, {
+    attached: opts.attachedNames,
+    skipped: new Map((opts.skippedAttachments ?? []).map((s): [string, string] => [s.name, s.reason])),
+  });
   const messages: ChatMessage[] = [];
   const hasTemplate = Boolean(vars.modelo.trim());
 
@@ -355,7 +396,15 @@ export async function buildMessages(
       ` sem saudações longas, sem repetir o enunciado e sem se dirigir a colegas específicos.` +
       ` Se já houver publicações parecidas, complemente o que falta em vez de repetir.`;
   }
-  if (user) messages.push({ role: "user", content: user });
+  if (attachments.length) {
+    user += `\n\n${ATTACHMENT_NOTE}`;
+    messages.push({
+      role: "user",
+      content: [{ type: "text", text: user }, ...attachments],
+    });
+  } else if (user) {
+    messages.push({ role: "user", content: user });
+  }
 
   return messages;
 }

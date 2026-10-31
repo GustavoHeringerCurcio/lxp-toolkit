@@ -1,4 +1,7 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { generateAnswer } from "../src/ai.js";
 import { makeExercise } from "./helpers.js";
@@ -17,7 +20,7 @@ const STYLE = {
   extraRules: "",
 } as const;
 
-const SECTIONS = { enunciado: true, arquivos: false, questoes: false, observacoes: false } as const;
+const SECTIONS = { enunciado: true, arquivos: true, questoes: false, observacoes: false } as const;
 
 const MODELS = {
   generation: "gpt-4o",
@@ -132,5 +135,47 @@ describe("generateAnswer (mock HTTP da OpenAI)", () => {
   it("propaga erro 500 da OpenAI", async () => {
     handler = (_req, res) => json(res, 500, { error: { message: "The server had an error." } });
     await expect(generateAnswer(CFG, makeExercise(), "", PROFILE)).rejects.toThrow(/500/);
+  });
+
+  it("anexa PDF e cai para texto quando o modelo rejeita arquivos", async () => {
+    const base = mkdtempSync(path.join(tmpdir(), "lxp-ai-"));
+    const abs = path.join(base, "atividade.pdf");
+    writeFileSync(abs, Buffer.from("%PDF-1.4\nfake"));
+
+    let first = true;
+    handler = (_req, res, body) => {
+      if (first && /"type":\s*"file"/.test(body)) {
+        first = false;
+        json(res, 400, { error: { message: "Invalid file content", type: "invalid_request_error" } });
+        return;
+      }
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      res.end(sseChunks(["ok"]));
+    };
+
+    const e = makeExercise({ files: [{ name: "atividade.pdf", relPath: "atividade.pdf", absPath: abs, remoteUrl: "" }] });
+    const result = await generateAnswer(CFG, e, "", PROFILE);
+
+    expect(requests).toHaveLength(2);
+    expect(requests[0].body).toMatch(/"type":\s*"file"/);
+    expect(requests[1].body).not.toMatch(/"type":\s*"file"/);
+    expect(result.text).toBe("ok");
+    expect(result.prompt).not.toContain("base64");
+    expect(result.prompt).not.toContain("data:application/pdf");
+  });
+
+  it("mantém o anexo no prompt de proveniência sem o base64", async () => {
+    const base = mkdtempSync(path.join(tmpdir(), "lxp-ai-"));
+    const abs = path.join(base, "bdi.pdf");
+    writeFileSync(abs, Buffer.from("%PDF-1.4\nfake"));
+
+    defaultSseHandler(["ok"]);
+    const e = makeExercise({ files: [{ name: "bdi.pdf", relPath: "bdi.pdf", absPath: abs, remoteUrl: "" }] });
+    const result = await generateAnswer(CFG, e, "", PROFILE);
+
+    expect(requests).toHaveLength(1);
+    expect(result.prompt).toContain("[pdf: bdi.pdf]");
+    expect(result.prompt).not.toContain("base64");
+    expect(result.promptHash).toMatch(/^[a-f0-9]{64}$/);
   });
 });

@@ -271,6 +271,7 @@ export interface AiConfigSavePatch {
   style?: Partial<AiStyle>;
   activitySections?: Partial<AiActivitySections>;
   projectAutoDetect?: boolean;
+  readAttachments?: boolean;
   abilities?: AbilitySettings;
 }
 

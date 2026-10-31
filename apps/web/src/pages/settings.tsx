@@ -187,6 +187,7 @@ export function SettingsPage() {
   const [nome, setNome] = useState("");
   const [matricula, setMatricula] = useState("");
   const [projectAutoDetect, setProjectAutoDetect] = useState(true);
+  const [readAttachments, setReadAttachments] = useState(true);
   const [abilities, setAbilities] = useState<AbilitySettings>({});
   const [showPreview, setShowPreview] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -207,6 +208,7 @@ export function SettingsPage() {
     setNome(cfg.profile?.nome ?? "");
     setMatricula(cfg.profile?.matricula ?? "");
     setProjectAutoDetect(cfg.projectAutoDetect !== false);
+    setReadAttachments(cfg.readAttachments !== false);
     setAbilities({ ...cfg.abilities });
   }, [cfg]);
 
@@ -270,6 +272,7 @@ export function SettingsPage() {
         style,
         activitySections: sections,
         projectAutoDetect,
+        readAttachments,
         abilities,
       });
       await saveProfile(profile);
@@ -281,6 +284,7 @@ export function SettingsPage() {
         style,
         activitySections: sections,
         projectAutoDetect,
+        readAttachments,
         abilities,
         profile,
       });
@@ -522,6 +526,16 @@ export function SettingsPage() {
                 onChange={(v) => patchSections({ observacoes: v })}
               />
             </div>
+            <Toggle
+              label={t("settings.readAttachments")}
+              hint={t("settings.readAttachmentsHint")}
+              checked={readAttachments}
+              onChange={(v) => {
+                setReadAttachments(v);
+                setMsg(null);
+                setErr(null);
+              }}
+            />
           </Card>
 
           <Card icon={<FolderKanban className="size-4 text-brand" aria-hidden />} title={t("settings.projectContext")}>

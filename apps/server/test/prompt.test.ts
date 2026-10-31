@@ -213,6 +213,40 @@ describe("buildMessages", () => {
     );
     expect(messages[1].content).toContain("publicação em primeira pessoa");
   });
+
+  it("anexos → user vira partes de texto + arquivo, com a instrução de diagramas", async () => {
+    const filePart = {
+      type: "file" as const,
+      file: { filename: "a.pdf", file_data: "data:application/pdf;base64,AAAA" },
+    };
+    const messages = await buildMessages(
+      makeExercise({ files: [{ name: "a.pdf", relPath: "a.pdf", absPath: "/nope/a.pdf", remoteUrl: "" }] }),
+      { nome: "Maria", matricula: "2024001" },
+      {
+        persona: "Você é o aluno.",
+        voice: "Simples.",
+        includeIdentity: true,
+        mcqMode: "letter",
+        numbering: true,
+        associateInline: true,
+        noIntroOutro: true,
+        noMetaLabels: true,
+        extraRules: "",
+      },
+      { enunciado: true, arquivos: true, questoes: false, observacoes: false },
+      "",
+      "",
+      { attachments: [filePart], attachedNames: new Set(["a.pdf"]) },
+    );
+
+    const content = messages[1].content;
+    expect(Array.isArray(content)).toBe(true);
+    const parts = content as { type: string; text?: string }[];
+    expect(parts[0].type).toBe("text");
+    expect(parts[0].text).toContain("Arquivo anexado ao modelo");
+    expect(parts[0].text).toContain("Leia também as páginas, diagramas");
+    expect(parts[1]).toMatchObject({ type: "file" });
+  });
 });
 
 describe("parseQuizSelections", () => {

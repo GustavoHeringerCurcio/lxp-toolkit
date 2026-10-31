@@ -50,7 +50,7 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
   };
 
   const previewText = showPreview
-    ? renderPreviewMessage(style, sections, e, profile, text)
+    ? renderPreviewMessage(style, sections, e, profile, text, cfg?.readAttachments !== false)
     : "";
 
   return (

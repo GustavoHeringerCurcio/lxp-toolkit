@@ -122,12 +122,46 @@ export function buildActivityPrompt(vars: PromptVars, sections: AiActivitySectio
   return blocks.join("\n\n");
 }
 
+/**
+ * Mirrors `ATTACHMENT_NOTE` in `apps/server/src/prompt.ts`.
+ * Keep both strings identical when editing the attachment instructions.
+ */
+const ATTACHMENT_NOTE =
+  "Obs.: os PDFs/imagens anexados ao final desta mensagem fazem parte da atividade. " +
+  "Leia também as páginas, diagramas, figuras e conteúdo escaneado deles, não só o texto.";
+
+const ATTACHABLE_EXTS = new Set([
+  "pdf",
+  "doc",
+  "docx",
+  "ppt",
+  "pptx",
+  "xls",
+  "xlsx",
+  "odt",
+  "ods",
+  "odp",
+  "rtf",
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "gif",
+]);
+
+/** True for files the server sends to the model as PDF/image parts. */
+export function isAttachableFile(name: string): boolean {
+  const ext = name.split(/[?#]/)[0].split(".").pop()?.toLowerCase() ?? "";
+  return ATTACHABLE_EXTS.has(ext);
+}
+
 /** Placeholder values for one exercise. PDF bodies are only known server-side. */
 export function buildVars(
   e: Exercise,
   profile: AiProfile,
   notes = "",
   sections: AiActivitySections = DEFAULT_ACTIVITY_SECTIONS,
+  readAttachments = true,
 ): PromptVars {
   const tipo =
     e.kind === "upload"
@@ -141,9 +175,13 @@ export function buildVars(
 
   let arquivos = "";
   if (e.kind === "upload" && sections.arquivos) {
-    const chunks = e.files.map(
-      (f) => `--- Arquivo: ${f.name} ---\n(texto do PDF é extraído no momento do envio)`,
-    );
+    const chunks = e.files.map((f) => {
+      const attached = readAttachments && isAttachableFile(f.name);
+      const marker = attached
+        ? "(Arquivo anexado ao modelo: texto e páginas, incluindo diagramas e imagens.)"
+        : "(texto do PDF é extraído no momento do envio)";
+      return `--- Arquivo: ${f.name} ---\n${marker}`;
+    });
     if (e.remoteFiles.length) {
       chunks.push(
         `Links dos arquivos no portal:\n${e.remoteFiles.map((r) => `- ${r.filename ?? r.url} (${r.url})`).join("\n")}`,
@@ -205,8 +243,9 @@ export function renderPreviewMessage(
   e: Exercise,
   profile: AiProfile,
   extraInstructions = "",
+  readAttachments = true,
 ): string {
-  const vars = buildVars(e, profile, "", sections);
+  const vars = buildVars(e, profile, "", sections, readAttachments);
   const system = renderTemplate(buildStylePrompt(style, extraInstructions), vars).trim();
   let user = buildActivityPrompt(vars, sections).trim();
   if (e.kind === "quiz" && e.questions.length) {
@@ -220,6 +259,9 @@ export function renderPreviewMessage(
       ` Responda à pergunta do professor com naturalidade (linguagem simples, como um aluno escrevendo para a turma),` +
       ` sem saudações longas, sem repetir o enunciado e sem se dirigir a colegas específicos.` +
       ` Se já houver publicações parecidas, complemente o que falta em vez de repetir.`;
+  }
+  if (readAttachments && sections.arquivos && e.kind === "upload" && e.files.some((f) => isAttachableFile(f.name))) {
+    user += `\n\n${ATTACHMENT_NOTE}`;
   }
   const parts: string[] = [];
   if (system) parts.push(`[system]\n${system}`);

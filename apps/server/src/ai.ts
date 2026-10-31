@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import OpenAI from "openai";
 import type { AiConfig, AiProfile, Exercise } from "./types.js";
 import { openaiKey } from "./config.js";
-import { buildMessages, resolveExtraInstructions } from "./prompt.js";
+import { buildAiAttachments, type BuiltAttachments } from "./attachments.js";
+import { buildMessages, resolveExtraInstructions, type ChatMessage } from "./prompt.js";
 
 let _client: OpenAI | null = null;
 function client(): OpenAI {
@@ -41,6 +42,91 @@ export interface GeneratedAnswer {
  * Returns the text plus provenance (model, token usage, prompt) so the caller
  * can persist an `ai_run`.
  */
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * Readable prompt (no file bytes), for `ai_run` provenance and debug logs.
+ * Base64 attachment payloads are replaced by markers so the DB never stores
+ * megabytes of file data.
+ */
+function serializeMessages(messages: ChatMessage[]): string {
+  return messages
+    .map((m) => {
+      const body =
+        typeof m.content === "string"
+          ? m.content
+          : m.content
+              .map((p) =>
+                p.type === "text" ? p.text : p.type === "file" ? `[pdf: ${p.file.filename}]` : "[imagem]",
+              )
+              .join("\n");
+      return `[${m.role}]\n${body}`;
+    })
+    .join("\n\n");
+}
+
+/** Stable hash that includes the attachment content without serializing it into the prompt. */
+function hashMessages(messages: ChatMessage[]): string {
+  const h = createHash("sha256");
+  for (const m of messages) {
+    h.update(`${m.role}\u0000`);
+    if (typeof m.content === "string") {
+      h.update(m.content);
+    } else {
+      for (const part of m.content) {
+        if (part.type === "text") h.update(part.text);
+        else if (part.type === "file") h.update(`file:${part.file.filename}:${sha256(part.file.file_data)}`);
+        else h.update(`image:${sha256(part.image_url.url)}`);
+        h.update("\u0000");
+      }
+    }
+  }
+  return h.digest("hex");
+}
+
+/** A 400 that mentions files/images means the model cannot take attachments. */
+function isAttachmentRejection(err: unknown): boolean {
+  const status = (err as { status?: number }).status;
+  if (status !== 400) return false;
+  const message = err instanceof Error ? err.message : String(err);
+  return /file|image|content|unsupported|vision|pdf|attachment/i.test(message);
+}
+
+async function streamCompletion(
+  model: string,
+  temperature: number,
+  maxTokens: number,
+  messages: ChatMessage[],
+  onDelta?: (text: string) => void,
+): Promise<{ text: string; tokensIn: number | null; tokensOut: number | null }> {
+  const stream = await client().chat.completions.create({
+    model,
+    temperature,
+    max_tokens: maxTokens,
+    stream: true,
+    stream_options: { include_usage: true },
+    messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+  });
+
+  let text = "";
+  let tokensIn: number | null = null;
+  let tokensOut: number | null = null;
+  for await (const chunk of stream) {
+    const delta = chunk.choices?.[0]?.delta?.content;
+    if (delta) {
+      text += delta;
+      onDelta?.(delta);
+    }
+    if (chunk.usage) {
+      tokensIn = chunk.usage.prompt_tokens ?? tokensIn;
+      tokensOut = chunk.usage.completion_tokens ?? tokensOut;
+    }
+  }
+  return { text, tokensIn, tokensOut };
+}
+
 export async function generateAnswer(
   cfg: AiConfig,
   e: Exercise,
@@ -49,59 +135,56 @@ export async function generateAnswer(
   opts: GenerateOpts = {},
   notes = "",
 ): Promise<GeneratedAnswer> {
-  const messages = await buildMessages(
-    e,
-    profile,
-    cfg.style,
-    cfg.activitySections,
-    resolveExtraInstructions(extraInstructions),
-    notes,
-    {
-      wantsTemplate: opts.wantsTemplate,
-      templateFields: opts.templateFields,
-      projectBlock: opts.projectBlock,
-    },
-  );
+  // Only upload tasks with the "arquivos" section enabled carry files.
+  const built: BuiltAttachments | null =
+    cfg.readAttachments === false || e.kind !== "upload" || cfg.activitySections.arquivos === false
+      ? null
+      : await buildAiAttachments(e.files).catch(() => null);
+
+  const base = {
+    wantsTemplate: opts.wantsTemplate,
+    templateFields: opts.templateFields,
+    projectBlock: opts.projectBlock,
+  };
+  const buildWith = (withAttachments: boolean) =>
+    buildMessages(e, profile, cfg.style, cfg.activitySections, resolveExtraInstructions(extraInstructions), notes, {
+      ...base,
+      ...(withAttachments && built
+        ? {
+            attachments: built.parts,
+            attachedNames: built.attachedNames,
+            skippedAttachments: built.skipped,
+          }
+        : {}),
+    });
+
+  const hasAttachments = Boolean(built?.parts.length);
+  let messages = await buildWith(hasAttachments);
 
   // Structured "fill the professor's template" tasks are deterministic, so use
   // a low temperature instead of the (higher) free-form default to curb invented
   // fields, actors and business rules.
   const temperature = opts.wantsTemplate ? TEMPLATE_TEMPERATURE : cfg.temperature;
-  const stream = await client().chat.completions.create({
-    model: cfg.models.generation,
-    temperature,
-    max_tokens: cfg.max_output_tokens ?? 2200,
-    stream: true,
-    stream_options: { include_usage: true },
-    messages,
-  });
+  const maxTokens = cfg.max_output_tokens ?? 2200;
 
-  let full = "";
-  let tokensIn: number | null = null;
-  let tokensOut: number | null = null;
-  for await (const chunk of stream) {
-    const delta = chunk.choices?.[0]?.delta?.content;
-    if (delta) {
-      full += delta;
-      opts.onDelta?.(delta);
-    }
-    if (chunk.usage) {
-      tokensIn = chunk.usage.prompt_tokens ?? tokensIn;
-      tokensOut = chunk.usage.completion_tokens ?? tokensOut;
-    }
+  let result: { text: string; tokensIn: number | null; tokensOut: number | null };
+  try {
+    result = await streamCompletion(cfg.models.generation, temperature, maxTokens, messages, opts.onDelta);
+  } catch (err) {
+    // Text-only models (or a provider without file support) keep working: retry
+    // once without the attachments, using the extracted text instead.
+    if (!hasAttachments || !isAttachmentRejection(err)) throw err;
+    messages = await buildWith(false);
+    result = await streamCompletion(cfg.models.generation, temperature, maxTokens, messages, opts.onDelta);
   }
 
-  const prompt = messages
-    .map((m) => `[${m.role}]\n${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`)
-    .join("\n\n");
-
   return {
-    text: full,
+    text: result.text,
     model: cfg.models.generation,
-    prompt,
-    promptHash: createHash("sha256").update(JSON.stringify(messages)).digest("hex"),
-    tokensIn,
-    tokensOut,
+    prompt: serializeMessages(messages),
+    promptHash: hashMessages(messages),
+    tokensIn: result.tokensIn,
+    tokensOut: result.tokensOut,
   };
 }
 

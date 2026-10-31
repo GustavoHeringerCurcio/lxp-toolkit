@@ -459,6 +459,71 @@ export const pt = {
   "exercise.instructions": "Enunciado",
   "exercise.files": "Arquivos",
   "exercise.questions": "Questões",
+  "exercise.aiInfo": "O que a IA vê",
+  "exercise.aiInfoTitle": "O que a IA vê nesta atividade",
+  "exercise.aiInfoIntro":
+    "Transparência: esta lista descreve o que a IA recebe e o que faz. Ela é mantida manualmente — atualize sempre que uma nova capacidade for adicionada.",
+  "exercise.aiInfoOff":
+    "A leitura de PDFs e imagens está desligada nas configurações (IA › Conteúdo enviado). O texto extraído continua sendo enviado.",
+  "exercise.aiInfoKeepUpdated": "Lista mantida manualmente: atualize ao adicionar novas capacidades à IA.",
+
+  "aiInfo.group.reads": "O que ele lê dos arquivos",
+  "aiInfo.group.receives": "O que mais ele recebe",
+  "aiInfo.group.does": "O que ele faz",
+  "aiInfo.group.doesNot": "O que ele não faz",
+  "aiInfo.group.limits": "Limites práticos",
+
+  "aiInfo.pdf.title": "PDF (texto + páginas)",
+  "aiInfo.pdf.detail":
+    "Lê o texto e também as imagens de cada página: diagramas, gráficos, tabelas e páginas escaneadas.",
+  "aiInfo.images.title": "Imagens",
+  "aiInfo.images.detail": "PNG, JPG, WEBP e GIF anexados vão como imagem em alta resolução.",
+  "aiInfo.office.title": "Documentos do Office",
+  "aiInfo.office.detail":
+    "DOCX, PPTX, XLSX, ODT e similares são convertidos em PDF e enviados com as imagens e diagramas preservados.",
+  "aiInfo.text.title": "Texto e HTML",
+  "aiInfo.text.detail": "TXT, MD, CSV e HTML entram como texto (até 30.000 caracteres por arquivo).",
+
+  "aiInfo.instructions.title": "Enunciado, tipo e módulo",
+  "aiInfo.instructions.detail": "O texto da atividade e o contexto da disciplina.",
+  "aiInfo.questions.title": "Questões e alternativas",
+  "aiInfo.questions.detail": "Em quizzes, todas as questões e opções listadas na atividade.",
+  "aiInfo.forum.title": "Publicações do fórum",
+  "aiInfo.forum.detail": "Em fóruns, a pergunta do professor e as respostas já publicadas.",
+  "aiInfo.notes.title": "Suas observações e instruções extras",
+  "aiInfo.notes.detail": "As notas da atividade e o campo “O que a IA recebe”.",
+  "aiInfo.identity.title": "Seu nome e matrícula",
+  "aiInfo.identity.detail": "Quando o formato pede identificação (não aparece em quizzes).",
+  "aiInfo.project.title": "Contexto do projeto",
+  "aiInfo.project.detail":
+    "Quando ativado, o projeto principal do curso (README, arquivos e notas) para fundamentar a resposta.",
+
+  "aiInfo.answer.title": "Escreve a resposta",
+  "aiInfo.answer.detail": "No formato pedido pela atividade e pelas suas regras de estilo.",
+  "aiInfo.diagram.title": "Diagrama UML",
+  "aiInfo.diagram.detail":
+    "Quando a habilidade está ativada, gera um diagrama de caso de uso a partir do texto.",
+  "aiInfo.gate.title": "Revisão do rascunho",
+  "aiInfo.gate.detail": "Uma checagem de qualidade avisa se a resposta parece incompleta ou fora do tema.",
+
+  "aiInfo.internet.title": "Não acessa a internet",
+  "aiInfo.internet.detail": "O modelo responde só com o que foi enviado a ele.",
+  "aiInfo.links.title": "Não abre os links do portal",
+  "aiInfo.links.detail": "Os links dos anexos aparecem como texto, mas não são abertos pela IA.",
+  "aiInfo.audio.title": "Não lê áudio ou vídeo",
+  "aiInfo.audio.detail": "Somente texto, PDF e imagens entram no contexto.",
+  "aiInfo.login.title": "Não faz login nem envia nada sozinho",
+  "aiInfo.login.detail": "O envio para o portal só acontece quando você clica em enviar.",
+
+  "aiInfo.chars.title": "30.000 caracteres por arquivo de texto",
+  "aiInfo.chars.detail": "Acima disso o texto é truncado; PDFs e imagens anexados não têm esse corte.",
+  "aiInfo.attachments.title": "Até 4 anexos de 10 MB",
+  "aiInfo.attachments.detail": "Arquivos maiores ou além do limite ficam só com o texto extraído.",
+  "aiInfo.cost.title": "Custo maior em tokens",
+  "aiInfo.cost.detail": "PDFs e imagens contam como entrada extra na API.",
+  "aiInfo.model.title": "Precisa de um modelo com visão",
+  "aiInfo.model.detail":
+    "Ex.: gpt-4o. Se o modelo escolhido não aceitar arquivos, a IA volta automaticamente para o texto extraído.",
 
   // forum thread
   "forum.title": "Publicações",
@@ -523,6 +588,9 @@ export const pt = {
   "settings.projectContextIntro": "A IA detecta quando uma atividade pede um projeto (tema, atores, requisitos) e usa esse contexto para preencher o rascunho.",
   "settings.projectAutoDetect": "Detectar projeto automaticamente",
   "settings.projectAutoDetectHint": "Analisa a atividade ao abri-la, com o modelo mais barato. Desligue para preencher o contexto manualmente.",
+  "settings.readAttachments": "Ler PDFs e imagens (diagramas)",
+  "settings.readAttachmentsHint":
+    "Envia as páginas dos PDFs e as imagens ao modelo, para ler diagramas, gráficos e escaneados. Aumenta o custo em tokens.",
   "settings.abilities": "Habilidades da IA",
   "settings.abilitiesIntro": "Ferramentas que a IA pode usar nas atividades. Cada atividade pode ligar/desligar individualmente.",
   "ability.uml_diagram": "Diagrama UML",
@@ -677,7 +745,7 @@ export const pt = {
   "aiPanel.removedMsg": "Instruções removidas.",
   "aiPanel.previewTitle": "Prévia da mensagem (system + user)",
   "aiPanel.previewNote":
-    "O texto dos PDFs e arquivos Office é extraído no servidor e inserido em {{arquivos}} no momento do envio.",
+    "O texto é extraído no servidor. PDFs e imagens também vão anexados (páginas e diagramas) quando “Ler PDFs e imagens” está ligado.",
 
   // error / empty states
   "errors.loadTitle": "Não conseguimos carregar suas tarefas.",
