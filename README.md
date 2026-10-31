@@ -187,6 +187,25 @@ To switch to two refreshes per day: `REFRESH_AT=11:00,18:00`. To disable automat
 `AUTO_REFRESH=0`. For host runs (`npm run dev` / `npm run web`) the scheduler is off by default;
 set `AUTO_REFRESH=1` in `apps/server/.env` to enable it there.
 
+### Refresh logs (JSON)
+
+Every refresh writes readable JSON files under `apps/server/data/logs/refresh/` (mounted from
+the host, gitignored):
+
+```
+status.json                         latest scheduler/run snapshot (read this first)
+runs/<date>_<time>_<source>.json    one file per run (start, finish, duration, log excerpt)
+scheduler/YYYY-MM-DD.json           app starts + scheduler decisions for that day
+```
+
+- `/api/refresh/logs` returns `status.json`, recent runs, and available scheduler days.
+- `/api/refresh/logs/run?file=...` and `/api/refresh/logs/scheduler?date=...` return one file.
+- Logs are written in `America/Sao_Paulo` time; secrets are redacted before writing.
+- Files older than **90 days** are pruned automatically.
+- You can also open the folder directly; an agent can read `status.json` first, then the
+  latest file in `runs/`. The UI exposes the same data under **Ajustes → Avançado → Logs de
+  atualização**.
+
 ### Fresh clone
 
 Everything personal (`scraped/`, `.env`, `data/`) is gitignored, so a clone starts clean:
@@ -261,8 +280,7 @@ sweep with `SKIP_HARVEST=1`.
 | **Treino de quiz** (`/treino/quiz`) | Gamified practice quiz generated from your course material (or the real portal questions). |
 | **Perguntar à IA** (`/treino/estudo`) | Free-text study Q&A scoped to a subject. |
 | **God's Eye** (`/gods-eye`) | Read-only view of hidden/upcoming topics the portal serves but doesn't list. |
-| **Ajustes** (`/ajustes`) | Profile, AI voice/format/rules, generation params, organization directory. |
-| **Design** (`/design`) | Living style guide. |
+| **Ajustes** (`/ajustes`) | Profile, Discord/Bark notifications, AI voice/format/rules, generation params, organization directory. |
 
 **Answer workbench.** Drafts stream from OpenAI, are saved as immutable versions, and can be
 restored. Quizzes are answered in `Q<id>: <letter>` format and mapped onto the portal's options.

@@ -71,6 +71,11 @@ Full detail: `agent-docs/10-deployment.md`.
   more) in `REFRESH_TZ`, quiet hours `REFRESH_QUIET_START`-`REFRESH_QUIET_END` (22:00-10:30), and
   retries (60 min, max 3/day). Manual **Atualizar** shares the same controller and bypasses quiet
   hours. History lives in `refresh_run` (migration `0018`); Docker tuning is in a root `.env`.
+- **Refresh JSON logs:** `apps/server/data/logs/refresh/` holds `status.json`, one
+  `runs/<local-time>_<source>.json` per run, and `scheduler/YYYY-MM-DD.json` (app starts +
+  decisions, São Paulo time, 90-day retention, secrets redacted). Read `status.json` first, then
+  the newest run. API: `/api/refresh/logs`, `/api/refresh/logs/run?file=`,
+  `/api/refresh/logs/scheduler?date=`. UI: Settings -> Advanced -> Refresh logs.
 - **Notifications:** `notification_config` + `notification_event` (migration `0020`) store per-student
   Discord webhook / Bark channels, four event toggles (new, <24h, done, expired) and an idempotency
   ledger. The scanner runs at server boot and after every refresh (no background timer); successful

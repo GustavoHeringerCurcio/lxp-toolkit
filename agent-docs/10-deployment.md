@@ -149,6 +149,17 @@ The scheduler and the **Atualizar** button share the same `refresh.ts` controlle
 overlap. Tuning for Docker lives in a gitignored root `.env` (Compose interpolation); host runs use
 `apps/server/.env`.
 
+**Refresh JSON logs (`src/refresh-log.ts`):**
+
+- `apps/server/data/logs/refresh/status.json` — latest snapshot (read first).
+- `.../runs/<local-time>_<source>.json` — one file per run (`running` then `ok`/`failed`,
+  duration, error/warning, redacted 8 KB log excerpt).
+- `.../scheduler/YYYY-MM-DD.json` — app starts + scheduler decisions (only on change).
+- São Paulo timestamps; 90-day retention; secret redaction before writing.
+- `GET /api/refresh/logs`, `/api/refresh/logs/run?file=`, `/api/refresh/logs/scheduler?date=`
+  (same auth gate). The web UI is **Ajustes → Avançado → Logs de atualização**.
+- `apps/server/data` is already mounted/local volume, so no Compose change is needed.
+
 **Production VM (always on):**
 
 - `deploy/refresh.service` (oneshot) + `deploy/refresh.timer` (`OnCalendar=*-*-* 06:00:00`,
