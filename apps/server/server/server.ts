@@ -22,7 +22,7 @@ import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import { healthCheck, query, runMigrations } from "../src/db.js";
 import { importAll } from "../src/import.js";
 import { ensureContentText } from "../src/extract.js";
-import { getCatalogVersion, readProjectionMeta, writeProjection } from "../src/project.js";
+import { buildCourseProgress, getCatalogVersion, readProjectionMeta, writeProjection } from "../src/project.js";
 import {
   clearAnswerHistory,
   deleteProfessorLink,
@@ -798,7 +798,12 @@ const server = createServer(async (req, res) => {
     }
 
     if (url === "/api/exercises") {
-      return json(res, 200, { generatedAt: new Date().toISOString(), exercises: await allViews() });
+      const [exercises, courses] = await Promise.all([allViews(), buildCourseProgress()]);
+      return json(res, 200, {
+        generatedAt: new Date().toISOString(),
+        exercises,
+        courses,
+      });
     }
     if (url === "/api/preview" && (method === "GET" || method === "HEAD")) {
       const src = new URL(req.url ?? "/", "http://local").searchParams.get("url") ?? "";

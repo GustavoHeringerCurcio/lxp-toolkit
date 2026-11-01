@@ -151,9 +151,17 @@ export interface Exercise {
   duplicate?: boolean;
 }
 
+export interface CourseProgress {
+  courseId: number;
+  courseName: string;
+  /** Official portal progress (0-100); null when the portal did not expose it. */
+  progress: number | null;
+}
+
 export interface ExercisesPayload {
   generatedAt: string;
   exercises: Exercise[];
+  courses?: CourseProgress[];
 }
 
 export interface AnswerEntry {

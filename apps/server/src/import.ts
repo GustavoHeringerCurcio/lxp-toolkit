@@ -64,6 +64,10 @@ interface RawItem {
 interface RawCourse {
   courseId: number;
   courseName: string;
+  /** Official portal progress (0-100), when the dump captured it. */
+  progress?: number | null;
+  /** Enrollment id from the course summary (fallback: item context). */
+  portalEnrollmentId?: number | null;
   items: RawItem[];
 }
 
@@ -184,21 +188,31 @@ async function importCourse(client: PoolClient, course: RawCourse, studentId: nu
   const teachers = [...teachersById.values()];
   await upsertProfessors(client, teachers);
 
-  // Enrollment (portal enrollment id lives on the item context).
-  const enrollmentId = course.items
-    .map((it) => Number(it.context?.enrollmentId))
-    .find((n) => Number.isFinite(n) && n > 0);
+  // Enrollment (portal enrollment id lives on the item context; the course
+  // summary also carries it and the official progress percentage).
+  const enrollmentId =
+    course.portalEnrollmentId ??
+    course.items
+      .map((it) => Number(it.context?.enrollmentId))
+      .find((n) => Number.isFinite(n) && n > 0) ??
+    null;
   const firstAccessAt = course.items
     .map((it) => (it.context?.firstAccessAt != null ? String(it.context.firstAccessAt) : null))
     .find((v): v is string => !!v);
-  if (enrollmentId) {
+  const progress = course.progress ?? null;
+  if (enrollmentId != null || progress != null) {
     await client.query(
-      `INSERT INTO enrollment(student_id, course_id, portal_enrollment_id, first_access_at)
-       VALUES ($1,$2,$3,$4)
+      `INSERT INTO enrollment(student_id, course_id, portal_enrollment_id, first_access_at, progress, progress_updated_at)
+       VALUES ($1,$2,$3,$4,$5::numeric,CASE WHEN $5::numeric IS NULL THEN NULL ELSE now() END)
        ON CONFLICT (student_id, course_id) DO UPDATE SET
-         portal_enrollment_id = EXCLUDED.portal_enrollment_id,
-         first_access_at = COALESCE(EXCLUDED.first_access_at, enrollment.first_access_at)`,
-      [studentId, course.courseId, enrollmentId, firstAccessAt],
+         portal_enrollment_id = COALESCE(EXCLUDED.portal_enrollment_id, enrollment.portal_enrollment_id),
+         first_access_at = COALESCE(EXCLUDED.first_access_at, enrollment.first_access_at),
+         progress = COALESCE(EXCLUDED.progress, enrollment.progress),
+         progress_updated_at = CASE
+           WHEN EXCLUDED.progress IS NULL THEN enrollment.progress_updated_at
+           ELSE now()
+         END`,
+      [studentId, course.courseId, enrollmentId, firstAccessAt, progress],
     );
   }
 

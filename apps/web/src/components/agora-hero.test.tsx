@@ -10,10 +10,15 @@ const modules = [
 ];
 const totals = { done: 4, late: 1, open: 3, total: 8 };
 
-function renderSummary(onSelect?: (name: string) => void) {
+function renderSummary(onSelect?: (name: string) => void, officialProgress?: number | null) {
   return render(
     <LangProvider>
-      <ProgressSummary modules={modules} totals={totals} onSelect={onSelect} />
+      <ProgressSummary
+        modules={modules}
+        totals={totals}
+        officialProgress={officialProgress}
+        onSelect={onSelect}
+      />
     </LangProvider>,
   );
 }
@@ -34,6 +39,14 @@ describe("ProgressSummary", () => {
     await user.click(screen.getByText("concluídas"));
 
     expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("mostra o progresso oficial do portal e mantem a contagem de tarefas", () => {
+    renderSummary(undefined, 56);
+
+    expect(screen.getByLabelText("Progresso no portal: 56%")).toBeInTheDocument();
+    expect(screen.getByText("Portal 56%")).toBeInTheDocument();
+    expect(screen.getByText("Tarefas: 4/8 (50%)")).toBeInTheDocument();
   });
 
   it("seleciona o módulo sem recolher o card", async () => {

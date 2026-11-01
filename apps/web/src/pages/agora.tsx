@@ -38,13 +38,21 @@ function SkeletonMain() {
 }
 
 export function AgoraPage() {
-  const { items, loading } = useAppData();
+  const { items, loading, courses } = useAppData();
   const { setModuleFilter } = useScopePrefs();
   const { t, locale } = useT();
   const navigate = useNavigate();
   const [visible, setVisible] = useState(6);
 
   const counts = useMemo(() => countInfo(items), [items]);
+  const officialProgress = useMemo(() => {
+    const courseId = items[0]?.courseId;
+    return (
+      courses.find((c) => c.courseId === courseId && c.progress != null)?.progress ??
+      courses.find((c) => c.progress != null)?.progress ??
+      null
+    );
+  }, [courses, items]);
   const next = useMemo(() => items.filter((e) => e.status === "open").sort((a, b) => cmpOpen(a, b, locale))[0] ?? null, [items, locale]);
   const queueAll = useMemo(
     () =>
@@ -83,6 +91,7 @@ export function AgoraPage() {
         <ProgressSummary
           modules={modules}
           totals={{ done: counts.done, late: counts.expired, open: counts.open, total: items.length }}
+          officialProgress={officialProgress}
           onSelect={(name) => {
             setModuleFilter(name);
             navigate("/tarefas");

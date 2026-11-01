@@ -112,6 +112,10 @@ export interface ContentCourse {
   courseId: number;
   courseName: string;
   items: ContentItem[];
+  /** Official course progress (0-100), when the courses/me payload exposes it. */
+  progress?: number | null;
+  /** Portal enrollment id from the course summary (fallback to item context). */
+  portalEnrollmentId?: number | null;
   /**
    * Module/section topic ids (containers). Used as extra anchors when sweeping
    * for hidden topics, so unpublished activities under unlisted containers are
@@ -354,9 +358,31 @@ interface RawLeaf {
   deadlineAt: string | null;
 }
 
-/** Enumerate all enrolled courses. Returns `{ id, name }[]`. */
-export async function fetchCourses(client: ApiClient): Promise<{ id: number; name: string }[]> {
-  const res = await client.get<{ courses?: { id: number; name: string }[] }>(
+export interface PortalCourse {
+  id: number;
+  name: string;
+  /** Official course progress. The portal returns either 0-100 or 0-1. */
+  progress?: number | string | null;
+  progressPercentage?: number | string | null;
+  enrollmentId?: number | null;
+  enrollment?: { id?: number | null } | null;
+}
+
+/**
+ * Normalize the portal's course progress to a 0-100 percentage.
+ * The endpoint has returned both `56` and `0.56` across tenants.
+ */
+export function normalizeCourseProgress(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const pct = n > 0 && n <= 1 && !Number.isInteger(n) ? n * 100 : n;
+  return Math.max(0, Math.min(100, Math.round(pct * 100) / 100));
+}
+
+/** Enumerate all enrolled courses, including the portal's official progress. */
+export async function fetchCourses(client: ApiClient): Promise<PortalCourse[]> {
+  const res = await client.get<{ courses?: PortalCourse[] }>(
     "/v1/plataforma/academic/courses/me?state=all&page=1&limit=50&sort=asc&sortBy=name&type=courses",
   );
   return res.data.courses ?? [];
@@ -548,6 +574,8 @@ export async function collectContent(
       courseId: course.id,
       courseName: course.name,
       items,
+      progress: normalizeCourseProgress(course.progress ?? course.progressPercentage),
+      portalEnrollmentId: course.enrollmentId ?? course.enrollment?.id ?? null,
       containerIds: [...containerIds].sort((a, b) => a - b),
     });
     logger.info({ course: course.name, items: items.length }, "course content collected");

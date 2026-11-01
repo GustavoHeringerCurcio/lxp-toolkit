@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchConfig, fetchExercises, fetchProfessorLinks } from "@/api";
-import type { AiConfigDto, Exercise, ExerciseKind, ProfessorLink } from "@/types";
+import type { AiConfigDto, CourseProgress, Exercise, ExerciseKind, ProfessorLink } from "@/types";
 
 export type Scope = "open" | "expired" | "done" | "all";
 
@@ -10,6 +10,8 @@ interface AppDataValue {
   hiddenItems: Exercise[];
   cfg: AiConfigDto | null;
   professorLinks: ProfessorLink[];
+  /** Official portal progress per course, from the last capture. */
+  courses: CourseProgress[];
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
@@ -36,6 +38,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [hiddenItems, setHiddenItems] = useState<Exercise[]>([]);
   const [cfg, setCfg] = useState<AiConfigDto | null>(null);
   const [professorLinks, setProfessorLinks] = useState<ProfessorLink[]>([]);
+  const [courses, setCourses] = useState<CourseProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState<Scope>("open");
@@ -55,6 +58,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       setHiddenItems(p.exercises.filter((e) => e.origin === "hidden"));
       setCfg(c);
       setProfessorLinks(links);
+      setCourses(p.courses ?? []);
     } catch (x) {
       setError(x instanceof Error ? x.message : String(x));
     } finally {
@@ -73,6 +77,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       setHiddenItems(p.exercises.filter((e) => e.origin === "hidden"));
       setCfg(c);
       setProfessorLinks(links);
+      setCourses(p.courses ?? []);
     } catch (x) {
       setError(x instanceof Error ? x.message : String(x));
     }
@@ -91,8 +96,32 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, []);
 
   const dataValue = useMemo<AppDataValue>(
-    () => ({ items, hiddenItems, cfg, professorLinks, loading, error, reload, refresh, patchExercise, patchConfig }),
-    [items, hiddenItems, cfg, professorLinks, loading, error, reload, refresh, patchExercise, patchConfig],
+    () => ({
+      items,
+      hiddenItems,
+      cfg,
+      professorLinks,
+      courses,
+      loading,
+      error,
+      reload,
+      refresh,
+      patchExercise,
+      patchConfig,
+    }),
+    [
+      items,
+      hiddenItems,
+      cfg,
+      professorLinks,
+      courses,
+      loading,
+      error,
+      reload,
+      refresh,
+      patchExercise,
+      patchConfig,
+    ],
   );
 
   const scopeValue = useMemo<ScopeValue>(

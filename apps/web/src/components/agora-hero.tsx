@@ -89,15 +89,23 @@ export function NextHero({ next, onClick }: { next: Exercise; onClick: () => voi
 export function ProgressRing({
   done,
   total,
+  percent,
   size = 84,
   ariaLabel,
 }: {
   done: number;
   total: number;
+  /** Official portal percentage; overrides the task ratio when present. */
+  percent?: number | null;
   size?: number;
   ariaLabel?: string;
 }) {
-  const pct = total === 0 ? 0 : done / total;
+  const pct = percent != null
+    ? Math.max(0, Math.min(100, percent)) / 100
+    : total === 0
+      ? 0
+      : done / total;
+  const display = percent != null ? Math.round(percent) : total === 0 ? null : Math.round(pct * 100);
   const r = 30;
   const c = 2 * Math.PI * r;
   return (
@@ -126,7 +134,7 @@ export function ProgressRing({
           className="font-heading font-semibold tabular-nums transition-[font-size] duration-500 ease-soft motion-reduce:transition-none"
           style={{ fontSize: Math.round(size * 0.32) }}
         >
-          {total === 0 ? "—" : `${Math.round(pct * 100)}%`}
+          {display == null ? "—" : `${display}%`}
         </span>
       </div>
     </div>
@@ -155,16 +163,22 @@ export interface ProgressTotals {
 export function ProgressSummary({
   modules,
   totals,
+  officialProgress,
   onSelect,
 }: {
   modules: ModuleProgress[];
   totals: ProgressTotals;
+  /** Official portal progress (0-100). Null/undefined falls back to tasks. */
+  officialProgress?: number | null;
   onSelect?: (name: string) => void;
 }) {
   const { t } = useT();
   const [open, setOpen] = useLocalStorage("lxp.agora.progress.modules", false);
   const { done, late, open: openCount, total } = totals;
   const pct = (n: number) => `${(n / Math.max(total, 1)) * 100}%`;
+  const hasOfficial = officialProgress != null && Number.isFinite(officialProgress);
+  const taskPct = total === 0 ? 0 : Math.round((done / total) * 100);
+  const officialPct = hasOfficial ? Math.round(officialProgress) : null;
 
   const legend = [
     { key: "done", label: t("progress.legendDone"), value: done, cls: "bg-ok" },
@@ -205,7 +219,17 @@ export function ProgressSummary({
             aria-hidden
           />
         </button>
-        <ProgressRing done={done} total={total} size={open ? 88 : 48} ariaLabel={t("now.ringAria", { done, total })} />
+        <ProgressRing
+          done={done}
+          total={total}
+          percent={hasOfficial ? officialProgress : null}
+          size={open ? 88 : 48}
+          ariaLabel={
+            hasOfficial
+              ? t("now.ringAriaPortal", { pct: officialPct ?? 0 })
+              : t("now.ringAria", { done, total })
+          }
+        />
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
@@ -216,6 +240,18 @@ export function ProgressSummary({
             {l.label}
           </span>
         ))}
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+        {hasOfficial && (
+          <span className="flex items-center gap-1.5 font-medium text-foreground">
+            <span className="size-2 rounded-full bg-brand" aria-hidden />
+            {t("now.portalProgress", { pct: officialPct ?? 0 })}
+          </span>
+        )}
+        <span className="text-muted-foreground">
+          {t("now.tasksProgress", { done, total, pct: taskPct })}
+        </span>
       </div>
 
       <div

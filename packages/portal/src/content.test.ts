@@ -4,6 +4,7 @@ import {
   harvestHiddenTopics,
   isDone,
   isMarkable,
+  normalizeCourseProgress,
   normalizeTitle,
   retainedHiddenItems,
   type ContentItem,
@@ -33,6 +34,22 @@ describe("classify", () => {
 
   it("cai em other para tipos desconhecidos", () => {
     expect(classify(10, 1, false)).toBe("other");
+  });
+});
+
+describe("normalizeCourseProgress", () => {
+  it("aceita percentual inteiro, fracao e string", () => {
+    expect(normalizeCourseProgress(56)).toBe(56);
+    expect(normalizeCourseProgress("56")).toBe(56);
+    expect(normalizeCourseProgress(0.56)).toBe(56);
+    expect(normalizeCourseProgress(null)).toBeNull();
+    expect(normalizeCourseProgress("abc")).toBeNull();
+  });
+
+  it("mantem 1 como 1% e limita a faixa 0-100", () => {
+    expect(normalizeCourseProgress(1)).toBe(1);
+    expect(normalizeCourseProgress(120)).toBe(100);
+    expect(normalizeCourseProgress(-5)).toBe(0);
   });
 });
 

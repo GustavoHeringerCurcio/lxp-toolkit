@@ -199,6 +199,40 @@ export async function buildProjection(): Promise<Exercise[]> {
   return out;
 }
 
+export interface CourseProgress {
+  courseId: number;
+  courseName: string;
+  /** Official portal progress (0-100); null when the portal did not expose it. */
+  progress: number | null;
+}
+
+interface CourseProgressRow {
+  course_id: string;
+  course_name: string;
+  progress: string | null;
+}
+
+/**
+ * Official course progress from the last `academic/courses/me` capture.
+ * One row per course, newest enrollment progress wins.
+ */
+export async function buildCourseProgress(): Promise<CourseProgress[]> {
+  const rows = await query<CourseProgressRow>(
+    `SELECT DISTINCT ON (c.id)
+            c.id AS course_id,
+            c.name AS course_name,
+            e.progress
+       FROM course c
+       LEFT JOIN enrollment e ON e.course_id = c.id
+      ORDER BY c.id, e.progress_updated_at DESC NULLS LAST`,
+  );
+  return rows.map((r) => ({
+    courseId: Number(r.course_id),
+    courseName: r.course_name,
+    progress: r.progress != null ? Number(r.progress) : null,
+  }));
+}
+
 /**
  * Bump whenever the projection *shape* changes (new/renamed fields), so a code
  * update invalidates the cached `exercises.json` on the next server boot even
