@@ -155,6 +155,7 @@ never written by the app.
 | `0019_ai_read_attachments` | `ai_config.read_attachments` (send PDFs/images to the generation model) |
 | `0020_notifications` | `notification_config` (Discord/Bark channels + event toggles + `baseline_at`) and `notification_event` (idempotency ledger) |
 | `0021_project_module_defaults` | `activity_project.use_project` + `module_project_default`; drops the guessed course `project_profile` |
+| `0022_clear_legacy_gate` | clears old `answer_attempt.gate_json` and old gate `debug_log` rows (4-level confidence) |
 
 Key read model: `v_exercise_current` feeds `/api/exercises` via `view.ts::enrich`.
 
@@ -207,7 +208,7 @@ Rules to preserve:
 | `ai.ts` | Calls OpenAI with streaming; returns text + provenance (model, tokens, prompt hash). Also `cheapJsonCompletion` for detection. When `readAttachments` is on, PDFs/images are sent as `file`/`image_url` content parts (vision) and the call retries text-only if the model rejects files; base64 is redacted from `ai_run`/debug prompts. |
 | `attachments.ts` | Builds the vision content parts: PDFs as `file`, Office→PDF (LibreOffice), images as `image_url`; caps 4 files / 10 MB each / 40 MB total. |
 | `classify.ts` | Lazy AI review of ambiguous uploads. |
-| `gate.ts` | `analyzeDraftQuality` — advisory quality gate over a draft. |
+| `gate.ts` | `analyzeDraftQuality` — four-level advisory judgment (`terrible`/`bad`/`ok`/`good`) + one-line reason; runs automatically after every generated draft. |
 | `training.ts` | Builds the per-subject knowledge pack (catalog + bank + `content_text`) and generates practice quizzes / streamed study guides. The subject picker flags real subjects (professor-linked or substantial tree) vs exam/phantom modules; hidden God's-Eye topics are included only when unique or question-bearing (duplicate readings dropped). |
 | `summary.ts` | `Resumo`: chunk-aware map-reduce summary of a subject (streamed), persisted via `summary-store.ts`. |
 | `exams.ts` / `exam-store.ts` | Exam phases (`course_exam`): manual end dates + item/section/module overrides; classifies content items to the current exam (keyword → gradebook → deadline → majority, manual wins). Scopes the Treino/Resumo knowledge pack so later exams don't re-send old material. |

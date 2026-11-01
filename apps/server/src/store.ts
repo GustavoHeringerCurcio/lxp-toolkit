@@ -180,7 +180,17 @@ function toSelections(rows: SelectionRow[]): QuizSelection[] {
 
 function toGate(value: unknown): GateResult | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as GateResult;
+  const o = value as Record<string, unknown>;
+  const verdict = o.verdict;
+  // Legacy payloads (ready/review/weak + scores/checks) are ignored.
+  if (verdict !== "terrible" && verdict !== "bad" && verdict !== "ok" && verdict !== "good") return null;
+  return {
+    verdict,
+    reason: typeof o.reason === "string" ? o.reason : "",
+    model: typeof o.model === "string" ? o.model : "",
+    ...(typeof o.logged === "boolean" ? { logged: o.logged } : {}),
+    ...(typeof o.draftHash === "string" ? { draftHash: o.draftHash } : {}),
+  };
 }
 
 export async function getAnswers(): Promise<Answers> {

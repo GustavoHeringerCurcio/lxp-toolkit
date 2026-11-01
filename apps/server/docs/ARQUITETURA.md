@@ -62,7 +62,7 @@
   prompt) para gravar em `ai_run`.
 - `src/classify.ts` / `src/build.ts` — detecção de "flavor" e revisão preguiçosa por IA das
   tarefas ambíguas.
-- `src/gate.ts` — quality gate do rascunho antes do envio.
+- `src/gate.ts` - Answer Confidence: julgamento em 4 niveis (terrible/bad/ok/good) + motivo curto.
 - `src/training.ts` / `src/training-store.ts` — modo treino: monta o pacote de conhecimento a
   partir do Postgres e persiste sessões/questões/respostas.
 - `src/diagram.ts` / `src/diagram-tool.ts` — geração de diagramas.

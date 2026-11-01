@@ -290,38 +290,15 @@ export interface ActivityAbility {
   enabled: boolean;
 }
 
-/** One deterministic rubric check on a draft (template/use-case aware). */
-export interface GateCheck {
-  /** Stable machine code, e.g. `fluxo_alternativo_ancorado`. */
-  code: string;
-  /** Human-facing label in Portuguese. */
-  label: string;
-  ok: boolean;
-  /** Why it failed (empty when ok). */
-  detail: string;
-}
+/** Four-level answer confidence. The UI maps it to a percentage. */
+export type GateVerdict = "terrible" | "bad" | "ok" | "good";
 
-/**
- * Quality-gate analysis of a draft (cheap model). The overall `score` is
- * computed by the server, never taken from the model directly.
- */
+/** Quality-gate judgment of a draft (cheap model). */
 export interface GateResult {
-  /** Weighted 0–100 confidence that the answer is ready to send. */
-  score: number;
-  /** 0–100: does the writing sound natural (not robotic/generic)? */
-  humanScore: number;
-  /** 0–100: does it answer exactly what was asked? */
-  relevanceScore: number;
-  /** 0–100: does it cover everything the task requests? */
-  completenessScore: number;
-  verdict: "ready" | "review" | "weak";
-  /** One-line assessment. */
-  summary: string;
-  issues: string[];
-  suggestions: string[];
+  verdict: GateVerdict;
+  /** One short sentence explaining the verdict. */
+  reason: string;
   model: string;
-  /** Deterministic rubric checks (empty when the draft is not a template). */
-  checks: GateCheck[];
   /** True when a full-context debug log was written for this draft. */
   logged?: boolean;
   /** Hash of the draft this analysis was produced from (for staleness checks). */

@@ -59,7 +59,7 @@ de forma persistente. Reenvios de algo já entregue são detectados e avisados.
 | `src/prompt.ts` | Monta as mensagens `system` + `user` enviadas ao modelo. |
 | `src/ai.ts` | Chamada à OpenAI (streaming) + proveniência gravada em `ai_run`. |
 | `src/classify.ts` / `src/build.ts` | Detecção de "flavor" e revisão preguiçosa por IA. |
-| `src/gate.ts` | Quality gate: analisa o rascunho antes do envio. |
+| `src/gate.ts` | Answer Confidence: julga o rascunho em 4 níveis (terrible/bad/ok/good) antes do envio. |
 | `src/training.ts` / `training-store.ts` | Modo treino: gera questões a partir do material e persiste sessões. |
 | `src/diagram.ts` / `diagram-tool.ts` | Geração de diagramas. |
 | `src/send.ts` | Dispara o runner de envio no pacote do portal e persiste o resultado. |

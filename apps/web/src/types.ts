@@ -170,28 +170,14 @@ export interface AnswerState {
   history: AnswerEntry[];
 }
 
-/** One deterministic rubric check on a draft. */
-export interface GateCheckDto {
-  code: string;
-  label: string;
-  ok: boolean;
-  detail: string;
-}
+export type GateVerdict = "terrible" | "bad" | "ok" | "good";
 
-/** Quality-gate analysis of a draft (cheap model). */
+/** Four-level judgment of a draft (cheap model). The UI maps it to a %. */
 export interface GateResultDto {
-  /** Weighted 0–100 confidence that the answer is ready to send. */
-  score: number;
-  humanScore: number;
-  relevanceScore: number;
-  completenessScore: number;
-  verdict: "ready" | "review" | "weak";
-  summary: string;
-  issues: string[];
-  suggestions: string[];
+  verdict: GateVerdict;
+  /** One short sentence explaining the verdict. */
+  reason: string;
   model: string;
-  /** Deterministic rubric checks (empty for non-template drafts). */
-  checks: GateCheckDto[];
   /** True when a full-context debug log was written for this draft. */
   logged?: boolean;
   /** Hash of the analyzed draft (used to detect a stale saved analysis). */

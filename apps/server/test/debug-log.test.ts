@@ -4,45 +4,25 @@ import type { GateResult } from "../src/types.js";
 
 function gate(patch: Partial<GateResult> = {}): GateResult {
   return {
-    score: 95,
-    humanScore: 90,
-    relevanceScore: 95,
-    completenessScore: 95,
-    verdict: "ready",
-    summary: "",
-    issues: [],
-    suggestions: [],
+    verdict: "good",
+    reason: "",
     model: "m",
-    checks: [],
     ...patch,
   };
 }
 
 describe("gateLogReason", () => {
-  it("returns null for a ready, complete, check-clean draft", () => {
-    expect(gateLogReason(gate())).toBeNull();
-    expect(shouldLog(gate())).toBe(false);
+  it("does not log good or ok drafts", () => {
+    expect(gateLogReason(gate({ verdict: "good" }))).toBeNull();
+    expect(gateLogReason(gate({ verdict: "ok" }))).toBeNull();
+    expect(shouldLog(gate({ verdict: "good" }))).toBe(false);
   });
 
-  it("logs when completeness is <= 90", () => {
-    const reason = gateLogReason(gate({ completenessScore: 90 }));
-    expect(reason).toContain("completude");
-  });
-
-  it("logs a weak verdict", () => {
-    expect(gateLogReason(gate({ verdict: "weak" }))).toContain("weak");
-  });
-
-  it("logs a failed rubric check", () => {
-    const reason = gateLogReason(
-      gate({ checks: [{ code: "fluxo_alternativo_ancorado", label: "x", ok: false, detail: "y" }] }),
+  it("logs bad and terrible with the reason", () => {
+    expect(gateLogReason(gate({ verdict: "bad", reason: "falta o fluxo" }))).toBe(
+      "julgamento bad: falta o fluxo",
     );
-    expect(reason).toContain("verificações falhas");
-    expect(reason).toContain("fluxo_alternativo_ancorado");
-  });
-
-  it("does not log a plain review with no other problem", () => {
-    expect(gateLogReason(gate({ verdict: "review" }))).toBeNull();
+    expect(shouldLog(gate({ verdict: "terrible" }))).toBe(true);
   });
 });
 
@@ -51,7 +31,7 @@ describe("renderDebugMarkdown", () => {
     const bundle: DebugLogBundle = {
       contentItemId: 42,
       answerAttemptId: 7,
-      reason: "completude 80% <= 90",
+      reason: "julgamento bad: falta o fluxo",
       activity: {
         title: "Caso de Uso",
         kind: "upload",
@@ -77,13 +57,14 @@ describe("renderDebugMarkdown", () => {
         tokensIn: 10,
         tokensOut: 20,
       },
-      gate: gate({ completenessScore: 80, verdict: "review" }),
+      gate: gate({ verdict: "bad", reason: "falta o fluxo principal" }),
       createdAt: "2026-09-13T00:00:00.000Z",
     };
 
     const md = renderDebugMarkdown(bundle);
     expect(md).toContain("Diagnóstico — Caso de Uso");
-    expect(md).toContain("completude 80% <= 90");
+    expect(md).toContain("**Julgamento:** bad");
+    expect(md).toContain("falta o fluxo principal");
     expect(md).toContain("FastAid");
     expect(md).toContain("Origem: module");
     expect(md).toContain("Fluxo Principal");

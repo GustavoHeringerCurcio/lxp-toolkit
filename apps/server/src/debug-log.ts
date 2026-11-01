@@ -1,9 +1,8 @@
 /**
- * Full-context diagnostics for drafts the quality gate is not confident about.
+ * Full-context diagnostics for drafts the quality gate considers bad or worse.
  *
- * When a generated draft is not ready to send (completeness <= 90, a failed
- * rubric check, or a non-"ready" verdict), the whole generation context is
- * captured — activity, detected project, prompt, completion, gate result — as
+ * When the four-level judgment is "bad" or "terrible", the whole generation
+ * context is captured — activity, project, prompt, completion, verdict — as
  * both a Postgres row (queryable) and a markdown file (readable by a human or
  * an agent). The goal is that "why did this happen?" is reproducible later.
  */
@@ -59,17 +58,12 @@ export interface DebugLogBundle {
 }
 
 /**
- * Why a draft should be logged, or null when it is ready to send. Only the
- * genuinely actionable cases log — a plain "review" (score 50–79) is not enough
- * on its own, otherwise nearly every draft would produce a file.
+ * Why a draft should be logged: only the actionable levels. `ok` and `good`
+ * never create a diagnostic file.
  */
 export function gateLogReason(gate: GateResult): string | null {
-  const failed = (gate.checks ?? []).filter((c) => !c.ok).map((c) => c.code);
-  const parts: string[] = [];
-  if (gate.completenessScore <= 90) parts.push(`completude ${gate.completenessScore}% <= 90`);
-  if (gate.verdict === "weak") parts.push('veredito "weak"');
-  if (failed.length) parts.push(`verificações falhas: ${failed.join(", ")}`);
-  return parts.length ? parts.join("; ") : null;
+  if (gate.verdict !== "bad" && gate.verdict !== "terrible") return null;
+  return `julgamento ${gate.verdict}${gate.reason ? `: ${gate.reason}` : ""}`;
 }
 
 export function shouldLog(gate: GateResult): boolean {
@@ -85,9 +79,7 @@ export function renderDebugMarkdown(b: DebugLogBundle): string {
   lines.push(`- **Item:** ${b.contentItemId}${b.answerAttemptId ? ` · tentativa ${b.answerAttemptId}` : ""}`);
   lines.push(`- **Quando:** ${b.createdAt}`);
   lines.push(`- **Atividade:** ${b.activity.kind} · ${b.activity.courseName} — ${b.activity.moduleTitle}`);
-  lines.push(
-    `- **Gate:** score ${b.gate.score} · veredito ${b.gate.verdict} · completude ${b.gate.completenessScore}% · aderência ${b.gate.relevanceScore}% · humanidade ${b.gate.humanScore}%`,
-  );
+  lines.push(`- **Julgamento:** ${b.gate.verdict} · ${b.gate.reason || "(sem motivo)"}`);
   lines.push(`- **Modelo:** ${b.generation.model} · temperatura ${b.generation.temperature}`);
   if (b.project) {
     lines.push("");
@@ -98,23 +90,6 @@ export function renderDebugMarkdown(b: DebugLogBundle): string {
     lines.push("");
     lines.push("## Projeto");
     lines.push("(nenhum contexto de projeto foi injetado)");
-  }
-  lines.push("");
-  lines.push("## Verificações do modelo");
-  if (b.gate.checks.length) {
-    for (const c of b.gate.checks) lines.push(`- ${c.ok ? "OK" : "FALHOU"} — ${c.label}${c.ok ? "" : `: ${c.detail}`}`);
-  } else {
-    lines.push("(nenhuma verificação aplicável)");
-  }
-  if (b.gate.issues.length) {
-    lines.push("");
-    lines.push("## Pontos de atenção");
-    for (const i of b.gate.issues) lines.push(`- ${i}`);
-  }
-  if (b.gate.suggestions.length) {
-    lines.push("");
-    lines.push("## Sugestões");
-    for (const s of b.gate.suggestions) lines.push(`- ${s}`);
   }
   if (b.templateFields.length) {
     lines.push("");

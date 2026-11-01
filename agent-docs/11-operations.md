@@ -68,7 +68,7 @@ Escape hatches:
 - `npm run doctor` — Node, deps, Chromium launch, portal creds, OpenAI key (+source), Postgres
   reachability, Docker, scraped content, LibreOffice, ports 4174/5174, PII guard.
 - `GET /api/health` — `{ ok, time }`; public; use for uptime checks and to confirm the proxy path.
-- `GET /api/debug-logs` / `GET /api/debug-log/:id` — quality-gate failures with full context.
+- `GET /api/debug-logs` / `GET /api/debug-log/:id` - drafts judged `bad`/`terrible` (Answer Confidence) with full context.
 - App logs: `$COMPOSE logs -f app`. Caddy logs: `journalctl -u caddy -f`.
 
 ---

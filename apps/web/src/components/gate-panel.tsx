@@ -3,7 +3,7 @@ import { AlertTriangle, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { analyzeDraftGate } from "@/api";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import type { Exercise, GateResultDto } from "@/types";
+import type { Exercise, GateResultDto, GateVerdict } from "@/types";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/collapsible-card";
 
@@ -14,52 +14,46 @@ function hashDraft(s: string): string {
   return `${s.length}:${h}`;
 }
 
-const TONE = {
-  ready: { bar: "bg-ok", text: "text-ok", border: "border-ok/30", bg: "bg-ok/10" },
-  review: { bar: "bg-soon", text: "text-foreground", border: "border-soon/30", bg: "bg-soon/10" },
-  weak: { bar: "bg-destructive", text: "text-destructive", border: "border-destructive/30", bg: "bg-destructive/10" },
-} as const;
+const LEVELS: readonly GateVerdict[] = ["terrible", "bad", "ok", "good"];
 
-function scoreTone(value: number): string {
-  if (value >= 80) return "bg-ok";
-  if (value >= 50) return "bg-soon";
-  return "bg-destructive";
-}
-
-function SubScore({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-border/60 bg-muted/30 p-2">
-      <p className="truncate text-[10px] font-medium text-muted-foreground">{label}</p>
-      <p className="text-sm font-semibold tabular-nums">{value}%</p>
-      <span className="mt-1 flex h-1 overflow-hidden rounded-full bg-muted">
-        <span className={cn("h-full", scoreTone(value))} style={{ width: `${value}%` }} />
-      </span>
-    </div>
-  );
-}
-
-function BulletList({ title, items, tone }: { title: string; items: string[]; tone: "warn" | "brand" }) {
-  return (
-    <div>
-      <p className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">{title}</p>
-      <ul className="mt-1 space-y-0.5">
-        {items.map((item, i) => (
-          <li key={i} className="flex gap-1.5 text-xs text-muted-foreground">
-            <span className={tone === "warn" ? "text-foreground" : "text-brand"} aria-hidden>
-              •
-            </span>
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+/** Visual mapping only: the model outputs a level, the UI shows a confidence %. */
+const TONE: Record<
+  GateVerdict,
+  { pct: number; bar: string; text: string; border: string; bg: string }
+> = {
+  terrible: {
+    pct: 25,
+    bar: "bg-destructive",
+    text: "text-destructive",
+    border: "border-destructive/30",
+    bg: "bg-destructive/10",
+  },
+  bad: {
+    pct: 50,
+    bar: "bg-orange-500",
+    text: "text-orange-600 dark:text-orange-400",
+    border: "border-orange-500/30",
+    bg: "bg-orange-500/10",
+  },
+  ok: {
+    pct: 75,
+    bar: "bg-soon",
+    text: "text-soon",
+    border: "border-soon/30",
+    bg: "bg-soon/10",
+  },
+  good: {
+    pct: 100,
+    bar: "bg-ok",
+    text: "text-ok",
+    border: "border-ok/30",
+    bg: "bg-ok/10",
+  },
+};
 
 /**
- * Quality gate above the draft: a cheap-model analysis of the generated answer
- * against the professor's question, rendered as a confidence bar. Advisory only
- * — it never blocks sending.
+ * Quality gate above the draft: a four-level judgment (terrible | bad | ok |
+ * good) with a one-line reason. Advisory only — it never blocks sending.
  */
 export function GatePanel({
   e,
@@ -119,7 +113,7 @@ export function GatePanel({
 
   // Hydrate from the saved analysis (persisted with the answer version, or
   // delivered by the generation stream) when it matches the current draft, so
-  // revisiting an activity costs no AI call.
+  // a generated draft shows its confidence without pressing Analyze.
   useEffect(() => {
     if (result || !initial) return;
     const text = draft.trim();
@@ -131,7 +125,7 @@ export function GatePanel({
   }, [initial, result]);
 
   // A changed draft invalidates the shown confidence, so the user is never
-  // looking at a score for text that no longer exists.
+  // looking at a judgment for text that no longer exists.
   useEffect(() => {
     if (!result) return;
     const text = draft.trim();
@@ -139,7 +133,7 @@ export function GatePanel({
   }, [draft, result]);
 
   const hasDraft = Boolean(draft.trim());
-  const tone = result ? TONE[result.verdict] : TONE.review;
+  const tone = result ? TONE[result.verdict] : null;
 
   return (
     <CollapsibleCard
@@ -149,7 +143,8 @@ export function GatePanel({
       className="shrink-0"
       bodyClassName="space-y-2.5 p-3"
       badge={
-        result && (
+        result &&
+        tone && (
           <span className="flex items-center gap-1.5">
             <span
               className={cn(
@@ -184,14 +179,31 @@ export function GatePanel({
       <div className="flex items-center gap-2">
         <span className="flex h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
           <span
-            className={cn("h-full transition-[width] duration-500", tone.bar)}
-            style={{ width: `${result?.score ?? 0}%` }}
+            className={cn("h-full transition-[width] duration-500", tone?.bar ?? "bg-muted")}
+            style={{ width: `${tone?.pct ?? 0}%` }}
           />
         </span>
         <span className="w-9 text-right text-xs font-semibold tabular-nums">
-          {result ? `${result.score}%` : "—"}
+          {tone ? `${tone.pct}%` : "—"}
         </span>
       </div>
+
+      {result && tone && (
+        <div className="grid grid-cols-4 gap-1 text-center text-[10px]">
+          {LEVELS.map((level) => (
+            <span
+              key={level}
+              className={cn(
+                level === result.verdict
+                  ? cn("font-semibold", TONE[level].text)
+                  : "text-muted-foreground",
+              )}
+            >
+              {t(`gate.verdict.${level}`)}
+            </span>
+          ))}
+        </div>
+      )}
 
       {!hasDraft && <p className="text-xs text-muted-foreground">{t("gate.idle")}</p>}
       {hasDraft && !result && !loading && !err && (
@@ -205,47 +217,7 @@ export function GatePanel({
 
       {result && (
         <>
-          {result.summary && <p className="text-xs text-muted-foreground">{result.summary}</p>}
-          <div className="grid grid-cols-3 gap-2">
-            <SubScore label={t("gate.human")} value={result.humanScore} />
-            <SubScore label={t("gate.relevance")} value={result.relevanceScore} />
-            <SubScore label={t("gate.completeness")} value={result.completenessScore} />
-          </div>
-          {result.completenessScore <= 90 && (
-            <p className="text-xs text-foreground">{t("gate.completenessLow")}</p>
-          )}
-          {result.checks.length > 0 && (
-            <div className="space-y-1 border-t border-border/60 pt-2.5">
-              <p className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-                {t("gate.checks")}
-              </p>
-              <ul className="space-y-1">
-                {result.checks.map((c) => (
-                  <li key={c.code} className="flex gap-1.5 text-xs">
-                    <span className={c.ok ? "text-ok" : "text-destructive"} aria-hidden>
-                      {c.ok ? "✓" : "✗"}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="text-muted-foreground">{c.label}</span>
-                      {!c.ok && c.detail && (
-                        <span className="block text-destructive/90">{c.detail}</span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {(result.issues.length > 0 || result.suggestions.length > 0) && (
-            <div className="space-y-2 border-t border-border/60 pt-2.5">
-              {result.issues.length > 0 && (
-                <BulletList title={t("gate.issues")} items={result.issues} tone="warn" />
-              )}
-              {result.suggestions.length > 0 && (
-                <BulletList title={t("gate.suggestions")} items={result.suggestions} tone="brand" />
-              )}
-            </div>
-          )}
+          {result.reason && <p className="text-xs text-muted-foreground">{result.reason}</p>}
           <p className="text-[10px] text-muted-foreground">{t("gate.advisory")}</p>
         </>
       )}
