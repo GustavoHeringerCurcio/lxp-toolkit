@@ -348,6 +348,11 @@ export const pt = {
   "send.action.forum": "Sua publicação será postada no fórum.",
   "send.cancel": "Cancelar",
   "send.confirm": "Confirmar e enviar",
+  "send.terribleTitle": "Sua resposta parece terrível",
+  "send.terribleBody":
+    "A confiança da resposta está no nível mais baixo. Tem certeza de que deseja enviar mesmo assim?",
+  "send.sendAnyway": "Enviar mesmo assim",
+  "send.goBack": "Voltar e revisar",
   "send.sending": "Enviando… (login no portal)",
   "send.preview": "Pré-visualizar",
   "send.download": "Baixar",

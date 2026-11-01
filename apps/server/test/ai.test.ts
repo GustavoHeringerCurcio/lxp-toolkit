@@ -3,7 +3,7 @@ import { createServer, type Server, type IncomingMessage, type ServerResponse } 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { generateAnswer } from "../src/ai.js";
+import { AttachmentReadError, generateAnswer } from "../src/ai.js";
 import { makeExercise } from "./helpers.js";
 
 const FAKE_KEY = "sk-test-fake-key-0000";
@@ -177,5 +177,40 @@ describe("generateAnswer (mock HTTP da OpenAI)", () => {
     expect(result.prompt).toContain("[pdf: bdi.pdf]");
     expect(result.prompt).not.toContain("base64");
     expect(result.promptHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("tenta de novo quando a IA recusa usar os anexos", async () => {
+    const base = mkdtempSync(path.join(tmpdir(), "lxp-ai-"));
+    const abs = path.join(base, "bdi.pdf");
+    writeFileSync(abs, Buffer.from("%PDF-1.4\nfake"));
+
+    let calls = 0;
+    handler = (_req, res) => {
+      calls++;
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      res.end(
+        sseChunks([
+          calls === 1
+            ? "Infelizmente, não posso acessar o conteúdo dos arquivos."
+            : "Tabela pronta com as colunas do exercício.",
+        ]),
+      );
+    };
+
+    const e = makeExercise({ files: [{ name: "bdi.pdf", relPath: "bdi.pdf", absPath: abs, remoteUrl: "" }] });
+    const result = await generateAnswer(CFG, e, "", PROFILE);
+
+    expect(requests).toHaveLength(2);
+    expect(result.refusal).toEqual({ detected: true, retried: true, final: false });
+    expect(result.attempts).toHaveLength(2);
+    expect(result.text).toContain("Tabela pronta");
+  });
+
+  it("falha antes do modelo quando nenhum anexo pode ser lido", async () => {
+    const e = makeExercise({
+      files: [{ name: "sumiu.pdf", relPath: "sumiu.pdf", absPath: "/nope/sumiu.pdf", remoteUrl: "" }],
+    });
+    await expect(generateAnswer(CFG, e, "", PROFILE)).rejects.toBeInstanceOf(AttachmentReadError);
+    expect(requests).toHaveLength(0);
   });
 });

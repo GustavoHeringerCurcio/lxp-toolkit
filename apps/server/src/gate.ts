@@ -63,17 +63,29 @@ const SYSTEM =
   "Na dúvida entre ok e bad, escolha bad. Seja específico e breve.\n" +
   'Responda SOMENTE com JSON no formato {"verdict":"terrible|bad|ok|good","reason":"<uma frase curta em português>"}.';
 
+export interface GateDebug {
+  system: string;
+  user: string;
+  raw: string;
+  model: string;
+  error?: string;
+}
+
+export interface GateAnalysis {
+  result: GateResult | null;
+  debug: GateDebug;
+}
+
 /**
- * Analyze a draft against the activity's question with the configured gate
- * model. Best-effort: returns null on any failure or empty input.
+ * Analyze a draft and keep the exact gate prompt/response for the JSON log.
+ * Best-effort: returns a null result on any failure or empty input.
  */
-export async function analyzeDraftQuality(
+export async function analyzeDraftQualityDetailed(
   cfg: AiConfig,
   e: Exercise,
   draft: string,
-): Promise<GateResult | null> {
+): Promise<GateAnalysis> {
   const draftText = stripHtml(draft ?? "").trim();
-  if (!draftText) return null;
   const instructions = stripHtml(e.instructionsText ?? "").slice(0, 6000);
   const user = [
     `Atividade: ${e.title}`,
@@ -81,19 +93,38 @@ export async function analyzeDraftQuality(
     `Enunciado do professor:\n${instructions || "(vazio)"}`,
     `Resposta do aluno:\n${draftText.slice(0, 12000)}`,
   ].join("\n\n");
+  const baseDebug = { system: SYSTEM, user, raw: "", model: cfg.models.gate };
+
+  if (!draftText) return { result: null, debug: baseDebug };
 
   try {
     const { text, model } = await cheapJsonCompletion(cfg, SYSTEM, user, 250, cfg.models.gate);
     const result = parseGateResult(text, model);
-    if (!result) return null;
     return {
-      ...result,
-      // Hash the RAW draft (only trimmed), never the HTML-stripped/whitespace-
-      // collapsed text: the web panel hashes the raw draft, and the two must
-      // match for a saved analysis to be recognized after a refresh.
-      draftHash: draftHash(draftHashInput(draft)),
+      result: result
+        ? {
+            ...result,
+            // Hash the RAW draft (only trimmed), never the HTML-stripped/whitespace-
+            // collapsed text: the web panel hashes the raw draft, and the two must
+            // match for a saved analysis to be recognized after a refresh.
+            draftHash: draftHash(draftHashInput(draft)),
+          }
+        : null,
+      debug: { ...baseDebug, raw: text, model },
     };
-  } catch {
-    return null;
+  } catch (err) {
+    return {
+      result: null,
+      debug: { ...baseDebug, error: err instanceof Error ? err.message : String(err) },
+    };
   }
+}
+
+/** Analyze a draft against the activity's question (result only). */
+export async function analyzeDraftQuality(
+  cfg: AiConfig,
+  e: Exercise,
+  draft: string,
+): Promise<GateResult | null> {
+  return (await analyzeDraftQualityDetailed(cfg, e, draft)).result;
 }

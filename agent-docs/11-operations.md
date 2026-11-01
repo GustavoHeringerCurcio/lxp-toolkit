@@ -69,6 +69,16 @@ Escape hatches:
   reachability, Docker, scraped content, LibreOffice, ports 4174/5174, PII guard.
 - `GET /api/health` — `{ ok, time }`; public; use for uptime checks and to confirm the proxy path.
 - `GET /api/debug-logs` / `GET /api/debug-log/:id` - drafts judged `bad`/`terrible` (Answer Confidence) with full context.
+- **AI generation logs (for agents):** every generation writes one JSON line to
+  `apps/server/data/logs/ai/YYYY-MM-DD.jsonl` and the newest record per activity to
+  `apps/server/data/logs/ai/latest/item-<id>.json`. Each record includes the full prompt/completion,
+  gate prompt/raw reply, config snapshot, and per-file attachment/text diagnostics. Base64, API keys
+  and auth tokens are redacted. Local and gitignored; retention `AI_LOG_KEEP_DAYS` (default 30).
+  ```bash
+  npm run ai:log -- --item 89612062   # newest record for one activity
+  npm run ai:log -- --bad --limit 10 # recent bad/terrible judgments
+  npm run ai:export -- --item 89612062 # one-off historical export from Postgres
+  ```
 - App logs: `$COMPOSE logs -f app`. Caddy logs: `journalctl -u caddy -f`.
 
 ---

@@ -43,6 +43,7 @@ import { toast } from "sonner";
 import { useAppData } from "@/lib/app-state";
 import { fmtDeadline } from "@/lib/status";
 import { isOffice, previewUrl, remoteFileName } from "@/lib/files";
+import { gateForDraft } from "@/lib/gate";
 import { useT, type TranslateFn } from "@/lib/i18n";
 import { cn, stripHtml } from "@/lib/utils";
 import type {
@@ -381,6 +382,7 @@ function AnswerPanel({
   const wantsText = !isGhost && ((isUpload && !isPrint) || isForum);
   const canAi = canAiAnswer(e);
   const isDone = e.done || e.status === "done";
+  const sendGate = gateForDraft(gateResult ?? state?.current?.gate ?? null, draft);
   const canSend =
     !isDone &&
     Boolean(sendCfg?.enabled) &&
@@ -622,6 +624,7 @@ function AnswerPanel({
           exercise={e}
           draft={draft}
           hasArtifacts={e.kind === "upload" && effectiveAbilities.length > 0}
+          gate={sendGate}
           sending={sending}
           sendErr={sendErr}
           onConfirm={(mode) => void confirmSend(mode)}

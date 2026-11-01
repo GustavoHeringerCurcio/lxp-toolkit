@@ -30,6 +30,8 @@
     "db:down": "docker compose down",
     "db:migrate": "npm run db:migrate -w @lxp-toolkit/server",
     "db:import": "npm run db:import -w @lxp-toolkit/server",
+    "ai:log": "npm run ai:log -w @lxp-toolkit/server --",
+    "ai:export": "npm run ai:export -w @lxp-toolkit/server --",
     "sync": "node scripts/sync.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:fresh": "node scripts/dev.mjs --sync",

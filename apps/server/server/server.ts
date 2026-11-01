@@ -102,7 +102,8 @@ import {
   resolveProjectOrigin,
 } from "../src/project-context.js";
 import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
-import { analyzeDraftQuality } from "../src/gate.js";
+import { aiLogApp, writeAiLog, type AiLogRecord } from "../src/ai-log.js";
+import { analyzeDraftQuality, analyzeDraftQualityDetailed } from "../src/gate.js";
 import {
   ABILITY_REGISTRY,
   artifactAbilities,
@@ -574,6 +575,8 @@ interface GateContext {
   promptHash: string;
   tokensIn: number | null;
   tokensOut: number | null;
+  /** Base record for the JSON AI log; gate fields are added by the runner. */
+  log: AiLogRecord;
 }
 
 /**
@@ -587,10 +590,13 @@ async function runGateAndLog(
   shown: string,
   ctx: GateContext,
 ): Promise<GateResult | null> {
+  let gate: GateResult | null = null;
+  let gateDebug: unknown = null;
   try {
-    const gate = await analyzeDraftQuality(cfg, view, shown);
-    if (!gate) return null;
-    if (shouldLog(gate)) {
+    const analysis = await analyzeDraftQualityDetailed(cfg, view, shown);
+    gate = analysis.result;
+    gateDebug = analysis.debug;
+    if (gate && shouldLog(gate)) {
       const written = await writeDebugLog({
         contentItemId: ctx.contentItemId,
         answerAttemptId: ctx.answerAttemptId,
@@ -620,12 +626,18 @@ async function runGateAndLog(
       }).catch(() => null);
       gate.logged = Boolean(written && (written.id || written.file));
     }
-    await saveAnswerGate(ctx.contentItemId, gate);
-    return gate;
+    if (gate) await saveAnswerGate(ctx.contentItemId, gate);
   } catch {
     /* gate is best-effort */
-    return null;
   }
+
+  // Every generation is logged, including good/ok and gate failures.
+  try {
+    writeAiLog({ ...ctx.log, gate, gateDebug });
+  } catch {
+    /* logs are best-effort */
+  }
+  return gate;
 }
 
 /**
@@ -681,14 +693,79 @@ async function generateAndSave(
     template || wantsTemplate ? "" : projectFormatHint(view),
   );
 
-  const gen = await generateAnswer(
-    cfg,
-    view,
-    extra,
-    profile,
-    { onDelta: opts.onDelta, wantsTemplate, templateFields },
-    view.notes,
-  );
+  const baseActivity = {
+    title: view.title,
+    kind: view.kind,
+    flavor: view.flavor,
+    courseId: view.courseId,
+    courseName: view.courseName,
+    moduleId: view.moduleId,
+    moduleTitle: view.moduleTitle,
+    moduleName: view.moduleName,
+    sectionTitle: view.sectionTitle,
+    instructionsText: view.instructionsText ?? "",
+    deadlineAt: view.deadlineAt,
+    remoteFiles: view.remoteFiles,
+  };
+  const baseConfig = {
+    readAttachments: cfg.readAttachments !== false,
+    projectAutoDetect: cfg.projectAutoDetect !== false,
+    models: cfg.models,
+    temperature: cfg.temperature,
+    maxOutputTokens: cfg.max_output_tokens ?? null,
+    activitySections: cfg.activitySections,
+    abilities: cfg.abilities ?? {},
+    style: cfg.style,
+  };
+  const baseTemplate = {
+    wantsTemplate,
+    fields: templateFields,
+    docx: template ? path.basename(template.path) : null,
+  };
+
+  let gen;
+  try {
+    gen = await generateAnswer(
+      cfg,
+      view,
+      extra,
+      profile,
+      { onDelta: opts.onDelta, wantsTemplate, templateFields },
+      view.notes,
+    );
+  } catch (err) {
+    // Even a preflight failure must leave an agent-readable trace.
+    try {
+      writeAiLog({
+        schema: 1,
+        createdAt: new Date().toISOString(),
+        app: aiLogApp(),
+        contentItemId: id,
+        answerAttemptId: null,
+        promptHash: null,
+        activity: {
+          ...baseActivity,
+          files: view.files.map((f) => ({
+            name: f.name,
+            relPath: f.relPath,
+            remoteUrl: f.remoteUrl,
+          })),
+        },
+        config: baseConfig,
+        project: projectInfo,
+        template: baseTemplate,
+        attachments: { requested: true, used: false, files: [], skipped: [], diagnostics: [] },
+        prompt: "",
+        output: { error: err instanceof Error ? err.message : String(err) },
+        gate: null,
+        gateDebug: null,
+        errors: [err instanceof Error ? err.message : String(err)],
+      });
+    } catch {
+      /* logging is best-effort */
+    }
+    throw err;
+  }
   const selections = view.kind === "quiz" ? parseQuizSelections(gen.text, view.questions) : [];
   // Never let the model's guessed date leak into a filled template draft.
   const finalText = wantsTemplate ? forceTodayDate(gen.text) : gen.text;
@@ -710,6 +787,52 @@ async function generateAndSave(
     answerAttemptId: attemptId,
   }).catch(() => undefined);
 
+  const fileInfoByName = new Map(gen.attachments.files.map((f) => [f.name, f]));
+  const diagByName = new Map(gen.attachments.diagnostics.map((d) => [d.name, d]));
+  const activityFiles = view.files.map((f) => {
+    const info = fileInfoByName.get(f.name);
+    const diag = diagByName.get(f.name);
+    return {
+      name: f.name,
+      relPath: f.relPath,
+      remoteUrl: f.remoteUrl,
+      ext: info?.ext ?? path.extname(f.name).toLowerCase(),
+      size: info?.size ?? null,
+      kind: info?.kind ?? "other",
+      attached: info?.attached ?? false,
+      reason: info?.reason ?? diag?.reason ?? null,
+      textChars: diag?.textChars ?? null,
+      status: diag?.status ?? null,
+    };
+  });
+
+  const log: AiLogRecord = {
+    schema: 1,
+    createdAt: new Date().toISOString(),
+    app: aiLogApp(),
+    contentItemId: id,
+    answerAttemptId: attemptId,
+    promptHash: gen.promptHash,
+    activity: { ...baseActivity, files: activityFiles },
+    config: baseConfig,
+    project: projectInfo,
+    template: baseTemplate,
+    attachments: gen.attachments,
+    prompt: gen.prompt,
+    output: {
+      model: gen.model,
+      completion: shown,
+      tokensIn: gen.tokensIn,
+      tokensOut: gen.tokensOut,
+      latencyMs: Date.now() - startedAt,
+      attempts: gen.attempts,
+      refusal: gen.refusal,
+    },
+    gate: null,
+    gateDebug: null,
+    errors: [],
+  };
+
   // Quality gate: runs automatically on every generation (advisory; never
   // blocks sending) and is persisted with the answer version. It is detached
   // from the response path so the draft is delivered immediately, but the
@@ -725,6 +848,7 @@ async function generateAndSave(
     promptHash: gen.promptHash,
     tokensIn: gen.tokensIn,
     tokensOut: gen.tokensOut,
+    log,
   });
   return { shown, rec, gate };
 }

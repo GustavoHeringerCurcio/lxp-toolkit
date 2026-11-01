@@ -206,6 +206,14 @@ export interface AttachmentTextInfo {
   skipped?: Map<string, string>;
 }
 
+/** Per-file status for logs / attachment preflight (never includes file bytes). */
+export interface FileDiagnostic {
+  name: string;
+  textChars: number | null;
+  status: "attached" | "text" | "skipped" | "empty";
+  reason?: string;
+}
+
 /** Build the placeholder values for one exercise (extracts PDF text on the server). */
 export async function buildPromptVars(
   e: Exercise,
@@ -213,6 +221,7 @@ export async function buildPromptVars(
   notes = "",
   sections: AiActivitySections = DEFAULT_ACTIVITY_SECTIONS,
   attachmentInfo: AttachmentTextInfo = {},
+  diagnostics?: FileDiagnostic[],
 ): Promise<PromptVars> {
   const tipo =
     e.kind === "upload"
@@ -233,6 +242,7 @@ export async function buildPromptVars(
       // extracted text is not duplicated here.
       if (attachmentInfo.attached?.has(f.name)) {
         chunks.push("(Arquivo anexado ao modelo: texto e páginas, incluindo diagramas e imagens.)");
+        diagnostics?.push({ name: f.name, textChars: null, status: "attached" });
         continue;
       }
       const skippedReason = attachmentInfo.skipped?.get(f.name);
@@ -243,10 +253,22 @@ export async function buildPromptVars(
       if (text) {
         const max = 30_000;
         chunks.push(text.length > max ? text.slice(0, max) + "\n…[truncado]" : text);
+        diagnostics?.push({
+          name: f.name,
+          textChars: text.length,
+          status: "text",
+          ...(skippedReason ? { reason: skippedReason } : {}),
+        });
       } else {
         chunks.push(
           "(Arquivo sem texto extraível — provavelmente imagem/escaneado ou conversão indisponível; veja o arquivo).",
         );
+        diagnostics?.push({
+          name: f.name,
+          textChars: 0,
+          status: skippedReason ? "skipped" : "empty",
+          ...(skippedReason ? { reason: skippedReason } : {}),
+        });
       }
     }
     if (e.remoteFiles.length) {
@@ -346,16 +368,25 @@ export async function buildMessages(
     attachments?: AiAttachmentPart[];
     attachedNames?: Set<string>;
     skippedAttachments?: SkippedAttachment[];
+    /** Filled in place with per-file text/attachment status (for logs). */
+    fileDiagnostics?: FileDiagnostic[];
   } = {},
 ): Promise<ChatMessage[]> {
   // Ghost/print tasks have no question: never send them to the model.
   if (e.flavor !== "question") return [];
 
   const attachments = opts.attachments ?? [];
-  const vars = await buildPromptVars(e, profile, notes, sections, {
-    attached: opts.attachedNames,
-    skipped: new Map((opts.skippedAttachments ?? []).map((s): [string, string] => [s.name, s.reason])),
-  });
+  const vars = await buildPromptVars(
+    e,
+    profile,
+    notes,
+    sections,
+    {
+      attached: opts.attachedNames,
+      skipped: new Map((opts.skippedAttachments ?? []).map((s): [string, string] => [s.name, s.reason])),
+    },
+    opts.fileDiagnostics,
+  );
   const messages: ChatMessage[] = [];
   const hasTemplate = Boolean(vars.modelo.trim());
 

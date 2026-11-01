@@ -32,11 +32,25 @@ export interface SkippedAttachment {
   reason: string;
 }
 
+/** Per-file diagnostic for logs / preflight (never includes file bytes). */
+export interface AttachmentFileInfo {
+  name: string;
+  ext: string;
+  size: number | null;
+  kind: "pdf" | "image" | "office" | "other";
+  attached: boolean;
+  reason?: string;
+  /** True when an Office file was converted to PDF before attaching. */
+  convertedToPdf?: boolean;
+}
+
 export interface BuiltAttachments {
   parts: AiAttachmentPart[];
   /** Original local file names that were attached (their text is not duplicated). */
   attachedNames: Set<string>;
   skipped: SkippedAttachment[];
+  /** One entry per input file, for logs and preflight. */
+  files: AttachmentFileInfo[];
 }
 
 const IMAGE_MIME: Record<string, string> = {
@@ -64,16 +78,27 @@ export async function buildAiAttachments(files: PdfRef[]): Promise<BuiltAttachme
   const parts: AiAttachmentPart[] = [];
   const attachedNames = new Set<string>();
   const skipped: SkippedAttachment[] = [];
+  const infos: AttachmentFileInfo[] = [];
   let total = 0;
 
   for (const file of files) {
-    if (parts.length >= MAX_ATTACHMENTS) {
-      skipped.push({ name: file.name, reason: "limite de arquivos por envio" });
-      continue;
-    }
-
     const ext = path.extname(file.name).toLowerCase();
     const imageMime = IMAGE_MIME[ext];
+    const office = !imageMime && ext !== ".pdf" && ext !== ".txt" && ext !== ".md" && ext !== ".csv" && ext !== ".html" && ext !== ".htm";
+    const info: AttachmentFileInfo = {
+      name: file.name,
+      ext,
+      size: null,
+      kind: ext === ".pdf" ? "pdf" : imageMime ? "image" : office ? "office" : "other",
+      attached: false,
+    };
+
+    if (parts.length >= MAX_ATTACHMENTS) {
+      info.reason = "limite de arquivos por envio";
+      infos.push(info);
+      skipped.push({ name: file.name, reason: info.reason });
+      continue;
+    }
 
     let bytes: Buffer | null = null;
     let filename = file.name;
@@ -86,7 +111,7 @@ export async function buildAiAttachments(files: PdfRef[]): Promise<BuiltAttachme
       } else if (imageMime) {
         bytes = readFileSync(file.absPath);
         kind = "image";
-      } else {
+      } else if (info.kind === "office") {
         // Office/OpenDocument: LibreOffice renders it to PDF, which keeps the
         // embedded diagrams/images that plain text extraction drops.
         const pdf = await officeToPdf(file.absPath);
@@ -94,27 +119,37 @@ export async function buildAiAttachments(files: PdfRef[]): Promise<BuiltAttachme
           bytes = readFileSync(pdf);
           filename = file.name.replace(/\.[a-z0-9]+$/i, ".pdf");
           kind = "pdf";
+          info.convertedToPdf = true;
         }
       }
     } catch {
       bytes = null;
     }
+    if (bytes) info.size = bytes.length;
 
     if (!kind || !bytes) {
-      skipped.push({ name: file.name, reason: "não foi possível ler/converter" });
+      info.reason = "não foi possível ler/converter";
+      infos.push(info);
+      skipped.push({ name: file.name, reason: info.reason });
       continue;
     }
     if (bytes.length > MAX_ATTACHMENT_BYTES) {
-      skipped.push({ name: file.name, reason: "arquivo maior que 10 MB" });
+      info.reason = "arquivo maior que 10 MB";
+      infos.push(info);
+      skipped.push({ name: file.name, reason: info.reason });
       continue;
     }
     if (total + bytes.length > MAX_TOTAL_ATTACHMENT_BYTES) {
-      skipped.push({ name: file.name, reason: "limite total de 40 MB" });
+      info.reason = "limite total de 40 MB";
+      infos.push(info);
+      skipped.push({ name: file.name, reason: info.reason });
       continue;
     }
 
     total += bytes.length;
     attachedNames.add(file.name);
+    info.attached = true;
+    infos.push(info);
     if (kind === "image" && imageMime) {
       parts.push({ type: "image_url", image_url: { url: imageDataUrl(bytes, imageMime), detail: "high" } });
     } else {
@@ -122,7 +157,7 @@ export async function buildAiAttachments(files: PdfRef[]): Promise<BuiltAttachme
     }
   }
 
-  return { parts, attachedNames, skipped };
+  return { parts, attachedNames, skipped, files: infos };
 }
 
 /** True when the extension is an image we can send to the model. */

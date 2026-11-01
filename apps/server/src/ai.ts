@@ -2,8 +2,13 @@ import { createHash } from "node:crypto";
 import OpenAI from "openai";
 import type { AiConfig, AiProfile, Exercise } from "./types.js";
 import { openaiKey } from "./config.js";
-import { buildAiAttachments, type BuiltAttachments } from "./attachments.js";
-import { buildMessages, resolveExtraInstructions, type ChatMessage } from "./prompt.js";
+import { buildAiAttachments, type AttachmentFileInfo, type BuiltAttachments } from "./attachments.js";
+import {
+  buildMessages,
+  resolveExtraInstructions,
+  type ChatMessage,
+  type FileDiagnostic,
+} from "./prompt.js";
 
 let _client: OpenAI | null = null;
 function client(): OpenAI {
@@ -23,16 +28,58 @@ export interface GenerateOpts {
   projectBlock?: string;
 }
 
+export interface GeneratedAttempt {
+  text: string;
+  refusal: boolean;
+}
+
+export interface GeneratedAttachmentInfo {
+  /** True when the activity had files that should have been sent/read. */
+  requested: boolean;
+  /** True when the final request carried file/image parts. */
+  used: boolean;
+  /** True when the first request carried attachments but the model rejected them. */
+  textFallback: boolean;
+  files: AttachmentFileInfo[];
+  skipped: { name: string; reason: string }[];
+  diagnostics: FileDiagnostic[];
+}
+
 export interface GeneratedAnswer {
   text: string;
   model: string;
   /** Readable prompt (system + user), for `ai_run` provenance. */
   prompt: string;
-  /** sha256 of the serialized messages — stable id for dedupe/analysis. */
+  /** sha256 of the serialized messages - stable id for dedupe/analysis. */
   promptHash: string;
   tokensIn: number | null;
   tokensOut: number | null;
+  attachments: GeneratedAttachmentInfo;
+  attempts: GeneratedAttempt[];
+  refusal: { detected: boolean; retried: boolean; final: boolean };
 }
+
+/** Thrown before the model call when an upload's files yield no usable content. */
+export class AttachmentReadError extends Error {
+  readonly code = "ATTACHMENT_UNREADABLE";
+  constructor(message: string) {
+    super(message);
+    this.name = "AttachmentReadError";
+  }
+}
+
+const REFUSAL_RE =
+  /n[ãa]o\s+(?:posso|consigo|tenho)\s+acess|n[ãa]o\s+(?:é|foi)\s+poss[íi]vel\s+acessar|n[ãa]o\s+tenho\s+acesso|precis(?:a|ar[áa])\s+(?:abrir|acessar)|abra\s+os\s+arquivos|i\s+(?:can't|cannot|am unable to)\s+access|unable\s+to\s+access/i;
+
+/** Detect the model refusing to use files/links (a common failure mode). */
+export function detectRefusal(text: string): boolean {
+  return REFUSAL_RE.test(text ?? "");
+}
+
+const REFUSAL_RETRY_NOTE =
+  "Os anexos e/ou o texto dos arquivos estão disponíveis no contexto acima. " +
+  "Você tem acesso a eles: nunca diga que não pode acessar arquivos ou links, " +
+  "nunca peça ao usuário para abrir nada e entregue o conteúdo solicitado.";
 
 /**
  * Generate an answer for an exercise. The model receives a `system` message with
@@ -146,20 +193,47 @@ export async function generateAnswer(
     templateFields: opts.templateFields,
     projectBlock: opts.projectBlock,
   };
-  const buildWith = (withAttachments: boolean) =>
-    buildMessages(e, profile, cfg.style, cfg.activitySections, resolveExtraInstructions(extraInstructions), notes, {
-      ...base,
-      ...(withAttachments && built
-        ? {
-            attachments: built.parts,
-            attachedNames: built.attachedNames,
-            skippedAttachments: built.skipped,
-          }
-        : {}),
-    });
+  const buildWith = async (withAttachments: boolean, extra = extraInstructions) => {
+    const diagnostics: FileDiagnostic[] = [];
+    const messages = await buildMessages(
+      e,
+      profile,
+      cfg.style,
+      cfg.activitySections,
+      resolveExtraInstructions(extra),
+      notes,
+      {
+        ...base,
+        ...(withAttachments && built
+          ? {
+              attachments: built.parts,
+              attachedNames: built.attachedNames,
+              skippedAttachments: built.skipped,
+            }
+          : {}),
+        fileDiagnostics: diagnostics,
+      },
+    );
+    return { messages, diagnostics };
+  };
 
   const hasAttachments = Boolean(built?.parts.length);
-  let messages = await buildWith(hasAttachments);
+  const requested =
+    e.kind === "upload" && cfg.activitySections.arquivos !== false && e.files.length > 0;
+
+  let prepared = await buildWith(hasAttachments);
+  let messages = prepared.messages;
+  let diagnostics = prepared.diagnostics;
+  const hasReadableText = diagnostics.some((d) => d.status === "text");
+
+  // Never call the model with an empty attachment context: it would refuse or
+  // invent content. The UI surfaces this error and the log records the reason.
+  if (requested && !hasAttachments && !hasReadableText) {
+    const names = e.files.map((f) => f.name).join(", ");
+    throw new AttachmentReadError(
+      `Nenhum anexo pôde ser lido (${names}). Ative "Ler PDFs e imagens" ou verifique o PDF/DOCX antes de gerar.`,
+    );
+  }
 
   // Structured "fill the professor's template" tasks are deterministic, so use
   // a low temperature instead of the (higher) free-form default to curb invented
@@ -167,6 +241,7 @@ export async function generateAnswer(
   const temperature = opts.wantsTemplate ? TEMPLATE_TEMPERATURE : cfg.temperature;
   const maxTokens = cfg.max_output_tokens ?? 2200;
 
+  let attachmentFallback = false;
   let result: { text: string; tokensIn: number | null; tokensOut: number | null };
   try {
     result = await streamCompletion(cfg.models.generation, temperature, maxTokens, messages, opts.onDelta);
@@ -174,8 +249,28 @@ export async function generateAnswer(
     // Text-only models (or a provider without file support) keep working: retry
     // once without the attachments, using the extracted text instead.
     if (!hasAttachments || !isAttachmentRejection(err)) throw err;
-    messages = await buildWith(false);
+    attachmentFallback = true;
+    prepared = await buildWith(false);
+    messages = prepared.messages;
+    diagnostics = prepared.diagnostics;
     result = await streamCompletion(cfg.models.generation, temperature, maxTokens, messages, opts.onDelta);
+  }
+
+  const attempts: GeneratedAttempt[] = [{ text: result.text, refusal: detectRefusal(result.text) }];
+  let retried = false;
+
+  // If the model refused to use available files/text, retry once with an explicit
+  // correction. The draft is still saved if the second attempt refuses too; the
+  // send dialog warns when the confidence is "terrible".
+  const canAttach = hasAttachments && !attachmentFallback;
+  if (attempts[0].refusal && (canAttach || hasReadableText)) {
+    retried = true;
+    prepared = await buildWith(canAttach, `${extraInstructions}\n\n${REFUSAL_RETRY_NOTE}`);
+    messages = prepared.messages;
+    diagnostics = prepared.diagnostics;
+    // Do not stream the retry: the `done` event replaces the draft atomically.
+    result = await streamCompletion(cfg.models.generation, temperature, maxTokens, messages);
+    attempts.push({ text: result.text, refusal: detectRefusal(result.text) });
   }
 
   return {
@@ -185,6 +280,20 @@ export async function generateAnswer(
     promptHash: hashMessages(messages),
     tokensIn: result.tokensIn,
     tokensOut: result.tokensOut,
+    attachments: {
+      requested,
+      used: hasAttachments && !attachmentFallback,
+      textFallback: attachmentFallback,
+      files: built?.files ?? [],
+      skipped: built?.skipped ?? [],
+      diagnostics,
+    },
+    attempts,
+    refusal: {
+      detected: attempts[0].refusal,
+      retried,
+      final: attempts[attempts.length - 1].refusal,
+    },
   };
 }
 

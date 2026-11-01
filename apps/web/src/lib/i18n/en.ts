@@ -344,6 +344,11 @@ export const en: Dict = {
   "send.action.forum": "Your reply will be posted to the forum.",
   "send.cancel": "Cancel",
   "send.confirm": "Confirm and send",
+  "send.terribleTitle": "Your answer looks terrible",
+  "send.terribleBody":
+    "The answer confidence is at the lowest level. Are you sure you want to send it anyway?",
+  "send.sendAnyway": "Send anyway",
+  "send.goBack": "Go back and review",
   "send.sending": "Sending… (portal login)",
   "send.preview": "Preview",
   "send.download": "Download",

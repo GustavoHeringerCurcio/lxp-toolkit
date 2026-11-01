@@ -205,10 +205,12 @@ Rules to preserve:
 | File | Role |
 |---|---|
 | `prompt.ts` | Builds the two messages: `system` (structured `style` rules + abilities + project block + extra instructions) and `user` (the activity content). Exposes `humanizeQuizAnswer`, `parseQuizSelections`, `composeGhostAnswer`. |
-| `ai.ts` | Calls OpenAI with streaming; returns text + provenance (model, tokens, prompt hash). Also `cheapJsonCompletion` for detection. When `readAttachments` is on, PDFs/images are sent as `file`/`image_url` content parts (vision) and the call retries text-only if the model rejects files; base64 is redacted from `ai_run`/debug prompts. |
+| `ai.ts` | Calls OpenAI with streaming; returns text + provenance (model, tokens, prompt hash). Also `cheapJsonCompletion` for detection. When `readAttachments` is on, PDFs/images are sent as `file`/`image_url` content parts (vision) and the call retries text-only if the model rejects files; base64 is redacted from `ai_run`/debug prompts. Preflights unreadable uploads and retries once when the model refuses to use available files; returns attachment/refusal diagnostics for JSON logs. |
 | `attachments.ts` | Builds the vision content parts: PDFs as `file`, Office→PDF (LibreOffice), images as `image_url`; caps 4 files / 10 MB each / 40 MB total. |
 | `classify.ts` | Lazy AI review of ambiguous uploads. |
-| `gate.ts` | `analyzeDraftQuality` — four-level advisory judgment (`terrible`/`bad`/`ok`/`good`) + one-line reason; runs automatically after every generated draft. |
+| `gate.ts` | `analyzeDraftQuality` — four-level advisory judgment (`terrible`/`bad`/`ok`/`good`) + one-line reason; runs automatically after every generated draft. `analyzeDraftQualityDetailed` also returns the gate prompt/raw reply for JSON logs. |
+| `ai-log.ts` | Appends every generation to `data/logs/ai/YYYY-MM-DD.jsonl` + `latest/item-<id>.json`: prompt/completion, gate, config, attachment/text diagnostics. Redacts base64/keys; 30-day retention. |
+| `ai-log-cli.ts` / `ai-export.ts` | `npm run ai:log` (latest per item / recent bad) and `npm run ai:export` (historical Postgres attempts) for agent debugging. |
 | `training.ts` | Builds the per-subject knowledge pack (catalog + bank + `content_text`) and generates practice quizzes / streamed study guides. The subject picker flags real subjects (professor-linked or substantial tree) vs exam/phantom modules; hidden God's-Eye topics are included only when unique or question-bearing (duplicate readings dropped). |
 | `summary.ts` | `Resumo`: chunk-aware map-reduce summary of a subject (streamed), persisted via `summary-store.ts`. |
 | `exams.ts` / `exam-store.ts` | Exam phases (`course_exam`): manual end dates + item/section/module overrides; classifies content items to the current exam (keyword → gradebook → deadline → majority, manual wins). Scopes the Treino/Resumo knowledge pack so later exams don't re-send old material. |
@@ -261,7 +263,7 @@ POST /api/send ──► send.ts::launch*Submit ──► spawn tsx packages/por
 - Actions: `upload` (text/`.txt`/`.pdf`/`.docx`/`image`/`fill`), `quiz` (option ids), `forum`
   (enrollment-scoped post + SPA composer fallback), `mark` (progress POST).
 - On `ok`/`already` the server writes `manual_status='done'`; the UI shows it as completed.
-- Nothing auto-submits — the confirmation modal is the gate.
+- Nothing auto-submits - the confirmation modal is the gate. A draft whose current Answer Confidence is `terrible` adds an extra warning step ("send anyway?") but is not blocked.
 
 The portal runner details (selectors, endpoints, WAF) are in `06-tooling.md` and
 `packages/portal/docs/gaps.md`.

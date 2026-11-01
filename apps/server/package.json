@@ -11,6 +11,8 @@
     "index": "tsx src/load.ts",
     "db:migrate": "tsx src/migrate.ts",
     "db:import": "tsx src/import.ts",
+    "ai:log": "tsx src/ai-log-cli.ts",
+    "ai:export": "tsx src/ai-export.ts",
     "start": "tsx server/server.ts",
     "web": "npm run build -w @lxp-toolkit/web && tsx server/server.ts",
     "test": "vitest run",

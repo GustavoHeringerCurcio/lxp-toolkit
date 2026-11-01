@@ -1,18 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { analyzeDraftGate } from "@/api";
+import { hashDraft } from "@/lib/gate";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { Exercise, GateResultDto, GateVerdict } from "@/types";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/collapsible-card";
-
-/** Tiny, stable hash so identical drafts are not re-analyzed. */
-function hashDraft(s: string): string {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
-  return `${s.length}:${h}`;
-}
 
 const LEVELS: readonly GateVerdict[] = ["terrible", "bad", "ok", "good"];
 

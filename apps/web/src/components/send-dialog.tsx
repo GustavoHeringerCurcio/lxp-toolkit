@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchSendArtifact, type SendMode } from "@/api";
-import type { Exercise } from "@/types";
+import type { Exercise, GateResultDto } from "@/types";
 import { useT } from "@/lib/i18n";
 import { SEND_MODES, defaultSendMode, hasDocxTemplate } from "@/lib/send";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,7 @@ export function SendDialog({
   exercise,
   draft,
   hasArtifacts = false,
+  gate = null,
   sending,
   sendErr,
   onConfirm,
@@ -37,12 +38,14 @@ export function SendDialog({
   exercise: Exercise;
   draft: string;
   hasArtifacts?: boolean;
+  gate?: GateResultDto | null;
   sending: boolean;
   sendErr: string | null;
   onConfirm: (mode: SendMode) => void;
 }) {
   const { t } = useT();
   const [mode, setMode] = useState<SendMode>(() => defaultSendMode(exercise));
+  const [confirmTerrible, setConfirmTerrible] = useState(false);
   const modes = hasArtifacts
     ? SEND_MODES.filter((m) => m.value !== "text" && m.value !== "txt")
     : SEND_MODES;
@@ -78,7 +81,8 @@ export function SendDialog({
     setPreviewUrl(null);
     setPreviewText(null);
     setPreviewErr(null);
-  }, [mode, open]);
+    setConfirmTerrible(false);
+  }, [mode, open, draft]);
 
   useEffect(() => {
     if (!hasArtifacts || (mode !== "text" && mode !== "txt")) return;
@@ -279,19 +283,67 @@ export function SendDialog({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t px-5 py-3.5">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={sending}>
-            {t("send.cancel")}
-          </Button>
-          <Button variant="default" size="sm" onClick={() => onConfirm(mode)} disabled={!canConfirm}>
-            {sending ? (
-              <SpinnerIcon className="size-3.5 animate-spin" />
-            ) : (
-              <SendIcon className="size-3.5" />
-            )}
-            {sending ? t("send.sending") : t("send.confirm")}
-          </Button>
-        </div>
+        {confirmTerrible ? (
+          <div className="space-y-3 border-t border-destructive/30 bg-destructive/5 px-5 py-4">
+            <div className="flex items-start gap-2">
+              <WarningIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
+              <div>
+                <p className="text-sm font-semibold text-destructive">{t("send.terribleTitle")}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("send.terribleBody")}</p>
+                {gate?.reason && (
+                  <p className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-[11px] text-destructive">
+                    {gate.reason}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfirmTerrible(false)}
+                disabled={sending}
+              >
+                {t("send.goBack")}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => onConfirm(mode)}
+                disabled={!canConfirm}
+              >
+                {sending ? (
+                  <SpinnerIcon className="size-3.5 animate-spin" />
+                ) : (
+                  <SendIcon className="size-3.5" />
+                )}
+                {sending ? t("send.sending") : t("send.sendAnyway")}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-end gap-2 border-t px-5 py-3.5">
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={sending}>
+              {t("send.cancel")}
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => {
+                if (gate?.verdict === "terrible") setConfirmTerrible(true);
+                else onConfirm(mode);
+              }}
+              disabled={!canConfirm}
+            >
+              {sending ? (
+                <SpinnerIcon className="size-3.5 animate-spin" />
+              ) : (
+                <SendIcon className="size-3.5" />
+              )}
+              {sending ? t("send.sending") : t("send.confirm")}
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
