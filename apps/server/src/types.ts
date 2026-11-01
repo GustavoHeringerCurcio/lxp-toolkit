@@ -215,42 +215,18 @@ export interface AiActivitySections {
 
 // ── Project context ─────────────────────────────────────────────────────────
 
-export type ProjectSource = "auto" | "manual";
-export type ProjectProfileMode = "main" | "activity" | "none";
-
-/** The student's MAIN project for a course (theme + actors + requirements). */
-export interface ProjectProfile {
-  courseId: number;
-  theme: string;
-  atores: string[];
-  requisitos: string[];
-  /** Themes suggested by the course material, used to populate the dropdown. */
-  suggestedThemes: string[];
-  source: ProjectSource;
-  confidence: number | null;
-  model: string | null;
-  contentHash: string | null;
-  updatedAt: string;
-}
-
-/** Per-activity project relevance, plus an optional quick project override. */
+/**
+ * Per-activity template detection + the explicit "use my project" override.
+ * `useProject` is tri-state: true = on, false = off, null = inherit the module
+ * default (which itself defaults to off).
+ */
 export interface ActivityProject {
   contentItemId: number;
-  needsProject: boolean;
   /** True when the activity asks to fill a professor-provided template/table. */
   wantsTemplate: boolean;
   /** Field labels the professor wants, in order (empty when none). */
   templateFields: string[];
-  profileMode: ProjectProfileMode;
-  /** Quick project (used when `profileMode === "activity"`). */
-  theme: string | null;
-  atores: string[];
-  requisitos: string[];
-  confidence: number | null;
-  intent: string | null;
-  reason: string | null;
-  source: ProjectSource;
-  model: string | null;
+  useProject: boolean | null;
   contentHash: string | null;
   updatedAt: string;
 }

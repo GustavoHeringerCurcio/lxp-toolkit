@@ -33,15 +33,16 @@ import {
   getAnswers,
   getCurrentAttemptId,
   getDebugLog,
+  getModuleProjectDefault,
   getNotificationConfig,
   getNotificationSummary,
   getOverrides,
   getProfessorLinks,
   getProfile,
-  getProjectProfile,
   getProjectSource,
   getRefreshScheduleState,
   listDebugLogs,
+  listModuleProjectDefaults,
   listProjectSourceFiles,
   recordAiRun,
   recordRefreshRun,
@@ -56,11 +57,11 @@ import {
   saveNotificationConfig,
   saveProfessorLink,
   saveProfile,
-  saveProjectProfile,
   saveProjectSource,
   saveProjectSourceReadme,
   saveTag,
   setActivityAbility,
+  setModuleProjectDefault,
 } from "../src/store.js";
 import {
   buildSubjectContext,
@@ -93,12 +94,12 @@ import { enrich, type ExerciseView } from "../src/view.js";
 import { generateAnswer } from "../src/ai.js";
 import { classifyFlavor } from "../src/classify.js";
 import {
-  analyzeActivity,
-  buildProjectInstructionBlock,
   composeEffectiveInstructions,
-  isProjectConfident,
+  detectActivityTemplate,
   projectFormatHint,
   resolveProjectContext,
+  resolveProjectEnabled,
+  resolveProjectOrigin,
 } from "../src/project-context.js";
 import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
 import { analyzeDraftQuality } from "../src/gate.js";
@@ -344,17 +345,10 @@ async function buildFilledDocx(
 }
 
 /**
- * The UML system boundary label: the course main project wins (template
- * activities are grounded in it), then the student's declared project
- * ("Meu projeto"), then the course name as a last resort.
+ * The UML system boundary label: the student's project title, then the course
+ * name as a last resort.
  */
 async function resolveSystemName(view: ExerciseView): Promise<string> {
-  try {
-    const main = await getProjectProfile(view.courseId);
-    if (main?.theme.trim()) return main.theme.trim();
-  } catch {
-    /* best-effort */
-  }
   try {
     const source = await getProjectSource();
     if (source.title.trim()) return source.title.trim();
@@ -545,59 +539,32 @@ async function generateAndSave(
   const profile = await getProfile();
   const startedAt = Date.now();
 
-  // Ground the generation in the activity's project context (when enabled).
-  // For template-fill activities the course MAIN project is the source of truth;
-  // otherwise the student's declared project ("Meu projeto") still wins.
-  let projectBlock = "";
+  // Template detection (opt-in via `projectAutoDetect`) and the explicit
+  // "use my project" switch are independent from each other.
   let externalBlock = "";
   let wantsTemplate = false;
   let templateFields: string[] = [];
   let projectInfo: DebugProject | null = null;
-  if (cfg.projectAutoDetect !== false && isAnswerable(view)) {
+  if (isAnswerable(view)) {
+    if (cfg.projectAutoDetect !== false) {
+      try {
+        const analysis = await detectActivityTemplate(cfg, view, { notes: view.notes ?? "" });
+        wantsTemplate = analysis.wantsTemplate;
+        templateFields = analysis.templateFields;
+      } catch {
+        /* template detection is best-effort */
+      }
+    }
     try {
-      const analysis = await analyzeActivity(cfg, view, { notes: view.notes ?? "" });
-      wantsTemplate = analysis.wantsTemplate;
-      templateFields = analysis.templateFields;
-      if (wantsTemplate) {
-        const main = analysis.mainProfile;
-        if (main && isProjectConfident(main)) {
-          projectBlock = buildProjectInstructionBlock({
-            theme: main.theme,
-            atores: main.atores,
-            requisitos: main.requisitos,
-            origin: "main",
-          });
-        }
+      const resolved = await resolveProjectContext(view);
+      externalBlock = resolved.external;
+      if (resolved.enabled) {
         projectInfo = {
-          theme: main?.theme ?? "",
-          atores: main?.atores ?? [],
-          requisitos: main?.requisitos ?? [],
-          origin: main ? "main" : null,
-          confidence: main?.confidence ?? analysis.confidence ?? null,
-          source: analysis.source ?? null,
-          model: analysis.activity.model ?? null,
-          intent: analysis.intent ?? null,
-          reason: analysis.reason ?? null,
-          needsProject: analysis.needsProject,
+          title: resolved.externalTitle,
+          enabled: true,
+          origin: resolved.origin,
+          configured: resolved.configured,
         };
-      } else {
-        const resolved = await resolveProjectContext(cfg, view, { notes: view.notes ?? "" });
-        if (resolved.effective) projectBlock = buildProjectInstructionBlock(resolved.effective);
-        externalBlock = resolved.external;
-        projectInfo = resolved.effective
-          ? {
-              theme: resolved.effective.theme,
-              atores: resolved.effective.atores,
-              requisitos: resolved.effective.requisitos,
-              origin: resolved.effective.origin,
-              confidence: analysis.confidence ?? null,
-              source: analysis.source ?? null,
-              model: analysis.activity.model ?? null,
-              intent: analysis.intent ?? null,
-              reason: analysis.reason ?? null,
-              needsProject: analysis.needsProject,
-            }
-          : null;
       }
     } catch {
       /* project context is best-effort */
@@ -608,8 +575,7 @@ async function generateAndSave(
   const template = view.kind === "upload" ? await findTemplateDocx(view.files).catch(() => null) : null;
   const extra = composeEffectiveInstructions(
     view.aiRequestJson,
-    wantsTemplate ? "" : projectBlock,
-    wantsTemplate ? "" : externalBlock,
+    externalBlock,
     template || wantsTemplate ? "" : projectFormatHint(view),
   );
 
@@ -618,7 +584,7 @@ async function generateAndSave(
     view,
     extra,
     profile,
-    { onDelta: opts.onDelta, wantsTemplate, templateFields, projectBlock },
+    { onDelta: opts.onDelta, wantsTemplate, templateFields },
     view.notes,
   );
   const selections = view.kind === "quiz" ? parseQuizSelections(gen.text, view.questions) : [];
@@ -1232,17 +1198,43 @@ const server = createServer(async (req, res) => {
       const [last, all] = await Promise.all([lastSubmission(id), submissionsFor(id)]);
       return json(res, 200, { submission: last ?? null, submissions: all });
     }
-    if (url === "/api/project-profile" && method === "GET") {
-      const courseId = Number(new URL(req.url ?? "/", "http://local").searchParams.get("courseId"));
-      if (!courseId) return json(res, 400, { error: "courseId required" });
-      const profile = await getProjectProfile(courseId);
-      return json(res, 200, { profile });
-    }
-    if (url.startsWith("/api/activity-project/") && method === "GET") {
+    if (url.startsWith("/api/project-context/") && method === "GET") {
       const id = Number(url.split("/")[3]);
       if (!id) return json(res, 400, { error: "id required" });
-      const activity = await getActivityProject(id);
-      return json(res, 200, { activity });
+      const view = await findView(id);
+      const [activity, moduleDefault, source, files] = await Promise.all([
+        getActivityProject(id).catch(() => null),
+        getModuleProjectDefault(view.moduleId).catch(() => false),
+        getProjectSource().catch(() => null),
+        listProjectSourceFiles().catch(() => []),
+      ]);
+      const activityOverride = activity?.useProject ?? null;
+      const configured = Boolean(
+        source?.title.trim() ||
+          source?.githubUrl.trim() ||
+          source?.notes.trim() ||
+          source?.readmeText.trim() ||
+          files.length,
+      );
+      return json(res, 200, {
+        ok: true,
+        enabled: resolveProjectEnabled(activityOverride, moduleDefault),
+        origin: resolveProjectOrigin(activityOverride, moduleDefault),
+        activityOverride,
+        moduleDefault,
+        module: { id: view.moduleId, name: view.moduleName, title: view.moduleTitle },
+        project: {
+          title: source?.title ?? "",
+          githubUrl: source?.githubUrl ?? "",
+          notes: source?.notes ?? "",
+          readmeStatus: source?.readmeStatus ?? "none",
+          files: files.map((f) => ({ filename: f.filename, status: f.status, charCount: f.charCount })),
+        },
+        configured,
+      });
+    }
+    if (url === "/api/project-defaults" && method === "GET") {
+      return json(res, 200, { defaults: await listModuleProjectDefaults() });
     }
     if (url.startsWith("/api/activity-abilities/") && method === "GET") {
       const id = Number(url.split("/")[3]);
@@ -1344,53 +1336,23 @@ const server = createServer(async (req, res) => {
         const view = await findView(id);
         return json(res, 200, { ok: true, aiRequestJson: view.aiRequestJson, hasAiOverride: view.hasAiOverride });
       }
-      if (url === "/api/context/analyze") {
-        // Lazy project-context analysis: relevance + main/quick profile.
+      if (url === "/api/project-use") {
+        // Per-activity switch: true/false pins an override, null inherits the
+        // module default.
         const b = await readBody(req);
         const id = Number(b.id);
         if (!id) return json(res, 400, { error: "id required" });
-        const view = await findView(id);
-        const cfg = await getAiConfig();
-        try {
-          const result = await analyzeActivity(cfg, view, {
-            notes: view.notes ?? "",
-            forceProfile: b.forceProfile === true,
-          });
-          return json(res, 200, { ok: true, ...result });
-        } catch (err) {
-          return json(res, 500, { error: err instanceof Error ? err.message : String(err) });
-        }
+        const useProject = b.enabled === null ? null : b.enabled === true;
+        const activity = await saveActivityProject(id, { useProject });
+        return json(res, 200, { ok: true, useProject: activity.useProject });
       }
-      if (url === "/api/project-profile") {
-        // Manual edit of the course MAIN project (theme/actors/requirements).
+      if (url === "/api/project-default") {
+        // Per-module (discipline) default for the student's project.
         const b = await readBody(req);
-        const courseId = Number(b.courseId);
-        if (!courseId) return json(res, 400, { error: "courseId required" });
-        const profile = await saveProjectProfile(courseId, {
-          theme: b.theme != null ? String(b.theme) : undefined,
-          atores: Array.isArray(b.atores) ? b.atores.map(String) : undefined,
-          requisitos: Array.isArray(b.requisitos) ? b.requisitos.map(String) : undefined,
-          suggestedThemes: Array.isArray(b.suggestedThemes) ? b.suggestedThemes.map(String) : undefined,
-          source: "manual",
-        });
-        return json(res, 200, { ok: true, profile });
-      }
-      if (url === "/api/activity-project") {
-        // Per-activity choice: use the main project, a quick project, or none.
-        const b = await readBody(req);
-        const id = Number(b.id);
-        if (!id) return json(res, 400, { error: "id required" });
-        const mode = b.profileMode;
-        const profileMode = mode === "activity" || mode === "none" || mode === "main" ? mode : undefined;
-        const activity = await saveActivityProject(id, {
-          needsProject: typeof b.needsProject === "boolean" ? b.needsProject : undefined,
-          profileMode,
-          theme: b.theme != null ? String(b.theme) : undefined,
-          atores: Array.isArray(b.atores) ? b.atores.map(String) : undefined,
-          requisitos: Array.isArray(b.requisitos) ? b.requisitos.map(String) : undefined,
-          source: "manual",
-        });
-        return json(res, 200, { ok: true, activity });
+        const moduleId = Number(b.moduleId);
+        if (!moduleId) return json(res, 400, { error: "moduleId required" });
+        await setModuleProjectDefault(moduleId, b.enabled === true);
+        return json(res, 200, { ok: true });
       }
       if (url === "/api/activity-ability") {
         // Per-activity ability toggle: true/false sets an override, null clears it.

@@ -1006,7 +1006,7 @@ export function ExercisePage() {
             </CollapsibleCard>
           )}
 
-          {canAiAnswer(e) && <ProjectPanel e={e} onSaved={() => setRegenToken((t) => t + 1)} />}
+          {canAiAnswer(e) && <ProjectPanel e={e} />}
 
           {canAiAnswer(e) && <AiRequestPanel e={e} onSaved={() => setRegenToken((t) => t + 1)} />}
         </div>

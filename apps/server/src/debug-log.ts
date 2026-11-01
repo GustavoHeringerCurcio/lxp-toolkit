@@ -26,17 +26,13 @@ export interface DebugActivity {
 }
 
 export interface DebugProject {
-  theme: string;
-  atores: string[];
-  requisitos: string[];
-  /** Where the injected profile came from: "main" | "activity". */
-  origin: string | null;
-  confidence: number | null;
-  source: string | null;
-  model: string | null;
-  intent: string | null;
-  reason: string | null;
-  needsProject: boolean;
+  /** The student's project title (project_source). */
+  title: string;
+  enabled: boolean;
+  /** Where the switch came from: "activity" | "module" | "off". */
+  origin: string;
+  /** False when the switch is on but project_source has no content. */
+  configured: boolean;
 }
 
 export interface DebugGeneration {
@@ -95,16 +91,12 @@ export function renderDebugMarkdown(b: DebugLogBundle): string {
   lines.push(`- **Modelo:** ${b.generation.model} · temperatura ${b.generation.temperature}`);
   if (b.project) {
     lines.push("");
-    lines.push("## Projeto detectado");
-    lines.push(`- Tema: ${b.project.theme || "(vazio)"}`);
-    lines.push(`- Origem: ${b.project.origin ?? "—"} · fonte: ${b.project.source ?? "—"} · confiança: ${b.project.confidence ?? "—"} · modelo: ${b.project.model ?? "—"}`);
-    lines.push(`- Atores: ${b.project.atores.join(", ") || "(vazio)"}`);
-    lines.push(`- Requisitos: ${b.project.requisitos.join("; ") || "(vazio)"}`);
-    if (b.project.intent) lines.push(`- Intenção detectada: ${b.project.intent}`);
-    if (b.project.reason) lines.push(`- Justificativa: ${b.project.reason}`);
+    lines.push("## Projeto");
+    lines.push(`- Projeto: ${b.project.title || "(sem titulo)"}`);
+    lines.push(`- Origem: ${b.project.origin} · configurado: ${b.project.configured ? "sim" : "não"}`);
   } else {
     lines.push("");
-    lines.push("## Projeto detectado");
+    lines.push("## Projeto");
     lines.push("(nenhum contexto de projeto foi injetado)");
   }
   lines.push("");

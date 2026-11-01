@@ -4,7 +4,8 @@ A resposta é gerada por **duas mensagens** montadas em `src/prompt.ts` (`buildM
 
 1. **`system`** — as regras de escrita, compiladas a partir do `style` estruturado
    (`buildStylePrompt`), mais as instruções extras da atividade, o bloco de **habilidades**
-   (`abilities`) e o bloco de **projeto** da disciplina, quando houver.
+   (`abilities`) e o bloco do **seu projeto** (Meu projeto), quando a atividade ou a disciplina
+   estiver com o contexto ligado.
 2. **`user`** — o conteúdo da atividade (`buildActivityPrompt`), com os placeholders preenchidos.
 
 Não existe um esqueleto editável cheio de marcadores `=== … ===`. O conteúdo é montado pelo

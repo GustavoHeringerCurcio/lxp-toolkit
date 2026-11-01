@@ -19,8 +19,8 @@ Domains (see `apps/server/db/migrations/0001_foundation.sql`):
   `submission_payload`, `item_annotation`.
 - **AI** — `ai_config`, `ai_run`.
 - **Customization** — `professor_link` (per-student professor photo; see below).
-- **Project context** — `project_profile` (main project per course), `activity_project`
-  (per-activity relevance + optional quick project; `0006_project_context.sql`).
+- **Project context** - `activity_project` (template cache + explicit switch) +
+  `module_project_default`; the single external project lives in `project_source`.
 - **Read model** — view `v_exercise_current` → projected to `apps/server/data/exercises.json`.
 
 Runtime writes go straight to the DB via `apps/server/src/store.ts` (answers, submissions,
@@ -69,26 +69,28 @@ module monogram, on error. Two sources are resolved in `view.ts::enrich` (person
 `professorPhotoUrl` is attached per exercise at request time (never written to the `exercises.json`
 cache).
 
-### Project context (`project_profile` + `activity_project`)
+### Project context (`activity_project` + `module_project_default`)
 
-Some activities require the student to work inside their team's **project** (theme + actors +
-functional requirements). `apps/server/src/project-context.ts` resolves this **lazily** with the
-cheapest model (`ai.ts::cheapJsonCompletion`, `DETECT_MODEL`) and caches it:
+There is **one** project per student: the external source in `project_source` (Ajustes →
+Organização → Meu projeto). The app never guesses a project from course material.
 
-1. `activity_project` (`0006_project_context.sql`) — per `(content_item_id, student_id)`. A free
-   regex pre-pass (`projectSignal`) short-circuits obvious cases; only `weak` signals call the model
-   (`detectActivityRelevance`). Stores `needs_project`, `profile_mode` (`main`/`activity`/`none`),
-   an optional quick project, `intent`, `confidence` and a `content_hash` (re-detect when the
-   activity changes). `source = manual` is never overwritten by auto-detection.
-2. `project_profile` — the course **main project**, one per `(student_id, course_id)`, detected by
-   `detectCourseProject` from `content_text` (project/requirements items first) plus `suggested_themes`
-   for the dropdown.
+1. `activity_project` (`0006_project_context.sql`, simplified by `0021_project_module_defaults.sql`)
+   — per `(content_item_id, student_id)`. Keeps the template detection cache (`wants_template`,
+   `template_fields`, `content_hash`) and the project switch `use_project`:
+   `TRUE` = on, `FALSE` = off, `NULL` = inherit.
+2. `module_project_default` (`0021_project_module_defaults.sql`) — per
+   `(student_id, module_id)`, the default switch for that module/discipline.
 
-At generation time `generateAndSave` (server) merges the per-exercise `ai_request` override with the
-effective project block (`buildProjectInstructionBlock`) and a generic table/format hint
-(`projectFormatHint`) into the prompt's extra instructions. Auto-detection is gated by
-`ai_config.project_auto_detect` (Ajustes → IA). Endpoints: `POST /api/context/analyze`,
-`GET/POST /api/project-profile`, `POST /api/activity-project`.
+At generation time `resolveProjectContext` (server) computes
+`enabled = activity.use_project ?? module_default ?? false`. When enabled, the external project
+block (`buildExternalProjectBlock`) is injected for **both** normal and template-fill activities.
+No AI call is involved in this resolution. The old course-level `project_profile`
+(theme/actors/requirements) was removed.
+
+Template detection (`detectActivityTemplate` → `detectActivityRelevance`) still runs lazily and is
+gated by `ai_config.project_auto_detect` (Ajustes → IA, now labelled "detectar templates
+automaticamente"). Endpoints: `GET /api/project-context/:id`, `POST /api/project-use`,
+`GET /api/project-defaults`, `POST /api/project-default`.
 
 ## Exam phases (`course_exam`) — Provas
 

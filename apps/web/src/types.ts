@@ -110,6 +110,7 @@ export interface Exercise {
   isRecordProgress: boolean;
   courseId: number;
   courseName: string;
+  moduleId: number;
   moduleTitle: string;
   moduleName: string;
   professor: string | null;
@@ -294,58 +295,35 @@ export interface AiConfigDto {
 
 // ── Project context ─────────────────────────────────────────────────────────
 
-export type ProjectSource = "auto" | "manual";
-export type ProjectProfileMode = "main" | "activity" | "none";
+export type ProjectOrigin = "activity" | "module" | "off";
 
-/** The student's MAIN project for a course. */
-export interface ProjectProfileDto {
-  courseId: number;
-  theme: string;
-  atores: string[];
-  requisitos: string[];
-  suggestedThemes: string[];
-  source: ProjectSource;
-  confidence: number | null;
-  model: string | null;
-  contentHash: string | null;
-  updatedAt: string;
+export interface ProjectContextFileDto {
+  filename: string;
+  status: ProjectSourceFileStatus;
+  charCount: number;
 }
 
-/** Per-activity relevance + optional quick project override. */
-export interface ActivityProjectDto {
-  contentItemId: number;
-  needsProject: boolean;
-  profileMode: ProjectProfileMode;
-  theme: string | null;
-  atores: string[];
-  requisitos: string[];
-  confidence: number | null;
-  intent: string | null;
-  reason: string | null;
-  source: ProjectSource;
-  model: string | null;
-  contentHash: string | null;
-  updatedAt: string;
-}
-
-export interface EffectiveProfileDto {
-  theme: string;
-  atores: string[];
-  requisitos: string[];
-  origin: "main" | "activity";
-}
-
-export interface AnalyzeResultDto {
+/** Explicit "use my project" state for one activity + its module default. */
+export interface ProjectContextDto {
   ok: boolean;
-  needsProject: boolean;
-  confidence: number | null;
-  intent: string | null;
-  reason: string | null;
-  source: ProjectSource;
-  mainProfile: ProjectProfileDto | null;
-  activity: ActivityProjectDto;
-  proposed: { theme: string; atores: string[]; requisitos: string[] } | null;
-  effective: EffectiveProfileDto | null;
+  enabled: boolean;
+  origin: ProjectOrigin;
+  activityOverride: boolean | null;
+  moduleDefault: boolean;
+  module: { id: number; name: string; title: string };
+  project: {
+    title: string;
+    githubUrl: string;
+    notes: string;
+    readmeStatus: ProjectReadmeStatus;
+    files: ProjectContextFileDto[];
+  };
+  configured: boolean;
+}
+
+export interface ModuleProjectDefaultDto {
+  moduleId: number;
+  enabled: boolean;
 }
 
 // ── External project source (Ajustes → Organização) ─────────────────────────

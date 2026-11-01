@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, FileText, FolderGit2, Loader2, RefreshCw, Save, Trash2, Upload } from "lucide-react";
 import {
   deleteProjectFile,
+  fetchProjectDefaults,
   fetchProjectReadme,
   fetchProjectSource,
+  saveProjectDefault,
   saveProjectSource,
   uploadProjectFile,
 } from "@/api";
+import { useAppData } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { ProjectSourceFile, ProjectSourceFileStatus, ProjectSourceState } from "@/types";
@@ -34,6 +37,7 @@ function formatBytes(n: number): string {
  */
 export function ProjectSourceSection() {
   const { t } = useT();
+  const { items } = useAppData();
   const [source, setSource] = useState<ProjectSourceState | null>(null);
   const [files, setFiles] = useState<ProjectSourceFile[]>([]);
   const [title, setTitle] = useState("");
@@ -43,7 +47,25 @@ export function ProjectSourceSection() {
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [defaults, setDefaults] = useState<Record<number, boolean>>({});
+  const [defaultBusy, setDefaultBusy] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const modules = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; courseName: string }>();
+    for (const e of items) {
+      if (!map.has(e.moduleId)) {
+        map.set(e.moduleId, {
+          id: e.moduleId,
+          name: e.moduleName?.trim() || e.moduleTitle,
+          courseName: e.courseName,
+        });
+      }
+    }
+    return [...map.values()].sort(
+      (a, b) => a.courseName.localeCompare(b.courseName) || a.name.localeCompare(b.name),
+    );
+  }, [items]);
 
   const applySource = useCallback((s: ProjectSourceState) => {
     setSource(s);
@@ -63,9 +85,33 @@ export function ProjectSourceSection() {
     }
   }, [applySource]);
 
+  const loadDefaults = useCallback(async () => {
+    try {
+      const list = await fetchProjectDefaults();
+      setDefaults(Object.fromEntries(list.map((d) => [d.moduleId, d.enabled])));
+    } catch {
+      /* defaults are optional */
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadDefaults();
+  }, [load, loadDefaults]);
+
+  const toggleDefault = async (moduleId: number, enabled: boolean) => {
+    setDefaultBusy(moduleId);
+    setErr(null);
+    setDefaults((prev) => ({ ...prev, [moduleId]: enabled }));
+    try {
+      await saveProjectDefault(moduleId, enabled);
+    } catch (x) {
+      setDefaults((prev) => ({ ...prev, [moduleId]: !enabled }));
+      setErr(x instanceof Error ? x.message : String(x));
+    } finally {
+      setDefaultBusy(null);
+    }
+  };
 
   const save = async () => {
     setBusy(true);
@@ -260,6 +306,53 @@ export function ProjectSourceSection() {
                 </button>
               </li>
             ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="space-y-2 border-t border-border/60 pt-3">
+        <div>
+          <p className="text-sm font-medium text-foreground/90">{t("org.project.defaults")}</p>
+          <p className="text-[11px] text-muted-foreground">{t("org.project.defaultsHint")}</p>
+        </div>
+        {modules.length === 0 ? (
+          <p className="text-xs text-muted-foreground">{t("org.project.defaultsEmpty")}</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {modules.map((m) => {
+              const on = defaults[m.id] === true;
+              const saving = defaultBusy === m.id;
+              return (
+                <li
+                  key={m.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card/60 px-2.5 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-foreground/90">{m.name}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{m.courseName}</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={on}
+                    aria-label={t("org.project.defaultHere", { module: m.name })}
+                    disabled={saving}
+                    onClick={() => void toggleDefault(m.id, !on)}
+                    className={cn(
+                      "relative h-6 w-11 shrink-0 rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50",
+                      on ? "border-brand bg-brand" : "border-border bg-muted",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute top-0.5 left-0.5 grid size-4 place-items-center rounded-full bg-card shadow transition-transform",
+                        on && "translate-x-5",
+                      )}
+                    />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

@@ -1,13 +1,11 @@
 import type {
   AbilityId,
   AbilitySettings,
-  ActivityProjectDto,
   AiActivitySections,
   AiConfigDto,
   AiModels,
   AiProfile,
   AiStyle,
-  AnalyzeResultDto,
   Anomaly,
   AnswerEntry,
   AnswerState,
@@ -21,11 +19,11 @@ import type {
   GateResultDto,
   NotificationChannelResultDto,
   NotificationConfigDto,
+  ModuleProjectDefaultDto,
   NotificationSaveInput,
   OrganizationDto,
   ProfessorLink,
-  ProjectProfileDto,
-  ProjectProfileMode,
+  ProjectContextDto,
   ProjectReadmeStatus,
   ProjectSourceFile,
   ProjectSourceState,
@@ -202,42 +200,27 @@ export async function saveAiRequest(id: number, raw: string | null): Promise<AiR
   return (await post("/api/ai-request", { id, raw })) as AiRequestSaveResult;
 }
 
-/**
- * Lazily resolve the project context for an activity: whether it needs a
- * project, the course main project, and any quick project proposed by the
- * activity. Cached server-side.
- */
-export async function analyzeActivityContext(id: number, forceProfile = false): Promise<AnalyzeResultDto> {
-  return (await post("/api/context/analyze", { id, forceProfile })) as AnalyzeResultDto;
+/** Explicit "use my project" state + module default for one activity. */
+export async function fetchProjectContext(id: number): Promise<ProjectContextDto> {
+  return (await req<ProjectContextDto>(`/api/project-context/${id}`)) as ProjectContextDto;
 }
 
-export interface SaveProjectProfileInput {
-  courseId: number;
-  theme?: string;
-  atores?: string[];
-  requisitos?: string[];
-  suggestedThemes?: string[];
+/** Pin the project switch for one activity; `null` clears the override. */
+export async function saveProjectUse(id: number, enabled: boolean | null): Promise<boolean | null> {
+  const res = (await post("/api/project-use", { id, enabled })) as { useProject: boolean | null };
+  return res.useProject;
 }
 
-/** Manually edit the course MAIN project. */
-export async function saveProjectProfile(input: SaveProjectProfileInput): Promise<ProjectProfileDto> {
-  const res = (await post("/api/project-profile", input)) as { profile: ProjectProfileDto };
-  return res.profile;
+/** Per-module (discipline) default for the student's project. */
+export async function saveProjectDefault(moduleId: number, enabled: boolean): Promise<void> {
+  await post("/api/project-default", { moduleId, enabled });
 }
 
-export interface SaveActivityProjectInput {
-  id: number;
-  needsProject?: boolean;
-  profileMode?: ProjectProfileMode;
-  theme?: string | null;
-  atores?: string[];
-  requisitos?: string[];
-}
-
-/** Choose the main project, a quick project, or none for one activity. */
-export async function saveActivityProject(input: SaveActivityProjectInput): Promise<ActivityProjectDto> {
-  const res = (await post("/api/activity-project", input)) as { activity: ActivityProjectDto };
-  return res.activity;
+export async function fetchProjectDefaults(): Promise<ModuleProjectDefaultDto[]> {
+  const res = (await req<{ defaults: ModuleProjectDefaultDto[] }>("/api/project-defaults")) as {
+    defaults: ModuleProjectDefaultDto[];
+  };
+  return res.defaults ?? [];
 }
 
 export interface TagSaveResult {

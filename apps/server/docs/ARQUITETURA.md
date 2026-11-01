@@ -48,8 +48,9 @@
   `safeaUserId` estável de `context.teachers[]` e grava `module_professor` (fonte, confiança).
 - `src/organizations.ts` — cruza o diretório commitado (`config/organizations.json`) com os
   professores locais para resolver fotos; a imagem é carregada no navegador, não no servidor.
-- `src/project-context.ts` — detecta o projeto principal da disciplina e a relevância por
-  atividade (modelo barato, cacheado em `project_profile` / `activity_project`).
+- `src/project-context.ts` - resolve o contexto explícito do projeto (`activity_project.use_project`
+  ?? `module_project_default` ?? desligado) e injeta o projeto de `project_source`; detecção de
+  template é separada e cacheada em `activity_project`.
 - `src/project.ts` — projeta a view `v_exercise_current` para `data/exercises.json` (cache da UI)
   e calcula o `catalogVersion` que invalida o cache.
 - `src/load.ts` — orquestra `migrate → import → project` (`npm run index:web`).

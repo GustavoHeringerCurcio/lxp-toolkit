@@ -61,16 +61,10 @@ describe("renderDebugMarkdown", () => {
         files: ["Modelo.docx"],
       },
       project: {
-        theme: "Aplicativo de saúde",
-        atores: ["Usuário"],
-        requisitos: ["Login"],
-        origin: "main",
-        confidence: 0.4,
-        source: "auto",
-        model: "gpt-5-nano",
-        intent: "preencher tabela",
-        reason: "sinal forte",
-        needsProject: true,
+        title: "FastAid",
+        enabled: true,
+        origin: "module",
+        configured: true,
       },
       templateFields: ["Atores", "Fluxo Principal"],
       abilities: { uml_diagram: true },
@@ -90,8 +84,8 @@ describe("renderDebugMarkdown", () => {
     const md = renderDebugMarkdown(bundle);
     expect(md).toContain("Diagnóstico — Caso de Uso");
     expect(md).toContain("completude 80% <= 90");
-    expect(md).toContain("Aplicativo de saúde");
-    expect(md).toContain("confiança: 0.4");
+    expect(md).toContain("FastAid");
+    expect(md).toContain("Origem: module");
     expect(md).toContain("Fluxo Principal");
     expect(md).toContain("[system]");
     expect(md).toContain("UC-01 — Login");

@@ -24,10 +24,7 @@ import type {
   Overrides,
   OverridesEntry,
   ProfessorLink,
-  ProjectProfile,
-  ProjectProfileMode,
   ProjectReadmeStatus,
-  ProjectSource,
   ProjectSourceFile,
   ProjectSourceFileStatus,
   ProjectSourceState,
@@ -857,148 +854,28 @@ function toStrArray(v: unknown): string[] {
   return Array.isArray(v) ? v.map((i) => String(i)).filter(Boolean) : [];
 }
 
-interface ProjectProfileRow {
-  course_id: string;
-  theme: string | null;
-  atores: unknown;
-  requisitos: unknown;
-  suggested_themes: unknown;
-  source: string;
-  confidence: number | null;
-  model: string | null;
-  content_hash: string | null;
-  updated_at: Date;
-}
-
-function toProjectProfile(r: ProjectProfileRow): ProjectProfile {
-  return {
-    courseId: Number(r.course_id),
-    theme: r.theme ?? "",
-    atores: toStrArray(r.atores),
-    requisitos: toStrArray(r.requisitos),
-    suggestedThemes: toStrArray(r.suggested_themes),
-    source: r.source === "manual" ? "manual" : "auto",
-    confidence: r.confidence,
-    model: r.model,
-    contentHash: r.content_hash,
-    updatedAt: iso(r.updated_at),
-  };
-}
-
-const PROJECT_PROFILE_COLS =
-  "course_id, theme, atores, requisitos, suggested_themes, source, confidence, model, content_hash, updated_at";
-
-export async function getProjectProfile(courseId: number): Promise<ProjectProfile | null> {
-  const studentId = await getStudentId();
-  const rows = await query<ProjectProfileRow>(
-    `SELECT ${PROJECT_PROFILE_COLS} FROM project_profile WHERE student_id = $1 AND course_id = $2`,
-    [studentId, courseId],
-  );
-  return rows[0] ? toProjectProfile(rows[0]) : null;
-}
-
-export interface ProjectProfileInput {
-  theme?: string;
-  atores?: string[];
-  requisitos?: string[];
-  suggestedThemes?: string[];
-  source?: ProjectSource;
-  confidence?: number | null;
-  model?: string | null;
-  contentHash?: string | null;
-  raw?: unknown;
-}
-
-export async function saveProjectProfile(
-  courseId: number,
-  input: ProjectProfileInput,
-): Promise<ProjectProfile> {
-  const studentId = await getStudentId();
-  const existing = await getProjectProfile(courseId);
-  const theme = input.theme ?? existing?.theme ?? "";
-  const atores = input.atores ?? existing?.atores ?? [];
-  const requisitos = input.requisitos ?? existing?.requisitos ?? [];
-  const suggestedThemes = input.suggestedThemes ?? existing?.suggestedThemes ?? [];
-  const source = input.source ?? existing?.source ?? "auto";
-  const confidence = input.confidence !== undefined ? input.confidence : (existing?.confidence ?? null);
-  const model = input.model !== undefined ? input.model : (existing?.model ?? null);
-  const contentHash = input.contentHash !== undefined ? input.contentHash : (existing?.contentHash ?? null);
-  await query(
-    `INSERT INTO project_profile(student_id, course_id, theme, atores, requisitos, suggested_themes, source, confidence, model, content_hash, raw_json, detected_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now(), now())
-     ON CONFLICT (student_id, course_id) DO UPDATE SET
-       theme = EXCLUDED.theme,
-       atores = EXCLUDED.atores,
-       requisitos = EXCLUDED.requisitos,
-       suggested_themes = EXCLUDED.suggested_themes,
-       source = EXCLUDED.source,
-       confidence = EXCLUDED.confidence,
-       model = EXCLUDED.model,
-       content_hash = EXCLUDED.content_hash,
-       raw_json = EXCLUDED.raw_json,
-       detected_at = now(),
-       updated_at = now()`,
-    [
-      studentId,
-      courseId,
-      theme,
-      JSON.stringify(atores),
-      JSON.stringify(requisitos),
-      JSON.stringify(suggestedThemes),
-      source,
-      confidence,
-      model,
-      contentHash,
-      input.raw != null ? JSON.stringify(input.raw) : null,
-    ],
-  );
-  const saved = await getProjectProfile(courseId);
-  if (!saved) throw new Error(`falha ao salvar projeto do curso ${courseId}`);
-  return saved;
-}
-
 interface ActivityProjectRow {
   content_item_id: string;
-  needs_project: boolean;
   wants_template: boolean;
   template_fields: unknown;
-  profile_mode: string;
-  theme: string | null;
-  atores: unknown;
-  requisitos: unknown;
-  confidence: number | null;
-  intent: string | null;
-  reason: string | null;
-  source: string;
-  model: string | null;
+  use_project: boolean | null;
   content_hash: string | null;
   updated_at: Date;
 }
 
 function toActivityProject(r: ActivityProjectRow): ActivityProject {
-  const mode: ProjectProfileMode =
-    r.profile_mode === "activity" || r.profile_mode === "none" ? r.profile_mode : "main";
   return {
     contentItemId: Number(r.content_item_id),
-    needsProject: r.needs_project === true,
     wantsTemplate: r.wants_template === true,
     templateFields: toStrArray(r.template_fields),
-    profileMode: mode,
-    theme: r.theme,
-    atores: toStrArray(r.atores),
-    requisitos: toStrArray(r.requisitos),
-    confidence: r.confidence,
-    intent: r.intent,
-    reason: r.reason,
-    source: r.source === "manual" ? "manual" : "auto",
-    model: r.model,
+    useProject: r.use_project === null || r.use_project === undefined ? null : r.use_project === true,
     contentHash: r.content_hash,
     updatedAt: iso(r.updated_at),
   };
 }
 
 const ACTIVITY_PROJECT_COLS =
-  "content_item_id, needs_project, wants_template, template_fields, profile_mode, theme, atores, requisitos, confidence, intent, reason, source, model, content_hash, updated_at";
+  "content_item_id, wants_template, template_fields, use_project, content_hash, updated_at";
 
 export async function getActivityProject(itemId: number): Promise<ActivityProject | null> {
   const studentId = await getStudentId();
@@ -1010,18 +887,9 @@ export async function getActivityProject(itemId: number): Promise<ActivityProjec
 }
 
 export interface ActivityProjectInput {
-  needsProject?: boolean;
   wantsTemplate?: boolean;
   templateFields?: string[];
-  profileMode?: ProjectProfileMode;
-  theme?: string | null;
-  atores?: string[];
-  requisitos?: string[];
-  confidence?: number | null;
-  intent?: string | null;
-  reason?: string | null;
-  source?: ProjectSource;
-  model?: string | null;
+  useProject?: boolean | null;
   contentHash?: string | null;
 }
 
@@ -1031,61 +899,59 @@ export async function saveActivityProject(
 ): Promise<ActivityProject> {
   const studentId = await getStudentId();
   const existing = await getActivityProject(itemId);
-  const needsProject = input.needsProject ?? existing?.needsProject ?? false;
   const wantsTemplate = input.wantsTemplate ?? existing?.wantsTemplate ?? false;
   const templateFields = input.templateFields ?? existing?.templateFields ?? [];
-  const profileMode = input.profileMode ?? existing?.profileMode ?? "main";
-  const theme = input.theme !== undefined ? input.theme : (existing?.theme ?? null);
-  const atores = input.atores ?? existing?.atores ?? [];
-  const requisitos = input.requisitos ?? existing?.requisitos ?? [];
-  const confidence = input.confidence !== undefined ? input.confidence : (existing?.confidence ?? null);
-  const intent = input.intent !== undefined ? input.intent : (existing?.intent ?? null);
-  const reason = input.reason !== undefined ? input.reason : (existing?.reason ?? null);
-  const source = input.source ?? existing?.source ?? "auto";
-  const model = input.model !== undefined ? input.model : (existing?.model ?? null);
+  const useProject = input.useProject !== undefined ? input.useProject : (existing?.useProject ?? null);
   const contentHash = input.contentHash !== undefined ? input.contentHash : (existing?.contentHash ?? null);
   await query(
-    `INSERT INTO activity_project(student_id, content_item_id, needs_project, wants_template, template_fields, profile_mode, theme, atores, requisitos, confidence, intent, reason, source, model, content_hash, detected_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15, now(), now())
+    `INSERT INTO activity_project(student_id, content_item_id, wants_template, template_fields, use_project, content_hash, detected_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6, now(), now())
      ON CONFLICT (content_item_id, student_id) DO UPDATE SET
-       needs_project = EXCLUDED.needs_project,
        wants_template = EXCLUDED.wants_template,
        template_fields = EXCLUDED.template_fields,
-       profile_mode = EXCLUDED.profile_mode,
-       theme = EXCLUDED.theme,
-       atores = EXCLUDED.atores,
-       requisitos = EXCLUDED.requisitos,
-       confidence = EXCLUDED.confidence,
-       intent = EXCLUDED.intent,
-       reason = EXCLUDED.reason,
-       source = EXCLUDED.source,
-       model = EXCLUDED.model,
+       use_project = EXCLUDED.use_project,
        content_hash = EXCLUDED.content_hash,
        detected_at = now(),
        updated_at = now()`,
-    [
-      studentId,
-      itemId,
-      needsProject,
-      wantsTemplate,
-      JSON.stringify(templateFields),
-      profileMode,
-      theme,
-      JSON.stringify(atores),
-      JSON.stringify(requisitos),
-      confidence,
-      intent,
-      reason,
-      source,
-      model,
-      contentHash,
-    ],
+    [studentId, itemId, wantsTemplate, JSON.stringify(templateFields), useProject, contentHash],
   );
   const saved = await getActivityProject(itemId);
   if (!saved) throw new Error(`falha ao salvar contexto do item ${itemId}`);
   return saved;
 }
 
+export interface ModuleProjectDefault {
+  moduleId: number;
+  enabled: boolean;
+}
+
+export async function getModuleProjectDefault(moduleId: number): Promise<boolean> {
+  const studentId = await getStudentId();
+  const rows = await query<{ enabled: boolean }>(
+    "SELECT enabled FROM module_project_default WHERE student_id = $1 AND module_id = $2",
+    [studentId, moduleId],
+  );
+  return rows[0]?.enabled === true;
+}
+
+export async function setModuleProjectDefault(moduleId: number, enabled: boolean): Promise<void> {
+  const studentId = await getStudentId();
+  await query(
+    `INSERT INTO module_project_default(student_id, module_id, enabled, updated_at)
+     VALUES ($1,$2,$3, now())
+     ON CONFLICT (student_id, module_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()`,
+    [studentId, moduleId, enabled],
+  );
+}
+
+export async function listModuleProjectDefaults(): Promise<ModuleProjectDefault[]> {
+  const studentId = await getStudentId();
+  const rows = await query<{ module_id: string; enabled: boolean }>(
+    "SELECT module_id, enabled FROM module_project_default WHERE student_id = $1",
+    [studentId],
+  );
+  return rows.map((r) => ({ moduleId: Number(r.module_id), enabled: r.enabled === true }));
+}
 // ── External project source (Ajustes → Organização) ─────────────────────────
 
 interface ProjectSourceRow {

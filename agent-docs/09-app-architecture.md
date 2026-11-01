@@ -84,7 +84,7 @@ One `createServer` handler with string-matched routes. Request order at the top:
 | Professor photos | `GET /api/professor-links`, `POST /api/professor-link`, `DELETE /api/professor-link/:id` |
 | Answers | `GET /api/answer/:id`, `POST /api/answer`, `POST /api/answer/stream` (SSE), `POST /api/answer/manual`, `POST /api/answer/:id/restore`, `DELETE /api/answer/:id/history` |
 | Quality gate | `POST /api/gate` |
-| Project context | `GET/POST /api/project-profile`, `GET /api/activity-project/:id`, `POST /api/activity-project`, `POST /api/context/analyze`, `GET /api/activity-abilities/:id`, `POST /api/activity-ability` |
+| Project context | `GET /api/project-context/:id`, `POST /api/project-use`, `GET /api/project-defaults`, `POST /api/project-default`, `GET /api/activity-abilities/:id`, `POST /api/activity-ability` |
 | Project source | `GET/POST /api/project-source`, `POST /api/project-source/fetch`, `POST /api/project-source/file`, `DELETE /api/project-source/file/:id` |
 | Flavor / tags | `POST /api/flavor/classify`, `POST /api/tag` |
 | Notes / AI request | `POST /api/note`, `POST /api/ai-request` |
@@ -139,7 +139,7 @@ never written by the app.
 | `0003_training` | `training_quiz`, `training_question`, `training_answer` |
 | `0004_content_text` | precomputed `content_text` (material for training/AI) |
 | `0005_professor_link` | per-student professor photo (`linkedin_url` / `image_url`) |
-| `0006_project_context` | `project_profile` (course main project), `activity_project` (per-activity relevance) |
+| `0006_project_context` | `activity_project` (template cache + project switch; course `project_profile` removed by `0021`) |
 | `0007_project_source` | external project source (repo/README/files) |
 | `0008_flavor_classify` | cached auto-flavor verdict on `item_annotation` |
 | `0009_template_fill` | template `.docx` fill metadata |
@@ -154,6 +154,7 @@ never written by the app.
 | `0018_refresh_run` | `refresh_run` (manual/scheduled/boot refresh history for the daily scheduler) |
 | `0019_ai_read_attachments` | `ai_config.read_attachments` (send PDFs/images to the generation model) |
 | `0020_notifications` | `notification_config` (Discord/Bark channels + event toggles + `baseline_at`) and `notification_event` (idempotency ledger) |
+| `0021_project_module_defaults` | `activity_project.use_project` + `module_project_default`; drops the guessed course `project_profile` |
 
 Key read model: `v_exercise_current` feeds `/api/exercises` via `view.ts::enrich`.
 
@@ -166,8 +167,8 @@ All runtime writes go straight to Postgres through `store.ts` (no JSON). Represe
 `clearAnswerHistory`, `saveAnswerGate`, `getOverrides`, `saveNote`, `saveTag`, `saveAiRequest`,
 `saveAutoFlavor`, `getProfile`, `saveProfile`, `getAiConfig`, `saveAiConfig`, `recordAiRun`,
 `appendSubmission`, `getSubmissions`, `setManualStatus`, `getProfessorLinks`, `saveProfessorLink`,
-`deleteProfessorLink`, `getProjectProfile`, `saveProjectProfile`, `getActivityProject`,
-`saveActivityProject`, `getActivityAbilities`, `setActivityAbility`, `getProjectSource`,
+`deleteProfessorLink`, `getActivityProject`, `saveActivityProject`, `getModuleProjectDefault`,
+`setModuleProjectDefault`, `listModuleProjectDefaults`, `getActivityAbilities`, `setActivityAbility`, `getProjectSource`,
 `saveProjectSource`, `saveProjectSourceReadme`, `getDebugLog`, `listDebugLogs`.
 
 Rules to preserve:
@@ -188,9 +189,10 @@ Rules to preserve:
   Never key on the display string.
 - **`organizations.ts`** matches `apps/server/config/organizations.json` (committed) to local
   `professor` rows; the browser loads avatars from `unavatar.io` (not downloaded server-side).
-- **`project-context.ts`** lazily detects the course main project and per-activity relevance with
-  the cheapest model, caching in `project_profile` / `activity_project`; a regex pre-pass
-  short-circuits obvious cases.
+- **`project-context.ts`** resolves the explicit project switch (`activity.use_project ?? module
+  default ?? false`) and injects the single external project from `project_source`. Template
+  detection is separate and lazy (cheap model, `wants_template` / `template_fields` in
+  `activity_project`); a regex pre-pass short-circuits obvious cases. No project is guessed.
 - **`build.ts` / `classify.ts`** assign each upload task a `flavor`
   (`question` | `ghost` | `print`) and `needsReview` heuristically; ambiguous ones get one lazy AI
   verdict cached in `item_annotation.auto_flavor`. Precedence: manual `tag` → cached AI → heuristic.
@@ -210,7 +212,7 @@ Rules to preserve:
 | `summary.ts` | `Resumo`: chunk-aware map-reduce summary of a subject (streamed), persisted via `summary-store.ts`. |
 | `exams.ts` / `exam-store.ts` | Exam phases (`course_exam`): manual end dates + item/section/module overrides; classifies content items to the current exam (keyword → gradebook → deadline → majority, manual wins). Scopes the Treino/Resumo knowledge pack so later exams don't re-send old material. |
 | `gradebook.ts` | Imports `surfaces.json.grades` (categories AVD1/AVD2 + evaluations) into `gradebook_category`/`gradebook_activity`. |
-| `project-context.ts` | Project detection/merge for the prompt. |
+| `project-context.ts` | Explicit project switch resolution (activity > module default > off) + lazy template detection. Injects `project_source` for normal and template activities. |
 | `template.ts` / `docx.ts` / `usecase.ts` | Template `.docx` detection, use-case parsing, filled-document rendering. |
 | `diagram.ts` / `diagram-tool.ts` | UML diagram spec + rasterization. |
 

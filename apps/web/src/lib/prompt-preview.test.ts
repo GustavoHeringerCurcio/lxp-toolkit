@@ -50,6 +50,7 @@ export function makeExercise(overrides: Partial<Exercise> = {}): Exercise {
     isRecordProgress: false,
     courseId: 10,
     courseName: "Curso Teste",
+    moduleId: 20,
     moduleTitle: "Módulo 1",
     moduleName: "M1",
     professor: null,
