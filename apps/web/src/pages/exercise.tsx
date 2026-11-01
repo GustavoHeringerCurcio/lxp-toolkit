@@ -928,15 +928,19 @@ export function ExercisePage() {
                   {e.moduleName && <SubjectLabel moduleName={e.moduleName} className="text-xs" />}
                 </div>
                 {e.sectionTitle && <p className="mt-1 text-xs text-muted-foreground">{e.sectionTitle}</p>}
+                {(e.instructionsHtml || e.instructionsText) && (
+                  <div className="border-t border-border/60 pt-4">
+                    <h2 className="font-heading text-sm font-semibold">{t("exercise.instructions")}</h2>
+                    <RichText
+                      html={e.instructionsHtml}
+                      fallback={e.instructionsText}
+                      className="mt-2"
+                    />
+                  </div>
+                )}
               </div>
             )}
           </header>
-
-          {(e.instructionsHtml || e.instructionsText) && (
-            <CollapsibleCard id="enunciado" title={t("exercise.instructions")} bodyClassName="p-4">
-              <RichText html={e.instructionsHtml} fallback={e.instructionsText} />
-            </CollapsibleCard>
-          )}
 
           {e.forum && <ForumThread forum={e.forum} />}
 
