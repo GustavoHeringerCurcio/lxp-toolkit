@@ -92,8 +92,6 @@ export function ProjectPanel({ e }: { e: ExerciseLike }) {
       }
       bodyClassName="space-y-3 p-4"
     >
-      <p className="text-xs text-muted-foreground">{t("project.intro")}</p>
-
       {busy === "load" && !ctx ? (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" aria-hidden /> {t("project.loading")}
@@ -150,13 +148,6 @@ export function ProjectPanel({ e }: { e: ExerciseLike }) {
 
           <SwitchRow
             label={t("project.useHere")}
-            hint={
-              override !== null
-                ? t("project.overridden")
-                : enabled
-                  ? t("project.inheritedOn", { module: moduleLabel })
-                  : t("project.inheritedOff", { module: moduleLabel })
-            }
             checked={enabled}
             disabled={disabled}
             onChange={(next) => void run("activity", () => saveProjectUse(e.id, next))}
@@ -175,16 +166,11 @@ export function ProjectPanel({ e }: { e: ExerciseLike }) {
           <div className="border-t border-border/60 pt-3">
             <SwitchRow
               label={t("project.defaultHere", { module: moduleLabel })}
-              hint={t("project.defaultHint")}
               checked={ctx.moduleDefault}
               disabled={disabled}
               onChange={(next) => void run("module", () => saveProjectDefault(ctx.module.id, next))}
             />
           </div>
-
-          <p className="text-[11px] text-muted-foreground">
-            {enabled ? t("project.enabledNote") : t("project.disabledNote")}
-          </p>
         </>
       ) : null}
 
@@ -199,13 +185,11 @@ export function ProjectPanel({ e }: { e: ExerciseLike }) {
 
 function SwitchRow({
   label,
-  hint,
   checked,
   disabled,
   onChange,
 }: {
   label: string;
-  hint?: string;
   checked: boolean;
   disabled?: boolean;
   onChange: (next: boolean) => void;
@@ -214,7 +198,6 @@ function SwitchRow({
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <p className="text-sm font-medium text-foreground/90">{label}</p>
-        {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
       </div>
       <button
         type="button"

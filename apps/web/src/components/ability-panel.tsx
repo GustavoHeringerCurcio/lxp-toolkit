@@ -77,11 +77,8 @@ export function AbilityPanel({ e }: { e: Exercise }) {
                   onChange={(ev) => void toggle(ability.id, ev.target.checked)}
                   className="mt-0.5 size-4 shrink-0 accent-brand"
                 />
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-foreground/90">
-                    {ability.label}
-                  </span>
-                  <span className="block text-[11px] text-muted-foreground">{ability.description}</span>
+                <span className="block min-w-0 truncate text-sm font-medium text-foreground/90">
+                  {ability.label}
                 </span>
               </label>
               <span

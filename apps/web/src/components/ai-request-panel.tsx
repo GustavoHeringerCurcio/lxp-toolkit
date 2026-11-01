@@ -65,8 +65,6 @@ export function AiRequestPanel({ e, onSaved }: { e: Exercise; onSaved?: () => vo
       }
       bodyClassName="space-y-3 p-4"
     >
-      <p className="text-xs text-muted-foreground">{t("aiPanel.intro")}</p>
-
       <Textarea
         value={text}
         onChange={(ev) => {

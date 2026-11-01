@@ -358,8 +358,6 @@ export const pt = {
 
   // project context panel
   "project.title": "Meu projeto da faculdade",
-  "project.intro":
-    "Use o seu único projeto (FastAid) como contexto nesta atividade. Nada é adivinhado: ele só entra no rascunho quando você liga aqui ou define um padrão para a disciplina.",
   "project.loading": "Carregando projeto…",
   "project.configured": "Projeto configurado",
   "project.notConfigured": "Nenhum projeto configurado ainda",
@@ -372,16 +370,9 @@ export const pt = {
   "project.configureHint":
     "Configure nome, repositório e arquivos em Ajustes → Organização → Meu projeto.",
   "project.useHere": "Usar meu projeto nesta atividade",
-  "project.overridden": "Alterado só nesta atividade",
-  "project.inheritedOn": "Padrão da disciplina ({{module}}): ligado",
-  "project.inheritedOff": "Padrão da disciplina ({{module}}): desligado",
   "project.restore": "Restaurar padrão",
   "project.defaultHere": "Usar por padrão em {{module}}",
-  "project.defaultHint":
-    "Aplica a todas as atividades desta disciplina que não tiverem escolha própria.",
   "project.noModule": "esta disciplina",
-  "project.enabledNote": "O contexto do projeto entra na próxima geração do rascunho.",
-  "project.disabledNote": "O projeto não será incluído nesta atividade.",
 
   // quality gate (above the draft)
   "gate.title": "Confiança da resposta",
@@ -770,8 +761,6 @@ export const pt = {
   // ai request panel
   "aiPanel.title": "O que a IA recebe",
   "aiPanel.badge": "só esta atividade",
-  "aiPanel.intro":
-    "Instruções extras só para esta atividade. As regras gerais ficam em IA Ajustes e o restante da mensagem é montado automaticamente.",
   "aiPanel.placeholder": "Ex.: responda em tópicos curtos / use exemplos de código em Python…",
   "aiPanel.aria": "Instruções extras desta atividade",
   "aiPanel.save": "Salvar",

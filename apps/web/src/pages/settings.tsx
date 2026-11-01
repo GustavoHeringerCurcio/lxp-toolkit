@@ -899,7 +899,6 @@ export function SettingsPage() {
               <Toggle
                 key={ability.id}
                 label={ability.label}
-                hint={ability.description}
                 checked={abilities[ability.id] === true}
                 onChange={(v) => {
                   setAbilities((prev) => ({ ...prev, [ability.id]: v }));

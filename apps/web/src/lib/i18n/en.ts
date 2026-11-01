@@ -354,8 +354,6 @@ export const en: Dict = {
 
   // project context panel
   "project.title": "My college project",
-  "project.intro":
-    "Use your single project (FastAid) as context in this activity. Nothing is guessed: it is only injected when you turn it on here or set a default for the subject.",
   "project.loading": "Loading project…",
   "project.configured": "Project configured",
   "project.notConfigured": "No project configured yet",
@@ -368,16 +366,9 @@ export const en: Dict = {
   "project.configureHint":
     "Set the name, repository and files in Settings → Organization → My project.",
   "project.useHere": "Use my project in this activity",
-  "project.overridden": "Overridden for this activity only",
-  "project.inheritedOn": "Subject default ({{module}}): on",
-  "project.inheritedOff": "Subject default ({{module}}): off",
   "project.restore": "Restore default",
   "project.defaultHere": "Use by default in {{module}}",
-  "project.defaultHint":
-    "Applies to every activity in this subject that has no explicit choice.",
   "project.noModule": "this subject",
-  "project.enabledNote": "The project context is included in the next draft generation.",
-  "project.disabledNote": "The project will not be included in this activity.",
 
   // quality gate (above the draft)
   "gate.title": "Answer confidence",
@@ -764,8 +755,6 @@ export const en: Dict = {
   // ai request panel
   "aiPanel.title": "What the AI receives",
   "aiPanel.badge": "this activity only",
-  "aiPanel.intro":
-    "Extra instructions for this activity only. The general rules live in AI Settings and the rest of the message is assembled automatically.",
   "aiPanel.placeholder": "E.g.: answer in short bullets / use Python code examples…",
   "aiPanel.aria": "Extra instructions for this activity",
   "aiPanel.save": "Save",
