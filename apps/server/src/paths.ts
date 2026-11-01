@@ -35,6 +35,18 @@ export function dataDir(): string {
   return d ? path.resolve(ASSISTANT_DIR, d) : path.join(ASSISTANT_DIR, "..", "..", "scraped");
 }
 
+/**
+ * Resolve a portable cache path (`scraped/courses/...`) against the current
+ * data root. `exercises.json` may be generated on another OS/container, so the
+ * stored absolute path must never be trusted at request time.
+ */
+export function resolveDataPath(relPath: string, root: string = dataDir()): string {
+  const clean = (relPath ?? "").replace(/^scraped[\\/]/, "");
+  return path.join(root, clean);
+}
+
+export const resolveDataRel = (relPath: string): string => resolveDataPath(relPath, dataDir());
+
 export const assist = (...p: string[]): string => path.join(ASSISTANT_DIR, ...p);
 export const inData = (...p: string[]): string => path.join(dataDir(), ...p);
 export const raw = (...p: string[]): string => path.join(dataDir(), "raw", ...p);

@@ -748,6 +748,8 @@ async function generateAndSave(
           files: view.files.map((f) => ({
             name: f.name,
             relPath: f.relPath,
+            absPath: f.absPath,
+            exists: existsSync(f.absPath),
             remoteUrl: f.remoteUrl,
           })),
         },

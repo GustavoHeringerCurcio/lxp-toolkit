@@ -38,7 +38,10 @@ export function previewCacheDir(): string {
 }
 
 function sofficeBin(): string {
-  return process.env.SOFFICE_BIN || "soffice";
+  const configured = process.env.SOFFICE_BIN?.trim();
+  // Inside Docker the host `.env` may carry a Windows path; fall back to the
+  // binary on PATH when that path does not exist in this environment.
+  return configured && existsSync(configured) ? configured : "soffice";
 }
 
 /**

@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { assist, dataDir, raw } from "./paths.js";
+import { assist, dataDir, raw, resolveDataRel } from "./paths.js";
 import { sanitizeHtml } from "./sanitize.js";
 import { computeStatus, daysLeft, refreshLive } from "./status.js";
 import type { Anomaly, AnomalyCode, AnomalySeverity, ContentKind, Exercise, ExerciseKind, ForumInfo, ForumPost, PdfRef, QuizQ, UploadFlavor } from "./types.js";
@@ -381,6 +381,12 @@ export function loadExercises(): Exercise[] {
   if (!existsSync(file)) throw new Error(`Missing ${file}. Run 'npm run index' first.`);
   const data = JSON.parse(readFileSync(file, "utf-8")) as { exercises: Exercise[] };
   for (const e of data.exercises) {
+    // The cache can be generated on another OS (Windows host -> Linux
+    // container), so absolute paths are not portable. Re-resolve them from the
+    // portable `relPath` against the current DATA_DIR.
+    for (const f of e.files ?? []) {
+      if (f.relPath) f.absPath = resolveDataRel(f.relPath);
+    }
     // Defensive: a cache written before the flavor/anomaly fields existed.
     if (!e.flavor) {
       e.flavor = "question";
