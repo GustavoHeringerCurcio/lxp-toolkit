@@ -281,3 +281,8 @@
 .subject-dot {
     background: var(--subj);
 }
+
+/* Agora: card borders use a hairline instead of the default 1px line. */
+.agora-page :where(.rounded-xl.border) {
+    border-width: 0.5px;
+}

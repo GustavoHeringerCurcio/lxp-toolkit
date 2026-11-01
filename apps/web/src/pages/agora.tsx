@@ -78,7 +78,7 @@ export function AgoraPage() {
   const dateLabel = capitalize(new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(new Date()));
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
+    <div className="agora-page mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
       {items.length > 0 && (
         <ProgressSummary
           modules={modules}
