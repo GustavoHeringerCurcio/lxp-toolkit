@@ -1,12 +1,12 @@
-# LXP Toolkit - Design System ("Mono" skin) - v4
+# LXP Toolkit - Design System ("Mono" skin) - v4.1
 
 Design specification for `apps/web/` (the LXP Toolkit web app, `npm run web` from the repo root).
 This document is the **single source of truth** for brand, tokens, typography, shape, motion,
 and component contracts.
 
-v4 is a **monochrome rebrand** inspired by Grok: near-neutral surfaces, alpha borders, a single
-ink primary, and color only where it carries meaning (status). The previous "Folio" skin
-(warm paper / sienna / Fraunces serif / warm espresso) is retired.
+v4.1 is a **Grok-inspired warm-black rebrand**: layered near-black surfaces, alpha borders, an ink
+primary, Grok blue for interactive details, and hue otherwise reserved for status. The previous
+"Folio" skin (warm paper / sienna / Fraunces serif / warm espresso) is retired.
 
 ## 1. Brand
 
@@ -16,7 +16,7 @@ ink primary, and color only where it carries meaning (status). The previous "Fol
 | Mark | "Stacked X" - rounded ink tile, two offset diagonals (layers/toolkit); `BrandMark` + `public/favicon.svg` |
 | Positioning | *Copiloto de estudos* - organization + deadlines first; AI drafts, the student reviews and owns |
 | Voice | pt-BR, calm, direct, adult. Never autopilot language ("entregue pra voce") |
-| Palette | Black / white / neutral grays. Status is the only intentional hue. |
+| Palette | Warm near-black / paper white / warm greys, with Grok blue for interactive details. Status keeps its semantic hue. |
 
 **Co-pilot copy rules (enforced):**
 - Generation = **"rascunho"** ("Gerar rascunho", "Salvar rascunho", "Novo rascunho") - never "resposta pronta".
@@ -27,14 +27,18 @@ ink primary, and color only where it carries meaning (status). The previous "Fol
 
 ## 2. Direction - "Mono"
 
-Grok-inspired minimalism. Black/white chrome, neutral gray surfaces, hairline borders, generous
-whitespace, and one ink color for actions. Light mode is paper-white with ink-black CTAs; dark mode
-is a near-black shell with a slightly lighter pane and paper-white CTAs. No warm paper, no sienna,
-no decorative gradients. Status colors are muted and functional, never a brand accent.
+Grok-inspired minimalism. Warm near-black chrome, layered dark surfaces, hairline borders, generous
+whitespace, and an ink primary for actions. Light mode is warm paper (`#F9F8F7` / `#FEFEFC`) with
+ink-black CTAs; dark mode moves through `#131211` (chrome), `#181716` (page) and `#201F1D` (cards)
+with `#23211F` for elevated surfaces. No sienna, no decorative gradients.
 
-References: Grok's live app uses `#fefefc` / `#f9f8f7` panes in light, `#282726` / `#1e1d1d` panes
-in dark, ink `#2c2c2b` / `#e6e5e3`, alpha-based borders, and Inter/Universal Sans. The Mono skin
-keeps that structure but removes Grok's blue accent so the interface stays strictly black/white.
+Grok blue (`#1084FE`) is an **interactive detail**, not a brand wash: focus rings, text selection,
+links, AI icons, selected states and chart accents. Primary buttons stay ink/paper. Light-mode blue
+text is deepened to `#0B6FD8` so it keeps AA contrast on warm paper; dark-mode blue text uses
+`#4B9BFF` for the same reason.
+
+References: Grok's live app uses `#FEFEFC` / `#F9F8F7` in light, warm near-black panes in dark, ink
+`#2C2C2B` / `#E6E5E3`, alpha-based borders, Inter/Universal Sans and a blue interactive accent.
 
 ## 3. Color tokens
 
@@ -45,32 +49,32 @@ tints via `color-mix(in oklab, ...)`. Tailwind utilities come from the `@theme i
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| `--background` | near-white `oklch(.985 0 0)` | near-black `oklch(.235 0 0)` | page |
-| `--card` | `oklch(1 0 0)` | `oklch(.269 0 0)` | raised surfaces |
-| `--popover` | = card | `oklch(.289 0 0)` | overlays |
-| `--primary` | ink `oklch(.205 0 0)` | paper `oklch(.931 0 0)` | CTA fill, active nav |
-| `--primary-foreground` | `oklch(.985 0 0)` | `oklch(.218 0 0)` | text on primary |
-| `--secondary` / `--muted` | `oklch(.97 0 0)` | `oklch(.301 0 0)` | support surfaces |
-| `--muted-foreground` | `oklch(.528 0 0)` | `oklch(.715 0 0)` | secondary text |
-| `--accent` | `oklch(.952 0 0)` | `oklch(.321 0 0)` | hover/focus wash |
-| `--border` / `--input` | `oklch(.922 0 0)` / `oklch(.87 0 0)` | `white / 12-16%` | lines, inputs |
-| `--ring` | = primary | = primary | focus |
+| `--background` | warm paper `oklch(.980 .002 67.8)` | `#181716` `oklch(.205 .003 67.7)` | page |
+| `--card` | `oklch(.996 .003 106.4)` | `#201F1D` `oklch(.240 .004 84.6)` | raised surfaces |
+| `--popover` | white `oklch(1 0 0)` | `#23211F` `oklch(.249 .005 67.6)` | overlays |
+| `--primary` | ink `oklch(.293 .002 106.5)` | paper `oklch(.922 .003 84.6)` | CTA fill, active nav |
+| `--primary-foreground` | `oklch(.996 .003 106.4)` | `#131211` `oklch(.183 .003 67.7)` | text on primary |
+| `--secondary` / `--muted` | `oklch(.956 .005 78.3)` | `#201F1D` | support surfaces |
+| `--muted-foreground` | `oklch(.526 .011 78.2)` | `oklch(.714 .011 81.8)` | secondary text |
+| `--accent` | `oklch(.929 .006 75.4)` | `#23211F` | hover/focus wash |
+| `--border` / `--input` | `oklch(.920 .007 80.7)` / `oklch(.865 .009 78.3)` | `warm white / 12-16%` | lines, inputs |
+| `--ring` | Grok blue `oklch(.624 .204 255.6)` | Grok blue | focus |
 | `--destructive` | red `oklch(.577 .215 27.3)` | `oklch(.711 .166 22.2)` | errors |
 
-Note (dark): `--primary` is paper-white with a **dark** `--primary-foreground` - dark-on-paper
-buttons. Light mode is the inverse: ink buttons with paper text. Borders are alpha layers in dark,
-so surfaces never pick up a warm cast.
+Note (dark): the surface stack is `#131211` sidebar -> `#181716` page -> `#201F1D` card ->
+`#23211F` elevated. `--primary` is paper-white with a **dark** `--primary-foreground`. Borders are
+warm white alpha layers, so the whole shell reads warm black rather than cold gray.
 
 ### 3.2 Brand / accents
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| `--brand` | = primary ink | = primary paper | monochrome accent - links, active labels, chips |
-| `--brand-2` | `oklch(.371 0 0)` | `oklch(.79 0 0)` | hover/edge variant |
-| `--info` | = muted foreground | = muted foreground | neutral informational tone |
+| `--brand` | `#0B6FD8` `oklch(.551 .181 255.7)` | `#4B9BFF` `oklch(.687 .167 255.4)` | blue accent - links, icons, chips |
+| `--brand-2` | `#0066CC` `oklch(.522 .177 255.8)` | `#1084FE` `oklch(.624 .204 255.6)` | hover/edge + chart accent |
+| `--info` | = brand | = brand | blue informational tone |
 
-There is **no brand hue**. `--brand` intentionally aliases the ink/paper primary so existing
-`text-brand` / `border-brand` / `bg-brand` surfaces become monochrome automatically.
+`#1084FE` is the Grok blue. It is used directly for focus rings and selection; text usages switch
+to the AA-safe light/dark variants above. Primary buttons and the brand mark stay ink/paper.
 
 ### 3.3 Status tones (semantics preserved)
 
@@ -79,8 +83,8 @@ There is **no brand hue**. `--brand` intentionally aliases the ink/paper primary
 | ok | done | `Concluida` | green `oklch(.527 .137 150)` -> `oklch(.800 .182 152)` |
 | late | expired | `Atrasada / Atrasada Nd` | red `oklch(.577 .215 27)` -> `oklch(.711 .166 22)` |
 | soon | due <= 3d | `Vence hoje/amanha/em Nd` | gold `oklch(.681 .142 76)` -> `oklch(.837 .164 84)` |
-| coming | open, > 3d | `Vence em Nd` | neutral `oklch(.439 0 0)` -> `oklch(.820 0 0)` |
-| none | no deadline | `Sem prazo` | neutral `oklch(.528 0 0)` -> `oklch(.715 0 0)` |
+| coming | open, > 3d | `Vence em Nd` | warm neutral `oklch(.450 .011 78)` -> `oklch(.800 .008 80)` |
+| none | no deadline | `Sem prazo` | warm neutral `oklch(.526 .011 78.2)` -> `oklch(.714 .011 81.8)` |
 
 Each tone exposes `--{tone}-bg` (`color-mix` 13-18%). `TONE_CLS` in `lib/status.ts` maps tone -> pill
 classes. Status is **never color-only** (icon + label always). `coming` and `none` are gray on
@@ -90,14 +94,14 @@ the text keeps its contrast.
 
 ### 3.4 Charts
 
-`--chart-1..5` = primary -> info -> ok -> soon -> none. Progresso view uses a neutral type ramp plus
-these tokens for module/type bars.
+`--chart-1..5` = brand blue -> brand-2 blue -> ok -> soon -> none. Progresso view uses a neutral
+type ramp plus these tokens for module/type bars.
 
-### 3.5 Identity color economy (v4)
+### 3.5 Identity color economy (v4.1)
 
-**Status owns hue · type is monochrome · subject owns a neutral step · professor is neutral.**
+**Status owns hue · type is monochrome · subject owns a warm neutral step · professor is neutral.**
 The old 12-hue subject palette is retired; it made a reading-focused app feel louder than its
-content. A grayscale ramp keeps cards calm while the monogram/domain icon carries recognition.
+content. A warm grayscale ramp keeps cards calm while the monogram/domain icon carries recognition.
 
 | Dimension | Encoding | Where |
 |---|---|---|
@@ -111,7 +115,7 @@ Subject ramp (tokens in `index.css`; no raw color in TSX):
 
 | Token | Light | Dark |
 |---|---|---|
-| `--subject-1..12` | `oklch(.240 0 0)` -> `oklch(.500 0 0)` in 12 steps | `oklch(.640 0 0)` -> `oklch(.900 0 0)` in 12 steps |
+| `--subject-1..12` | `oklch(.240 .004 70)` -> `oklch(.500 .004 70)` in 12 steps | `oklch(.640 .004 70)` -> `oklch(.900 .004 70)` in 12 steps |
 
 A module maps to a slot deterministically (FNV-1a `subjectIndex`, with an optional pin map). Because
 a bare hash can collide, `SubjectColorProvider` (`lib/subject-colors.tsx`) resolves the whole visible
@@ -279,11 +283,15 @@ panel `aria-hidden` while collapsed.
 - Icon-only buttons carry `aria-label` (theme toggle, refresh, palette, focus mode).
 - Visible focus (`outline-ring/50`, `ring-ring/50`); `prefers-reduced-motion` respected.
 - Contrast: `--primary-foreground` on `--primary` >= 4.5:1 in both themes (paper-on-ink in light,
-  ink-on-paper in dark). Muted text and subject labels also stay >= 4.5:1.
+  ink-on-paper in dark). Muted text, blue links (`#0B6FD8` light / `#4B9BFF` dark) and subject
+  labels also stay >= 4.5:1.
 - `lang="pt-BR"` set in `index.html`.
 
 ## History
 
+- **v4.1 (2026-10):** Grok warm-black pass - layered `#131211` / `#181716` / `#201F1D` / `#23211F`
+  dark surfaces, warm paper light surfaces, warm-neutral subject ramp, and Grok blue `#1084FE` for
+  focus/selection/links/icons. Primary buttons stay ink/paper.
 - **v4 (2026-10):** Mono skin - Grok-inspired black/white chrome, neutral grayscale subject ramp,
   Inter display (Fraunces retired), status-only hue (ok/late/soon + neutral coming/none). Retired
   Folio warm paper, sienna brand, and warm espresso dark mode.
