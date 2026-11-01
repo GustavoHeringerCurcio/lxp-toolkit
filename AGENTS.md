@@ -76,6 +76,10 @@ Full detail: `agent-docs/10-deployment.md`.
   decisions, São Paulo time, 90-day retention, secrets redacted). Read `status.json` first, then
   the newest run. API: `/api/refresh/logs`, `/api/refresh/logs/run?file=`,
   `/api/refresh/logs/scheduler?date=`. UI: Settings -> Advanced -> Refresh logs.
+- **AI abilities:** global (`ai_config.abilities_json`) + per-activity (`activity_ability`) switches
+  feed `artifactAbilities()`. When an artifact ability is on, `buildSubmissionFile` attaches the
+  artifact to the final PDF/DOCX and blocks the send if it cannot be produced. The UML diagram uses
+  `buildDiagram(..., { force: true })` and a dedicated Chromium-rendered PDF page.
 - **Notifications:** `notification_config` + `notification_event` (migration `0020`) store per-student
   Discord webhook / Bark channels, four event toggles (new, <24h, done, expired) and an idempotency
   ledger. The scanner runs at server boot and after every refresh (no background timer); successful

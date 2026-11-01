@@ -278,6 +278,83 @@ export async function generateDiagramSpec(
   return withRelations(fallback);
 }
 
+/** Extract the first JSON object from a model answer (tolerates fences). */
+function parseJsonObject(text: string): unknown {
+  const cleaned = text.replace(/```(?:json)?/gi, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start < 0 || end <= start) return null;
+    try {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
+ * Infer a use-case diagram directly from an activity + draft. This is the
+ * free-form path used when the ability is enabled on a task that has no
+ * professor-provided use-case template. Unlike `generateDiagramSpec`, it does
+ * not require parseable "UC-01" blocks.
+ */
+export async function generateDiagramSpecFromText(
+  cfg: AiConfig,
+  activity: string,
+  draft: string,
+  system: string,
+): Promise<DiagramSpec | null> {
+  const sys =
+    "Você monta o modelo de um DIAGRAMA DE CASO DE USO (UML) a partir da atividade e do rascunho do aluno. " +
+    "Responda SOMENTE com um objeto JSON, sem texto ao redor, no formato " +
+    '{"system": string, "actors": string[], "useCases": [{"name": string, "actors": string[], "includes": string[], "extends": string[]}]}. ' +
+    "`actors` são pessoas ou sistemas externos citados ou claramente implícitos na atividade; " +
+    "`useCases[].name` deve ser uma ação no infinitivo (ex.: \"Realizar agendamento\"); " +
+    "`includes`/`extends` são NOMES de outros casos de uso. Crie entre 2 e 12 casos, sem inventar outro domínio. " +
+    "Se o rascunho já tiver casos de uso, reaproveite os nomes. Use os atores do domínio da atividade.";
+  const user =
+    `Atividade: ${activity.trim()}\n\n` +
+    `Rascunho do aluno:\n${draft.trim().slice(0, 12000)}\n\n` +
+    `Sistema (rótulo da fronteira): ${system.trim() || "Sistema"}`;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const attemptUser =
+        attempt === 0
+          ? user
+          : `${user}\n\nA resposta anterior não era um JSON válido. Responda SOMENTE com o objeto JSON, sem markdown.`;
+      const { text } = await cheapJsonCompletion(cfg, sys, attemptUser, 1100, cfg.models.diagram);
+      const spec = coerceSpec(parseJsonObject(text));
+      if (spec && spec.useCases.length) {
+        // Every include/extend target must exist as a use case so the renderer
+        // can draw the relation instead of silently dropping it.
+        const byName = new Map(spec.useCases.map((u) => [u.name.toLowerCase(), u]));
+        for (const u of [...spec.useCases]) {
+          for (const target of [...u.includes, ...u.extends]) {
+            const key = target.toLowerCase();
+            if (!byName.has(key)) {
+              const created = { name: target, actors: [], includes: [], extends: [] };
+              byName.set(key, created);
+              spec.useCases.push(created);
+            }
+          }
+        }
+        return {
+          ...spec,
+          system: system.trim() || spec.system || "Sistema",
+          actors: spec.actors.length ? spec.actors : ["Usuário"],
+        };
+      }
+    } catch {
+      /* retry once, then fail closed */
+    }
+  }
+  return null;
+}
+
 // ── SVG rendering ───────────────────────────────────────────────────────────
 
 function escapeXml(text: string): string {

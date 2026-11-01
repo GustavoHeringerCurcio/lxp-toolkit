@@ -489,7 +489,7 @@ export const pt = {
   "aiInfo.answer.detail": "No formato pedido pela atividade e pelas suas regras de estilo.",
   "aiInfo.diagram.title": "Diagrama UML",
   "aiInfo.diagram.detail":
-    "Quando a habilidade está ativada, gera um diagrama de caso de uso a partir do texto.",
+    "Quando a habilidade está ativada, gera um diagrama de caso de uso e anexa uma página ao PDF/DOCX final.",
   "aiInfo.gate.title": "Revisão do rascunho",
   "aiInfo.gate.detail": "Uma checagem de qualidade avisa se a resposta parece incompleta ou fora do tema.",
 
@@ -590,6 +590,8 @@ export const pt = {
   "diagram.empty": "Gere um rascunho para montar o diagrama.",
   "diagram.hint": "Clique em “Gerar diagrama” para montar o caso de uso a partir do rascunho.",
   "diagram.error": "Não foi possível gerar o diagrama agora.",
+  "diagram.included": "Uma página com o diagrama será anexada ao PDF/DOCX final.",
+  "send.artifactIncluded": "O diagrama será anexado ao arquivo final.",
   "ability.toggle": "Habilidades",
   "ability.overrideOn": "Ligada nesta atividade",
   "ability.overrideOff": "Desligada nesta atividade",

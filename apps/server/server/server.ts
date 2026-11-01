@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { ASSISTANT_DIR, assist, dataDir, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
@@ -103,7 +103,12 @@ import {
 } from "../src/project-context.js";
 import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
 import { analyzeDraftQuality } from "../src/gate.js";
-import { ABILITY_REGISTRY, isAbilityId, mergeAbilities } from "../src/abilities.js";
+import {
+  ABILITY_REGISTRY,
+  artifactAbilities,
+  isAbilityId,
+  mergeAbilities,
+} from "../src/abilities.js";
 import { gateLogReason, shouldLog, writeDebugLog, type DebugProject } from "../src/debug-log.js";
 import { findTemplateDocx } from "../src/template.js";
 import type {
@@ -134,9 +139,8 @@ import {
 import { officeToPdf, previewCacheDir } from "../src/office.js";
 import { answerToPdf } from "../src/pdf.js";
 import { renderFilledDocx } from "../src/docx.js";
-import { generateDiagramSpec, renderDiagramPng } from "../src/diagram.js";
 import { buildDiagram } from "../src/diagram-tool.js";
-import { applyTemplateDefaults, forceTodayDate, parseUseCases, type UseCase } from "../src/usecase.js";
+import { applyTemplateDefaults, forceTodayDate, parseUseCases } from "../src/usecase.js";
 import { parseLinkedinUrl } from "../src/linkedin.js";
 import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/organizations.js";
 import {
@@ -322,6 +326,7 @@ function attachmentDisposition(
 async function buildFilledDocx(
   view: ExerciseView,
   answer: string,
+  opts: { includeDiagram: boolean },
 ): Promise<{ buffer: Buffer; filename: string } | { error: string }> {
   const template = await findTemplateDocx(view.files);
   if (!template) return { error: "Esta atividade não tem um modelo .docx para preencher." };
@@ -339,7 +344,15 @@ async function buildFilledDocx(
     };
   }
   const systemName = await resolveSystemName(view);
-  const diagramPng = await buildDiagramPng(view, cases, systemName).catch(() => null);
+  const diagramPng = opts.includeDiagram
+    ? await buildDiagramPng(view, answer, systemName).catch(() => null)
+    : null;
+  if (opts.includeDiagram && !diagramPng) {
+    return {
+      error:
+        "Não foi possível gerar o diagrama UML para anexar ao documento. Tente novamente ou desligue a habilidade.",
+    };
+  }
   const buffer = await renderFilledDocx(template.path, labels, cases, diagramPng);
   return { buffer, filename: safeFilename(await uploadBaseName(view), "docx") };
 }
@@ -358,15 +371,104 @@ async function resolveSystemName(view: ExerciseView): Promise<string> {
   return view.courseName;
 }
 
-/** Infer the UML diagram model and rasterize it to PNG (null when unavailable). */
+/** Render the activity's UML diagram to PNG (forced when the ability is on). */
 async function buildDiagramPng(
   view: ExerciseView,
-  cases: UseCase[],
+  answer: string,
   systemName: string,
 ): Promise<Buffer | null> {
   const cfg = await getAiConfig();
-  const spec = await generateDiagramSpec(cfg, cases, systemName);
-  return renderDiagramPng(spec);
+  const artifact = await buildDiagram(cfg, view, answer, {
+    systemName,
+    png: true,
+    force: true,
+  });
+  return artifact?.png ?? null;
+}
+
+function pngDimensions(png: Buffer): { width: number; height: number } {
+  if (png.length < 24 || png.readUInt32BE(0) !== 0x89504e47) {
+    return { width: 1200, height: 800 };
+  }
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
+/** True when an enabled artifact ability requires a PDF/DOCX attachment. */
+async function hasFileArtifact(view: ExerciseView): Promise<boolean> {
+  if (view.kind !== "upload") return false;
+  const cfg = await getAiConfig();
+  const overrides = await getActivityAbilities(view.id).catch(() => ({}));
+  return artifactAbilities(cfg, overrides).length > 0;
+}
+
+/** Build the exact PDF/DOCX that the send flow will attach. */
+async function buildSubmissionFile(
+  view: ExerciseView,
+  answer: string,
+  mode: SendMode,
+): Promise<{ buffer: Buffer; filename: string; contentType: string } | { error: string }> {
+  const cfg = await getAiConfig();
+  const overrides = await getActivityAbilities(view.id).catch(() => ({}));
+  const artifacts = artifactAbilities(cfg, overrides);
+  const needsDiagram = view.kind === "upload" && artifacts.includes("uml_diagram");
+
+  if (needsDiagram && (mode === "text" || mode === "txt")) {
+    return { error: "O diagrama só pode ser anexado em PDF ou DOCX. Escolha um desses formatos." };
+  }
+
+  if (mode === "docx") {
+    const built = await buildFilledDocx(view, answer, { includeDiagram: needsDiagram });
+    if ("error" in built) return built;
+    return {
+      buffer: built.buffer,
+      filename: built.filename,
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    };
+  }
+
+  if (mode === "pdf" || mode === "fill") {
+    let diagram: { png: Buffer; width: number; height: number; title: string } | undefined;
+    if (needsDiagram) {
+      const systemName = await resolveSystemName(view);
+      const artifact = await buildDiagram(cfg, view, answer, {
+        systemName,
+        png: true,
+        force: true,
+      });
+      if (!artifact?.png) {
+        return {
+          error:
+            "Não foi possível gerar o diagrama UML para anexar ao PDF. Tente novamente ou desligue a habilidade.",
+        };
+      }
+      const size = pngDimensions(artifact.png);
+      diagram = {
+        png: artifact.png,
+        width: size.width,
+        height: size.height,
+        title: "Figura 1 — Diagrama de caso de uso (UML)",
+      };
+    }
+    const pdf = await answerToPdf(answer, await uploadBaseName(view), {
+      rich: mode === "fill",
+      diagram,
+    });
+    if (!pdf) {
+      return {
+        error: needsDiagram
+          ? "Não foi possível renderizar o PDF com o diagrama. Tente novamente."
+          : "Não foi possível gerar o PDF da resposta.",
+      };
+    }
+    return {
+      buffer: readFileSync(pdf),
+      filename: safeFilename(await uploadBaseName(view), "pdf"),
+      contentType: "application/pdf",
+    };
+  }
+
+  return { error: "Formato de envio sem arquivo." };
 }
 
 function readBody(req: import("node:http").IncomingMessage): Promise<Record<string, unknown>> {
@@ -1149,19 +1251,16 @@ const server = createServer(async (req, res) => {
       const id = Number(b.id);
       const answer = String(b.answer ?? "");
       const mode = String(b.mode ?? "");
-      const rich = mode === "fill";
-      const isPdf = mode === "pdf" || rich;
       const download = b.download === true;
       if (!id) return json(res, 400, { error: "id obrigatório" });
       if (!answer.trim()) return json(res, 400, { error: "Escreva a resposta antes de gerar o arquivo." });
       const view = await findView(id);
 
-      if (mode === "docx") {
-        const built = await buildFilledDocx(view, answer);
+      if (mode === "docx" || mode === "pdf" || mode === "fill") {
+        const built = await buildSubmissionFile(view, answer, mode as SendMode);
         if ("error" in built) return json(res, 400, { error: built.error });
         res.writeHead(200, {
-          "content-type":
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "content-type": built.contentType,
           "content-length": built.buffer.length,
           ...attachmentDisposition(built.filename, download ? "attachment" : "inline"),
           "cache-control": "no-store",
@@ -1169,23 +1268,13 @@ const server = createServer(async (req, res) => {
         return res.end(built.buffer);
       }
 
-      const baseName = await uploadBaseName(view);
-      const ext = isPdf ? "pdf" : "txt";
-      const filename = safeFilename(baseName, ext);
-
-      if (isPdf) {
-        const pdf = await answerToPdf(answer, baseName, { rich });
-        if (!pdf) return json(res, 500, { error: "Não foi possível gerar o PDF (LibreOffice indisponível?)." });
-        res.writeHead(200, {
-          "content-type": "application/pdf",
-          "content-length": statSync(pdf).size,
-          ...attachmentDisposition(filename, download ? "attachment" : "inline"),
-          "cache-control": "no-store",
+      if (await hasFileArtifact(view)) {
+        return json(res, 400, {
+          error: "O diagrama só pode ser anexado em PDF ou DOCX. Escolha um desses formatos.",
         });
-        createReadStream(pdf).pipe(res);
-        return;
       }
 
+      const filename = safeFilename(await uploadBaseName(view), "txt");
       res.writeHead(200, {
         "content-type": "text/plain; charset=utf-8",
         ...attachmentDisposition(filename, download ? "attachment" : "inline"),
@@ -1572,6 +1661,7 @@ const server = createServer(async (req, res) => {
           const artifact = await buildDiagram(cfg, view, draft, {
             systemName,
             png: b.png === true,
+            force: true,
           });
           return json(res, 200, {
             ok: true,
@@ -1707,6 +1797,11 @@ const server = createServer(async (req, res) => {
           }
           await saveAnswerVersion(id, answer, "manual", undefined, []);
         }
+        if (view.kind === "upload" && (mode === "text" || mode === "txt") && (await hasFileArtifact(view))) {
+          return json(res, 400, {
+            error: "O diagrama só pode ser anexado em PDF ou DOCX. Escolha um desses formatos.",
+          });
+        }
         try {
           let submission;
           if (view.kind === "quiz") {
@@ -1715,20 +1810,13 @@ const server = createServer(async (req, res) => {
             submission = await launchForumSubmit(view, answer);
           } else {
             let filePath: string | undefined;
-            if (mode === "docx") {
-              const built = await buildFilledDocx(view, answer);
+            if (mode === "docx" || mode === "pdf" || mode === "fill") {
+              const built = await buildSubmissionFile(view, answer, mode);
               if ("error" in built) return json(res, 400, { error: built.error });
               const dir = assist("data", "send");
               mkdirSync(dir, { recursive: true });
               filePath = path.join(dir, built.filename);
               writeFileSync(filePath, built.buffer);
-            } else if (mode === "pdf" || mode === "fill") {
-              const pdf = await answerToPdf(answer, await uploadBaseName(view), { rich: mode === "fill" });
-              if (!pdf)
-                return json(res, 500, {
-                  error: "Não foi possível gerar o PDF da resposta (LibreOffice indisponível?).",
-                });
-              filePath = pdf;
             } else if (mode === "image") {
               const found = findUploadedImage(id);
               if (!found) return json(res, 400, { error: "Anexe a imagem antes de enviar." });

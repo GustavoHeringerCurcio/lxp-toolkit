@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { looksLikeMarkdown, renderRichPdf } from "../src/pdf.js";
+import { buildAnswerHtml, looksLikeMarkdown, renderRichPdf } from "../src/pdf.js";
+
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3Q6wAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 function asLatin1(buf: Buffer): string {
   return buf.toString("latin1");
@@ -15,6 +20,25 @@ describe("looksLikeMarkdown", () => {
 
   it("não confunde texto simples", () => {
     expect(looksLikeMarkdown("Apenas um parágrafo comum, sem marcação.")).toBe(false);
+  });
+});
+
+describe("buildAnswerHtml (diagram page)", () => {
+  it("adds a dedicated page with the embedded PNG", () => {
+    const html = buildAnswerHtml("Atividade", "<p>Resposta</p>", {
+      png: ONE_PIXEL_PNG,
+      width: 1,
+      height: 1,
+      title: "Figura 1 — Diagrama de caso de uso (UML)",
+    });
+    expect(html).toContain('<figure class="diagram-page">');
+    expect(html).toContain("data:image/png;base64,");
+    expect(html).toContain("Figura 1");
+    expect(html.indexOf("<p>Resposta</p>")).toBeLessThan(html.indexOf("<figure"));
+  });
+
+  it("does not add a diagram page when none is supplied", () => {
+    expect(buildAnswerHtml("Atividade", "<p>Resposta</p>")).not.toContain("<figure");
   });
 });
 

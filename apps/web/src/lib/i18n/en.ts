@@ -491,7 +491,8 @@ export const en: Dict = {
   "aiInfo.answer.title": "Writes the answer",
   "aiInfo.answer.detail": "In the format requested by the activity and your style rules.",
   "aiInfo.diagram.title": "UML diagram",
-  "aiInfo.diagram.detail": "When the ability is enabled, generates a use-case diagram from the text.",
+  "aiInfo.diagram.detail":
+    "When the ability is enabled, generates a use-case diagram and attaches a page to the final PDF/DOCX.",
   "aiInfo.gate.title": "Draft review",
   "aiInfo.gate.detail": "A quality check warns when the answer looks incomplete or off-topic.",
 
@@ -585,6 +586,8 @@ export const en: Dict = {
   "diagram.empty": "Generate a draft to build the diagram.",
   "diagram.hint": "Click “Generate diagram” to build the use case from the draft.",
   "diagram.error": "Couldn't generate the diagram right now.",
+  "diagram.included": "A diagram page will be attached to the final PDF/DOCX.",
+  "send.artifactIncluded": "The diagram will be attached to the final file.",
   "ability.toggle": "Abilities",
   "ability.overrideOn": "On for this activity",
   "ability.overrideOff": "Off for this activity",

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchSendArtifact, type SendMode } from "@/api";
 import type { Exercise } from "@/types";
 import { useT } from "@/lib/i18n";
-import { SEND_MODES, defaultSendMode } from "@/lib/send";
+import { SEND_MODES, defaultSendMode, hasDocxTemplate } from "@/lib/send";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +27,7 @@ export function SendDialog({
   onOpenChange,
   exercise,
   draft,
+  hasArtifacts = false,
   sending,
   sendErr,
   onConfirm,
@@ -35,12 +36,16 @@ export function SendDialog({
   onOpenChange: (open: boolean) => void;
   exercise: Exercise;
   draft: string;
+  hasArtifacts?: boolean;
   sending: boolean;
   sendErr: string | null;
   onConfirm: (mode: SendMode) => void;
 }) {
   const { t } = useT();
   const [mode, setMode] = useState<SendMode>(() => defaultSendMode(exercise));
+  const modes = hasArtifacts
+    ? SEND_MODES.filter((m) => m.value !== "text" && m.value !== "txt")
+    : SEND_MODES;
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewText, setPreviewText] = useState<string | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
@@ -74,6 +79,11 @@ export function SendDialog({
     setPreviewText(null);
     setPreviewErr(null);
   }, [mode, open]);
+
+  useEffect(() => {
+    if (!hasArtifacts || (mode !== "text" && mode !== "txt")) return;
+    setMode(hasDocxTemplate(exercise.remoteFiles) ? "docx" : "pdf");
+  }, [hasArtifacts, mode, exercise.remoteFiles]);
 
   useEffect(() => {
     return () => {
@@ -167,7 +177,7 @@ export function SendDialog({
                 aria-label={t("send.formatTitle")}
                 className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:grid-cols-4"
               >
-                {SEND_MODES.map((m) => {
+                {modes.map((m) => {
                   const Icon = m.icon;
                   const selected = mode === m.value;
                   return (
@@ -194,6 +204,11 @@ export function SendDialog({
                 })}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">{t(actionKey)}</p>
+              {hasArtifacts && (
+                <p className="mt-2 rounded-md border border-brand/30 bg-brand/10 px-2.5 py-1.5 text-[11px] font-medium text-brand">
+                  {t("send.artifactIncluded")}
+                </p>
+              )}
 
               {(mode === "txt" || mode === "pdf" || mode === "fill" || mode === "docx") && (
                 <div className="mt-3">

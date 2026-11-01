@@ -23,6 +23,7 @@ import {
 import {
   clearAnswerHistory,
   classifyFlavor,
+  fetchActivityAbilities,
   fetchAnswerState,
   fetchSendConfig,
   fetchSubmission,
@@ -44,7 +45,15 @@ import { fmtDeadline } from "@/lib/status";
 import { isOffice, previewUrl, remoteFileName } from "@/lib/files";
 import { useT, type TranslateFn } from "@/lib/i18n";
 import { cn, stripHtml } from "@/lib/utils";
-import type { AnswerState, Exercise, ForumInfo, ForumPost, GateResultDto, RemoteFile } from "@/types";
+import type {
+  AbilityId,
+  AnswerState,
+  Exercise,
+  ForumInfo,
+  ForumPost,
+  GateResultDto,
+  RemoteFile,
+} from "@/types";
 import { BackLink } from "@/components/app-sidebar";
 import { CollapseButton, CollapsibleCard, useCardCollapse } from "@/components/collapsible-card";
 import { ProfessorTag, SubjectLabel } from "@/components/identity";
@@ -115,12 +124,35 @@ function AnswerPanel({
   const [printFile, setPrintFile] = useState<File | null>(null);
   const [printPreview, setPrintPreview] = useState<string | null>(null);
   const [gateResult, setGateResult] = useState<GateResultDto | null>(null);
+  const [effectiveAbilities, setEffectiveAbilities] = useState<AbilityId[]>([]);
   const cancelRef = useRef(false);
   const busyRef = useRef(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const { patchExercise } = useAppData();
+  const { patchExercise, cfg } = useAppData();
   const { t, locale } = useT();
+
+  useEffect(() => {
+    let alive = true;
+    fetchActivityAbilities(e.id)
+      .then((overrides) => {
+        if (!alive) return;
+        const ids = (cfg?.abilityRegistry ?? [])
+          .filter((ability) => {
+            if (!ability.artifact) return false;
+            const override = overrides[ability.id];
+            return typeof override === "boolean" ? override : cfg?.abilities?.[ability.id] === true;
+          })
+          .map((ability) => ability.id);
+        setEffectiveAbilities(ids);
+      })
+      .catch(() => {
+        if (alive) setEffectiveAbilities([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [e.id, cfg]);
 
   const loadSubs = useCallback(async () => {
     setSubs(await fetchSubmissions(e.id));
@@ -366,7 +398,9 @@ function AnswerPanel({
       {wantsText && (
         <GatePanel e={e} draft={draft} initial={gateResult ?? state?.current?.gate ?? null} />
       )}
-      {canAi && <AbilityPanel e={e} />}
+      {canAi && (
+        <AbilityPanel e={e} draft={draft} onEffectiveChange={setEffectiveAbilities} />
+      )}
       <CollapsibleCard
         id="resposta"
         icon={<Sparkles className="size-4 shrink-0 text-brand" aria-hidden />}
@@ -587,6 +621,7 @@ function AnswerPanel({
           onOpenChange={setSendOpen}
           exercise={e}
           draft={draft}
+          hasArtifacts={e.kind === "upload" && effectiveAbilities.length > 0}
           sending={sending}
           sendErr={sendErr}
           onConfirm={(mode) => void confirmSend(mode)}

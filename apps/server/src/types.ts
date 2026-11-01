@@ -276,6 +276,8 @@ export interface AbilityMeta {
   description: string;
   /** Whether the ability is on by default for a fresh config. */
   defaultOn: boolean;
+  /** True when the ability produces an artifact attached to the final PDF/DOCX. */
+  artifact: boolean;
 }
 
 /** Global per-student ability switches, keyed by ability id. */

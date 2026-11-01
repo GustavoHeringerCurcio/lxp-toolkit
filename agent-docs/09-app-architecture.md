@@ -224,6 +224,21 @@ records an `ai_run` → runs the gate detached (streamed to the client as a `gat
 Prompt rules are documented in `apps/server/docs/PROMPT.md`. `DEFAULT_STYLE` exists in **two**
 places (`apps/server/src/config.ts` and `apps/web/src/lib/prompt-preview.ts`) — keep them in sync.
 
+### 7.1 Abilities and file artifacts
+
+- `abilities.ts` is the registry (label/description/default + `artifact` flag). Global switches live
+  in `ai_config.abilities_json`; `activity_ability` overrides them per item.
+- `artifactAbilities(cfg, overrides)` returns the enabled file-producing abilities. The send bridge
+  uses it; a toggle off means no artifact anywhere.
+- `diagram-tool.ts::buildDiagram` uses `force` when the ability is on, so free-form activities get a
+  diagram too. Specs are cached by activity+draft in `data/diagrams/specs/`.
+- `server.ts::buildSubmissionFile` is the single PDF/DOCX builder used by both
+  `/api/send/artifact` and `/api/send`. If an artifact is enabled but cannot be produced, the send
+  is blocked instead of silently omitting it.
+- PDFs with an artifact are rendered through Chromium (`answerToPdf` → `renderHtmlPdfChromium`) with
+  a dedicated figure page; text-only PDFs keep the LibreOffice/custom fallback.
+- Template `.docx` files embed the diagram only when the ability is enabled.
+
 The Files-card **(i) "O que a IA vê"** modal is user-facing documentation of the AI contract.
 Its rows live in `apps/web/src/lib/ai-capabilities.ts` (header: `KEEP THIS UPDATED`) with
 `aiInfo.*` strings in PT/EN. Add a row whenever the AI gains a new input source, attachment type

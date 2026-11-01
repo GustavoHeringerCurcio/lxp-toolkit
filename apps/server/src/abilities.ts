@@ -13,8 +13,9 @@ export const ABILITY_REGISTRY: readonly AbilityMeta[] = [
     id: "uml_diagram",
     label: "Diagrama UML",
     description:
-      "Gera um diagrama de caso de uso (UML) a partir do rascunho. Útil quando a atividade pede um diagrama.",
+      "Gera um diagrama de caso de uso (UML) a partir da atividade e do rascunho, e anexa uma página no PDF/DOCX final.",
     defaultOn: false,
+    artifact: true,
   },
 ];
 
@@ -55,4 +56,22 @@ export function abilityEnabled(
   const override = activityOverrides[ability];
   if (typeof override === "boolean") return override;
   return cfg.abilities?.[ability] ?? defaultAbilities()[ability] ?? false;
+}
+
+/** Effective ability ids for one activity (global toggle overridden per item). */
+export function enabledAbilities(
+  cfg: AiConfig,
+  activityOverrides: Partial<Record<AbilityId, boolean>> = {},
+): AbilityId[] {
+  return ABILITY_REGISTRY.filter((a) => abilityEnabled(cfg, a.id, activityOverrides)).map((a) => a.id);
+}
+
+/** Effective abilities that produce a file artifact (PDF/DOCX attachment). */
+export function artifactAbilities(
+  cfg: AiConfig,
+  activityOverrides: Partial<Record<AbilityId, boolean>> = {},
+): AbilityId[] {
+  return ABILITY_REGISTRY.filter(
+    (a) => a.artifact && abilityEnabled(cfg, a.id, activityOverrides),
+  ).map((a) => a.id);
 }

@@ -268,6 +268,7 @@ export interface AbilityMeta {
   label: string;
   description: string;
   defaultOn: boolean;
+  artifact: boolean;
 }
 
 /** Global ability switches, keyed by ability id. */

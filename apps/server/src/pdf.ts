@@ -38,6 +38,14 @@ export function answerPdfCacheDir(): string {
   return assist("data", "send-pdf");
 }
 
+/** A diagram page to append to the final PDF. */
+export interface PdfDiagram {
+  png: Buffer;
+  width: number;
+  height: number;
+  title?: string;
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -585,41 +593,8 @@ export function looksLikeMarkdown(text: string): boolean {
   );
 }
 
-/**
- * Render an answer to a PDF, cached by content + title. Uses LibreOffice when
- * available (styled HTML output) and otherwise falls back to the built-in
- * renderer, so `.pdf` delivery works without LibreOffice.
- *
- * `rich` (the "fill" send mode) preserves headings/lists/tables/bold; the
- * default is the plain line-by-line layout — unless the answer itself contains
- * Markdown, in which case the rich layout is used so symbols aren't printed raw.
- */
-export async function answerToPdf(
-  answer: string,
-  baseName: string,
-  opts: { rich?: boolean } = {},
-): Promise<string | null> {
-  const rich = opts.rich === true || looksLikeMarkdown(answer);
-  const cache = answerPdfCacheDir();
-  const key = createHash("sha256").update(`${rich ? "rich" : "plain"}\n${baseName}\n${answer}`).digest("hex");
-  const htmlPath = path.join(cache, `${key}.html`);
-  const pdfPath = path.join(cache, `${key}.pdf`);
-  if (existsSync(pdfPath)) return pdfPath;
-
-  mkdirSync(cache, { recursive: true });
-  if (!existsSync(htmlPath)) {
-    const inner = rich
-      ? markdownToHtml(answer)
-      : answer
-          .replace(/\r\n/g, "\n")
-          .split("\n")
-          .map((line) => (line.trim() ? `<p>${escapeHtml(line)}</p>` : "<p>&nbsp;</p>"))
-          .join("\n");
-    const html = `<!doctype html>
-<html lang="pt-BR">
-<head><meta charset="utf-8"><title>${escapeHtml(baseName)}</title>
-<style>
-  @page { margin: 2.5cm; }
+const PDF_STYLE = `
+  @page { size: A4; margin: 2.5cm; }
   body { font-family: "Inter", Arial, sans-serif; font-size: 12pt; line-height: 1.5; color: #171717; }
   h1 { font-family: "Inter", Arial, sans-serif; font-size: 15pt; margin: 0 0 1em; }
   h2 { font-size: 13pt; margin: 1.2em 0 0.5em; }
@@ -631,9 +606,93 @@ export async function answerToPdf(
   th, td { border: 1px solid #d4d4d4; padding: 4px 8px; text-align: left; vertical-align: top; }
   th { background: #f5f5f5; }
   hr { border: none; border-top: 1px solid #e5e5e5; margin: 1em 0; }
-</style></head>
-<body><h1>${escapeHtml(baseName)}</h1>${inner}</body></html>`;
-    writeFileSync(htmlPath, html, "utf-8");
+  .diagram-page { break-before: page; page-break-before: always; padding-top: 0.4cm; text-align: center; }
+  .diagram-page h2 { margin: 0 0 0.8em; font-size: 13pt; }
+  .diagram-page img { display: block; margin: 0 auto; max-width: 100%; max-height: 22cm; object-fit: contain; }
+  .diagram-page figcaption { margin-top: 0.5em; color: #525252; font-size: 9.5pt; }
+`;
+
+export function buildAnswerHtml(
+  baseName: string,
+  inner: string,
+  diagram?: PdfDiagram,
+): string {
+  const diagramHtml = diagram
+    ? `<figure class="diagram-page">
+  <h2>${escapeHtml(diagram.title ?? "Diagrama de caso de uso (UML)")}</h2>
+  <img src="data:image/png;base64,${diagram.png.toString("base64")}" width="${diagram.width}" height="${diagram.height}" alt="${escapeHtml(diagram.title ?? "Diagrama de caso de uso (UML)")}" />
+  <figcaption>${escapeHtml(diagram.title ?? "Diagrama de caso de uso (UML)")}</figcaption>
+</figure>`
+    : "";
+  return `<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><title>${escapeHtml(baseName)}</title>
+<style>${PDF_STYLE}</style></head>
+<body><h1>${escapeHtml(baseName)}</h1>${inner}${diagramHtml}</body></html>`;
+}
+
+/** Render HTML to PDF with Chromium (used when an image page is present). */
+async function renderHtmlPdfChromium(html: string, out: string): Promise<boolean> {
+  try {
+    const { chromium } = await import("playwright");
+    const noSandbox = /^(1|true|yes)$/i.test(process.env.PLAYWRIGHT_NO_SANDBOX ?? "");
+    const browser = await chromium.launch({ args: noSandbox ? ["--no-sandbox"] : [] });
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "load" });
+      const pdf = await page.pdf({
+        printBackground: true,
+        preferCSSPageSize: true,
+      });
+      writeFileSync(out, pdf);
+      return true;
+    } finally {
+      await browser.close();
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Render an answer to a PDF, cached by content + title + diagram.
+ *
+ * - Diagram pages use Chromium's HTML→PDF engine so the image is embedded at
+ *   full quality. If that fails, the whole render fails (the caller blocks the
+ *   send) instead of silently producing a PDF without the requested diagram.
+ * - Text-only answers keep the existing LibreOffice → built-in renderer path.
+ */
+export async function answerToPdf(
+  answer: string,
+  baseName: string,
+  opts: { rich?: boolean; diagram?: PdfDiagram } = {},
+): Promise<string | null> {
+  const rich = opts.rich === true || looksLikeMarkdown(answer);
+  const diagram = opts.diagram;
+  const cache = answerPdfCacheDir();
+  const diagramHash = diagram
+    ? createHash("sha256").update(diagram.png).digest("hex")
+    : "none";
+  const key = createHash("sha256")
+    .update(`${rich ? "rich" : "plain"}\n${baseName}\n${diagramHash}\n${answer}`)
+    .digest("hex");
+  const htmlPath = path.join(cache, `${key}.html`);
+  const pdfPath = path.join(cache, `${key}.pdf`);
+  if (existsSync(pdfPath)) return pdfPath;
+
+  mkdirSync(cache, { recursive: true });
+  const inner = rich
+    ? markdownToHtml(answer)
+    : answer
+        .replace(/\r\n/g, "\n")
+        .split("\n")
+        .map((line) => (line.trim() ? `<p>${escapeHtml(line)}</p>` : "<p>&nbsp;</p>"))
+        .join("\n");
+  const html = buildAnswerHtml(baseName, inner, diagram);
+  writeFileSync(htmlPath, html, "utf-8");
+
+  if (diagram) {
+    return (await renderHtmlPdfChromium(html, pdfPath)) ? pdfPath : null;
   }
 
   const converted = await officeToPdf(htmlPath, cache);

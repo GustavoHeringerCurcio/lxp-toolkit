@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   ABILITY_REGISTRY,
   abilityEnabled,
+  artifactAbilities,
   defaultAbilities,
+  enabledAbilities,
   isAbilityId,
   mergeAbilities,
 } from "../src/abilities.js";
@@ -52,6 +54,22 @@ describe("mergeAbilities", () => {
   it("tolerates non-object input", () => {
     expect(mergeAbilities(null)).toEqual(defaultAbilities());
     expect(mergeAbilities("x")).toEqual(defaultAbilities());
+  });
+});
+
+describe("enabledAbilities / artifactAbilities", () => {
+  it("lists effective abilities and artifact-producing abilities", () => {
+    expect(enabledAbilities(cfg({ uml_diagram: true }))).toEqual(["uml_diagram"]);
+    expect(artifactAbilities(cfg({ uml_diagram: true }))).toEqual(["uml_diagram"]);
+    expect(enabledAbilities(cfg({ uml_diagram: false }))).toEqual([]);
+    expect(artifactAbilities(cfg({ uml_diagram: true }), { uml_diagram: false })).toEqual([]);
+  });
+
+  it("marks every registered artifact ability explicitly", () => {
+    for (const ability of ABILITY_REGISTRY) {
+      expect(typeof ability.artifact).toBe("boolean");
+    }
+    expect(ABILITY_REGISTRY.find((a) => a.id === "uml_diagram")?.artifact).toBe(true);
   });
 });
 
