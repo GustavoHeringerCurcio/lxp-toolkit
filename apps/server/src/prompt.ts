@@ -1,4 +1,4 @@
-import type { AiActivitySections, AiProfile, AiStyle, Exercise, ForumPost, QuizQ, QuizSelection } from "./types.js";
+import type { AiActivitySections, AiProfile, AiStyle, Exercise, ForumInfo, ForumPost, QuizQ, QuizSelection } from "./types.js";
 import { DEFAULT_ACTIVITY_SECTIONS } from "./config.js";
 import { kindLabel } from "./kind.js";
 import { extractFileText } from "./pdf.js";
@@ -206,6 +206,48 @@ export interface AttachmentTextInfo {
   skipped?: Map<string, string>;
 }
 
+/**
+ * Format quiz questions + alternatives for a model prompt. Shared by the
+ * generation prompt and the answer-quality gate so both judge the same "ask".
+ */
+export function formatQuizQuestions(questions: QuizQ[]): string {
+  const lines: string[] = [];
+  for (const q of questions) {
+    lines.push(`Q${q.id}: ${q.text}`);
+    q.options.forEach((opt, i) => lines.push(`   ${String.fromCharCode(97 + i)}) ${opt.text}`));
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Compact forum thread (question + existing posts) for a model prompt. Shared
+ * by the generation prompt and the gate.
+ */
+export function formatForumThread(forum: ForumInfo | null): string {
+  if (!forum) return "";
+  const strip = (html: string): string =>
+    html
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/\s+/g, " ")
+      .trim();
+  const lines: string[] = [];
+  const renderPost = (depth: number, p: ForumPost): void => {
+    if (p.isDeleted) return;
+    const indent = "  ".repeat(depth);
+    const who =
+      p.postOwnerSafeaRole && p.postOwnerSafeaRole !== "student"
+        ? `${p.postOwnerUsername} (${p.postOwnerRoleName ?? p.postOwnerSafeaRole})`
+        : p.postOwnerUsername;
+    lines.push(`${indent}- ${who} em ${p.createdAt}:`);
+    lines.push(`${indent}  ${strip(p.html)}`);
+    for (const c of p.children) renderPost(depth + 1, c);
+  };
+  for (const p of forum.posts) renderPost(0, p);
+  return lines.join("\n");
+}
+
 /** Per-file status for logs / attachment preflight (never includes file bytes). */
 export interface FileDiagnostic {
   name: string;
@@ -281,39 +323,15 @@ export async function buildPromptVars(
 
   let questoes = "";
   if (e.kind === "quiz" && e.questions.length && sections.questoes) {
-    const lines: string[] = [];
-    for (const q of e.questions) {
-      lines.push(`Q${q.id}: ${q.text}`);
-      q.options.forEach((opt, i) => lines.push(`   ${String.fromCharCode(97 + i)}) ${opt.text}`));
-    }
-    questoes = lines.join("\n");
+    questoes = formatQuizQuestions(e.questions);
   }
 
   // Forum thread: the professor's question (enunciado) + the existing posts,
   // so the reply can be contextual (agree/complement, never duplicate).
   let forum = "";
   if (e.kind === "forum" && e.forum) {
-    const strip = (html: string): string =>
-      html
-        .replace(/<[^>]+>/g, " ")
-        .replace(/&nbsp;/gi, " ")
-        .replace(/&amp;/gi, "&")
-        .replace(/\s+/g, " ")
-        .trim();
-    const lines: string[] = [];
-    const renderPost = (depth: number, p: ForumPost): void => {
-      if (p.isDeleted) return;
-      const indent = "  ".repeat(depth);
-      const who = p.postOwnerSafeaRole && p.postOwnerSafeaRole !== "student"
-        ? `${p.postOwnerUsername} (${p.postOwnerRoleName ?? p.postOwnerSafeaRole})`
-        : p.postOwnerUsername;
-      lines.push(`${indent}- ${who} em ${p.createdAt}:`);
-      lines.push(`${indent}  ${strip(p.html)}`);
-      for (const c of p.children) renderPost(depth + 1, c);
-    };
-    for (const p of e.forum.posts) renderPost(0, p);
-    const header = lines.length ? "" : "(O fórum ainda não tem publicações — a sua será a primeira.)";
-    forum = (header ? header + "\n" : "") + lines.join("\n");
+    const thread = formatForumThread(e.forum);
+    forum = thread || "(O fórum ainda não tem publicações — a sua será a primeira.)";
   }
 
   // Professor-provided model (e.g. the "Modelo de Caso de Uso" table). When the

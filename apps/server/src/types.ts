@@ -303,6 +303,8 @@ export interface GateResult {
   logged?: boolean;
   /** Hash of the draft this analysis was produced from (for staleness checks). */
   draftHash?: string;
+  /** Gate prompt/logic revision. Saved analyses from older revisions are stale. */
+  gateVersion?: number;
 }
 
 export interface AiConfig {

@@ -38,6 +38,13 @@ export function answerPdfCacheDir(): string {
   return assist("data", "send-pdf");
 }
 
+/**
+ * Renderer revision mixed into the cache key. Bump it whenever the PDF output
+ * changes, otherwise a stale file (e.g. one with a leading blank page) keeps
+ * being served from `data/send-pdf`.
+ */
+const PDF_RENDER_VERSION = "2";
+
 /** A diagram page to append to the final PDF. */
 export interface PdfDiagram {
   png: Buffer;
@@ -595,6 +602,7 @@ export function looksLikeMarkdown(text: string): boolean {
 
 const PDF_STYLE = `
   @page { size: A4; margin: 2.5cm; }
+  html, body { margin: 0; padding: 0; }
   body { font-family: "Inter", Arial, sans-serif; font-size: 12pt; line-height: 1.5; color: #171717; }
   h1 { font-family: "Inter", Arial, sans-serif; font-size: 15pt; margin: 0 0 1em; }
   h2 { font-size: 13pt; margin: 1.2em 0 0.5em; }
@@ -657,10 +665,12 @@ async function renderHtmlPdfChromium(html: string, out: string): Promise<boolean
 /**
  * Render an answer to a PDF, cached by content + title + diagram.
  *
- * - Diagram pages use Chromium's HTML→PDF engine so the image is embedded at
- *   full quality. If that fails, the whole render fails (the caller blocks the
- *   send) instead of silently producing a PDF without the requested diagram.
- * - Text-only answers keep the existing LibreOffice → built-in renderer path.
+ * - Every answer uses Chromium's HTML→PDF engine. LibreOffice's HTML import can
+ *   prepend a blank first page, so it is no longer used for answer PDFs.
+ * - When a diagram is requested and Chromium fails, the whole render fails (the
+ *   caller blocks the send) instead of silently producing a PDF without it.
+ * - Text-only answers fall back to the built-in renderer (deterministic, no
+ *   external process, no blank page).
  */
 export async function answerToPdf(
   answer: string,
@@ -674,7 +684,7 @@ export async function answerToPdf(
     ? createHash("sha256").update(diagram.png).digest("hex")
     : "none";
   const key = createHash("sha256")
-    .update(`${rich ? "rich" : "plain"}\n${baseName}\n${diagramHash}\n${answer}`)
+    .update(`${PDF_RENDER_VERSION}\n${rich ? "rich" : "plain"}\n${baseName}\n${diagramHash}\n${answer}`)
     .digest("hex");
   const htmlPath = path.join(cache, `${key}.html`);
   const pdfPath = path.join(cache, `${key}.pdf`);
@@ -691,12 +701,9 @@ export async function answerToPdf(
   const html = buildAnswerHtml(baseName, inner, diagram);
   writeFileSync(htmlPath, html, "utf-8");
 
-  if (diagram) {
-    return (await renderHtmlPdfChromium(html, pdfPath)) ? pdfPath : null;
-  }
-
-  const converted = await officeToPdf(htmlPath, cache);
-  if (converted) return converted;
+  if (await renderHtmlPdfChromium(html, pdfPath)) return pdfPath;
+  // A diagram must render through the browser (full-quality embedded image).
+  if (diagram) return null;
 
   writeFileSync(pdfPath, rich ? renderRichPdf(baseName, answer) : renderTextPdf(baseName, answer));
   return pdfPath;

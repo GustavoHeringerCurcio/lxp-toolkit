@@ -3,6 +3,7 @@ import {
   buildGateUserPrompt,
   draftHash,
   draftHashInput,
+  GATE_SYSTEM_PROMPT,
   isGateVerdict,
   parseGateResult,
 } from "../src/gate.js";
@@ -72,6 +73,53 @@ describe("buildGateUserPrompt", () => {
   it("converts instruction HTML to text but keeps paragraph breaks", () => {
     const prompt = buildGateUserPrompt(exercise, "x");
     expect(prompt).toContain("Monte a tabela do MER.\nEnvie o arquivo em PDF.");
+  });
+
+  it("never says the statement is empty and feeds the quiz questions", () => {
+    const quiz = {
+      title: "Questionário 1",
+      kind: "quiz",
+      instructionsText: "",
+      questions: [
+        {
+          id: 1,
+          text: "O que é TCP?",
+          options: [
+            { id: 11, text: "Um protocolo de transporte" },
+            { id: 12, text: "Uma linguagem" },
+          ],
+        },
+      ],
+      files: [],
+      remoteFiles: [],
+    } as unknown as Exercise;
+    const prompt = buildGateUserPrompt(quiz, "É um protocolo de transporte confiável.");
+    expect(prompt).not.toContain("(vazio)");
+    expect(prompt).toContain("O que a atividade pede");
+    expect(prompt).toContain("O que é TCP?");
+    expect(prompt).toContain("Um protocolo de transporte");
+    expect(prompt).toContain("não informado");
+  });
+
+  it("includes attachment names without requiring the statement", () => {
+    const upload = {
+      title: "Atividade com modelo",
+      kind: "upload",
+      instructionsText: "",
+      questions: [],
+      files: [{ name: "modelo.docx" }],
+      remoteFiles: [{ filename: "brief.pdf", url: "https://example.test/brief.pdf" }],
+    } as unknown as Exercise;
+    const prompt = buildGateUserPrompt(upload, "resposta");
+    expect(prompt).toContain("modelo.docx");
+    expect(prompt).toContain("brief.pdf");
+    expect(prompt).toContain("não informado");
+  });
+
+  it("system prompt forbids refusing to evaluate for a missing statement", () => {
+    expect(GATE_SYSTEM_PROMPT).toContain("NUNCA impede a avaliação");
+    expect(GATE_SYSTEM_PROMPT).toContain("nunca diga que não é possível avaliar");
+    expect(GATE_SYSTEM_PROMPT).toContain("Sempre devolva um dos quatro veredictos");
   });
 });
 

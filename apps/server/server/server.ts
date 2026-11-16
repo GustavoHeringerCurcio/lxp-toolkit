@@ -110,6 +110,7 @@ import {
   analyzeDraftQualityDetailed,
   draftHash,
   draftHashInput,
+  GATE_VERSION,
   type GatePromptContext,
 } from "../src/gate.js";
 import {
@@ -632,6 +633,14 @@ async function buildGatePromptContext(
 }
 
 /**
+ * A saved gate is only reusable when it came from the current prompt revision;
+ * older analyses may carry a stale reason (e.g. "enunciado vazio").
+ */
+function currentGate(gate: GateResult | null | undefined): GateResult | null {
+  return gate && gate.gateVersion === GATE_VERSION ? gate : null;
+}
+
+/**
  * Run the quality gate for a just-saved draft and persist it. Detached from the
  * request path: never throws, so generation is never affected. When the draft is
  * not ready to send, a full-context debug log is written.
@@ -923,10 +932,11 @@ async function generateAndSave(
   // attempt), so regenerating the same draft never spends tokens on the gate.
   const savedHash = draftHash(draftHashInput(shown));
   let gate: Promise<GateResult | null>;
-  if (rec.gate && rec.gate.draftHash === savedHash) {
-    gate = Promise.resolve(rec.gate);
+  const savedGate = currentGate(rec.gate);
+  if (savedGate && savedGate.draftHash === savedHash) {
+    gate = Promise.resolve(savedGate);
     try {
-      writeAiLog({ ...log, gate: rec.gate, gateDebug: null });
+      writeAiLog({ ...log, gate: savedGate, gateDebug: null });
     } catch {
       /* logs are best-effort */
     }
@@ -1165,7 +1175,7 @@ const server = createServer(async (req, res) => {
               updatedAt: rec.updatedAt,
               source: rec.source,
               selections: rec.selections ?? [],
-              gate: rec.gate ?? null,
+              gate: currentGate(rec.gate),
             }
           : null,
         history: rec?.history ?? [],
@@ -1875,7 +1885,7 @@ const server = createServer(async (req, res) => {
           // Reuse the judgment already stored for this exact saved draft: opening
           // the activity or pressing Analyze again must not spend tokens.
           const rec = await getAnswerRecord(id);
-          const saved = rec?.gate ?? null;
+          const saved = currentGate(rec?.gate);
           const matchesCurrent = Boolean(rec && rec.answer.trim() === draft);
           const savedHash = draftHash(draftHashInput(draft));
           if (!force && matchesCurrent && saved?.draftHash === savedHash) {

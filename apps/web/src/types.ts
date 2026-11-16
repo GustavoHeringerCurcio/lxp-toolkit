@@ -190,6 +190,8 @@ export interface GateResultDto {
   logged?: boolean;
   /** Hash of the analyzed draft (used to detect a stale saved analysis). */
   draftHash?: string;
+  /** Gate prompt/logic revision; older saved analyses are discarded server-side. */
+  gateVersion?: number;
 }
 
 /** Recent weak-draft diagnostic (list view; payload omitted). */

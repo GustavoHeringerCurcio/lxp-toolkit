@@ -189,6 +189,7 @@ function toGate(value: unknown): GateResult | null {
     model: typeof o.model === "string" ? o.model : "",
     ...(typeof o.logged === "boolean" ? { logged: o.logged } : {}),
     ...(typeof o.draftHash === "string" ? { draftHash: o.draftHash } : {}),
+    ...(typeof o.gateVersion === "number" ? { gateVersion: o.gateVersion } : {}),
   };
 }
 

@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildAnswerHtml, looksLikeMarkdown, renderRichPdf } from "../src/pdf.js";
+import { answerToPdf, buildAnswerHtml, looksLikeMarkdown, renderRichPdf } from "../src/pdf.js";
 
 const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3Q6wAAAABJRU5ErkJggg==",
@@ -40,6 +41,24 @@ describe("buildAnswerHtml (diagram page)", () => {
   it("does not add a diagram page when none is supplied", () => {
     expect(buildAnswerHtml("Atividade", "<p>Resposta</p>")).not.toContain("<figure");
   });
+
+  it("resets html/body margins so the renderer adds no leading blank page", () => {
+    expect(buildAnswerHtml("Atividade", "<p>Resposta</p>")).toContain(
+      "html, body { margin: 0; padding: 0; }",
+    );
+  });
+});
+
+describe("answerToPdf", () => {
+  it("produces a single page for a short answer (no leading blank page)", async () => {
+    // Random answer keeps the cache from masking a renderer regression.
+    const answer = `Resposta curta de teste ${Math.random().toString(36).slice(2)}`;
+    const pdfPath = await answerToPdf(answer, "Atividade");
+    expect(pdfPath).toBeTruthy();
+    const text = asLatin1(readFileSync(pdfPath as string));
+    const pages = (text.match(/\/Type\s*\/Page(?![s])/g) ?? []).length;
+    expect(pages).toBe(1);
+  }, 30_000);
 });
 
 describe("renderRichPdf (fill mode)", () => {
