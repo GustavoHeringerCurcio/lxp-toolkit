@@ -189,3 +189,28 @@ SSE endpoints directly from the browser (requires exposing a scoped token), or m
 | AI errors | `OPENAI_API_KEY` missing/invalid; model roles in `ai_config` |
 | Port 4174 busy locally | set `PORT` in `apps/server/.env` |
 | Postgres not reachable | `$COMPOSE logs db`; `DATABASE_URL`/`POSTGRES_PASSWORD` mismatch |
+| Tailscale URL fails but `localhost:4174` works | device not on the tailnet (Tailscale off / MagicDNS), or the node has a Funnel-only path on that port — see §11 |
+
+---
+
+## 11. Access remotely over Tailscale
+
+The local app (container or `npm run web`, `127.0.0.1:4174`) can be reached from your own
+phone/laptop anywhere via [Tailscale Serve](https://tailscale.com/kb/1247/funnel-serve-use-cases).
+
+```bash
+npm run tailscale              # map https://<node>.<tailnet>.ts.net -> 127.0.0.1:4174
+npm run tailscale -- --status  # current mapping + reachability
+npm run tailscale -- --off     # remove the mapping
+npm run tailscale -- --funnel  # ALSO public on the internet (no auth — avoid)
+```
+
+- Serve is **tailnet-only**: the device needs Tailscale connected and MagicDNS on. It is free,
+  gets a real TLS cert, and is the recommended way to use the app off-home.
+- The mapping persists across reboots; the app itself must be running (`docker compose up -d`).
+- This is independent of the cloud deployment in `10-deployment.md` — nothing changes on Vercel.
+- **A `*.ts.net` name also resolves publicly once any Funnel exists on that tailnet/node.** If a
+  device without Tailscale opens the URL, it fails at the node's public ingress — that's expected;
+  use `--funnel` only if you accept the app being publicly reachable. The API has no browser
+  login in local mode (`TOOLKIT_TOKEN` unset), so Funnel exposes scraping/send to anyone with the
+  link.
