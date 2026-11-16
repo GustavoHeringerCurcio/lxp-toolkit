@@ -494,9 +494,19 @@ export async function generateAnswerPlain(id: number): Promise<AnswerState> {
   return { current: res.current ?? { answer: res.answer, updatedAt: "", source: "ai" }, history: res.history ?? [] };
 }
 
-/** Quality-gate analysis of a draft against the professor's question. */
-export async function analyzeDraftGate(id: number, draft: string): Promise<GateResultDto | null> {
-  const res = (await post("/api/gate", { id, draft })) as { result: GateResultDto | null };
+/**
+ * Quality-gate analysis of a draft against the professor's question. When
+ * `force` is false the server may return the judgment already saved for this
+ * exact draft (no model call).
+ */
+export async function analyzeDraftGate(
+  id: number,
+  draft: string,
+  force = false,
+): Promise<GateResultDto | null> {
+  const res = (await post("/api/gate", { id, draft, force })) as {
+    result: GateResultDto | null;
+  };
   return res.result ?? null;
 }
 

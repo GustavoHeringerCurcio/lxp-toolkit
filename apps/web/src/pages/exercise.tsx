@@ -257,6 +257,9 @@ function AnswerPanel({
     try {
       const st = await saveManualAnswer(e.id, draft);
       setState(st);
+      // The saved version carries its own judgment; drop any stale in-memory
+      // result so the restored gate can hydrate from `st.current`.
+      setGateResult(null);
       onRefresh();
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
@@ -272,6 +275,9 @@ function AnswerPanel({
       const st = await restoreAnswerVersion(e.id, index);
       setState(st);
       setDraft(st.current?.answer ?? "");
+      // The restored version has its own saved confidence; never let a gate
+      // from the previous draft shadow it.
+      setGateResult(null);
       onRefresh();
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
@@ -286,6 +292,7 @@ function AnswerPanel({
     try {
       const st = await clearAnswerHistory(e.id);
       setState(st);
+      setGateResult(null);
       onRefresh();
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x));
@@ -382,7 +389,11 @@ function AnswerPanel({
   const wantsText = !isGhost && ((isUpload && !isPrint) || isForum);
   const canAi = canAiAnswer(e);
   const isDone = e.done || e.status === "done";
-  const sendGate = gateForDraft(gateResult ?? state?.current?.gate ?? null, draft);
+  // Only a judgment whose draftHash matches the draft on screen may be shown.
+  // Prefer the fresh in-session result, then the saved version's gate.
+  const initialGate =
+    gateForDraft(gateResult, draft) ?? gateForDraft(state?.current?.gate, draft) ?? null;
+  const sendGate = initialGate;
   const canSend =
     !isDone &&
     Boolean(sendCfg?.enabled) &&
@@ -398,7 +409,7 @@ function AnswerPanel({
   return (
     <div className="flex min-h-0 flex-col gap-3 xl:h-full">
       {wantsText && (
-        <GatePanel e={e} draft={draft} initial={gateResult ?? state?.current?.gate ?? null} />
+        <GatePanel e={e} draft={draft} initial={initialGate} />
       )}
       {canAi && (
         <AbilityPanel e={e} draft={draft} onEffectiveChange={setEffectiveAbilities} />

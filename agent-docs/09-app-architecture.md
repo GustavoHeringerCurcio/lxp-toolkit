@@ -194,6 +194,8 @@ Rules to preserve:
   default ?? false`) and injects the single external project from `project_source`. Template
   detection is separate and lazy (cheap model, `wants_template` / `template_fields` in
   `activity_project`); a regex pre-pass short-circuits obvious cases. No project is guessed.
+  `resolveProjectSummary` / `resolveProjectSystemName` power the gate and the UML boundary: the
+  project title is used **only when enabled**, never as a hidden default.
 - **`build.ts` / `classify.ts`** assign each upload task a `flavor`
   (`question` | `ghost` | `print`) and `needsReview` heuristically; ambiguous ones get one lazy AI
   verdict cached in `item_annotation.auto_flavor`. Precedence: manual `tag` → cached AI → heuristic.
@@ -204,11 +206,12 @@ Rules to preserve:
 
 | File | Role |
 |---|---|
-| `prompt.ts` | Builds the two messages: `system` (structured `style` rules + abilities + project block + extra instructions) and `user` (the activity content). Exposes `humanizeQuizAnswer`, `parseQuizSelections`, `composeGhostAnswer`. |
+| `prompt.ts` | Builds the two messages: `system` (structured `style` rules + submission format/ability block + project block + extra instructions) and `user` (the activity content). Exposes `humanizeQuizAnswer`, `parseQuizSelections`, `composeGhostAnswer`. |
 | `ai.ts` | Calls OpenAI with streaming; returns text + provenance (model, tokens, prompt hash). Also `cheapJsonCompletion` for detection. When `readAttachments` is on, PDFs/images are sent as `file`/`image_url` content parts (vision) and the call retries text-only if the model rejects files; base64 is redacted from `ai_run`/debug prompts. Preflights unreadable uploads and retries once when the model refuses to use available files; returns attachment/refusal diagnostics for JSON logs. |
 | `attachments.ts` | Builds the vision content parts: PDFs as `file`, Office→PDF (LibreOffice), images as `image_url`; caps 4 files / 10 MB each / 40 MB total. |
 | `classify.ts` | Lazy AI review of ambiguous uploads. |
-| `gate.ts` | `analyzeDraftQuality` — four-level advisory judgment (`terrible`/`bad`/`ok`/`good`) + one-line reason; runs automatically after every generated draft. `analyzeDraftQualityDetailed` also returns the gate prompt/raw reply for JSON logs. |
+| `gate.ts` | `analyzeDraftQuality` — four-level advisory judgment (`terrible`/`bad`/`ok`/`good`) + one-line reason; runs automatically after every generated draft and is persisted on the `answer_attempt` (`gate_json`). The prompt keeps the draft's raw line breaks and receives the planned submission format + template/project contract, so it judges content rather than requiring the draft itself to be a PDF/DOCX. `draftHash` lets `/api/gate` and regeneration reuse a saved judgment instead of spending tokens again. |
+| `submission-plan.ts` | Deterministic planned delivery (text / TXT / PDF / DOCX, template fill, appended UML page) shared by the generation prompt, the gate and the send defaults. `describeSubmissionPlan` / `describeSubmissionContract` produce the human-readable block. |
 | `ai-log.ts` | Appends every generation to `data/logs/ai/YYYY-MM-DD.jsonl` + `latest/item-<id>.json`: prompt/completion, gate, config, attachment/text diagnostics. Redacts base64/keys; 30-day retention. |
 | `ai-log-cli.ts` / `ai-export.ts` | `npm run ai:log` (latest per item / recent bad) and `npm run ai:export` (historical Postgres attempts) for agent debugging. |
 | `training.ts` | Builds the per-subject knowledge pack (catalog + bank + `content_text`) and generates practice quizzes / streamed study guides. The subject picker flags real subjects (professor-linked or substantial tree) vs exam/phantom modules; hidden God's-Eye topics are included only when unique or question-bearing (duplicate readings dropped). |

@@ -234,6 +234,35 @@ export function stripHtml(html: string | null | undefined): string {
     .trim();
 }
 
+/**
+ * HTML -> readable text that preserves block structure (line breaks and table
+ * cells). Unlike `stripHtml`, it never collapses newlines, so tables, lists and
+ * use-case blocks stay readable to the model (e.g. the answer-confidence gate).
+ */
+export function htmlToText(html: string | null | undefined): string {
+  if (!html) return "";
+  const hasCells = /<t[dh][\s>]/i.test(html);
+  const text = html
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|tr|h[1-6]|blockquote|pre)>/gi, "\n")
+    .replace(/<\/(td|th)>/gi, " | ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCharCode(Number(d)))
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;|&#39;/gi, "'")
+    .replace(/&aacute;/gi, "á").replace(/&eacute;/gi, "é").replace(/&iacute;/gi, "í")
+    .replace(/&oacute;/gi, "ó").replace(/&uacute;/gi, "ú").replace(/&atilde;/gi, "ã")
+    .replace(/&otilde;/gi, "õ").replace(/&ccedil;/gi, "ç")
+    .replace(/[ \t\f\v]+/g, " ")
+    .replace(/ *\n */g, "\n");
+  // A cell separator is emitted after every </td>; drop the one at line end.
+  const cleaned = hasCells ? text.replace(/ \|[ \t]*$/gm, "") : text;
+  return cleaned.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 /** Locate the on-disk course folder for a course id (e.g. "5254272-…"). */
 export function courseDirFor(courseId: number): string | null {
   const coursesRoot = path.join(dataDir(), "courses");

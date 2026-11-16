@@ -100,19 +100,34 @@ import {
   resolveProjectContext,
   resolveProjectEnabled,
   resolveProjectOrigin,
+  resolveProjectSummary,
+  resolveProjectSystemName,
 } from "../src/project-context.js";
 import { humanizeQuizAnswer, parseQuizSelections, composeGhostAnswer } from "../src/prompt.js";
 import { aiLogApp, writeAiLog, type AiLogRecord } from "../src/ai-log.js";
-import { analyzeDraftQuality, analyzeDraftQualityDetailed } from "../src/gate.js";
+import {
+  analyzeDraftQuality,
+  analyzeDraftQualityDetailed,
+  draftHash,
+  draftHashInput,
+  type GatePromptContext,
+} from "../src/gate.js";
 import {
   ABILITY_REGISTRY,
+  abilityEnabled,
   artifactAbilities,
   isAbilityId,
   mergeAbilities,
 } from "../src/abilities.js";
+import {
+  describeSubmissionContract,
+  describeSubmissionPlan,
+  resolveSubmissionPlan,
+} from "../src/submission-plan.js";
 import { gateLogReason, shouldLog, writeDebugLog, type DebugProject } from "../src/debug-log.js";
 import { findTemplateDocx } from "../src/template.js";
 import type {
+  AbilityId,
   AiActivitySections,
   AiConfig,
   AiModels,
@@ -359,17 +374,11 @@ async function buildFilledDocx(
 }
 
 /**
- * The UML system boundary label: the student's project title, then the course
- * name as a last resort.
+ * The UML system boundary label. The project title is used only when the
+ * activity explicitly enabled the project; otherwise fall back to the course.
  */
 async function resolveSystemName(view: ExerciseView): Promise<string> {
-  try {
-    const source = await getProjectSource();
-    if (source.title.trim()) return source.title.trim();
-  } catch {
-    /* best-effort */
-  }
-  return view.courseName;
+  return resolveProjectSystemName(view, view.courseName);
 }
 
 /** Render the activity's UML diagram to PNG (forced when the ability is on). */
@@ -396,7 +405,9 @@ function pngDimensions(png: Buffer): { width: number; height: number } {
 
 /** True when an enabled artifact ability requires a PDF/DOCX attachment. */
 async function hasFileArtifact(view: ExerciseView): Promise<boolean> {
-  if (view.kind !== "upload") return false;
+  // Artifacts only apply to AI-answerable uploads (the same set that exposes
+  // the per-activity ability switch). Print/ghost tasks never attach them.
+  if (view.kind !== "upload" || !isAnswerable(view)) return false;
   const cfg = await getAiConfig();
   const overrides = await getActivityAbilities(view.id).catch(() => ({}));
   return artifactAbilities(cfg, overrides).length > 0;
@@ -411,7 +422,8 @@ async function buildSubmissionFile(
   const cfg = await getAiConfig();
   const overrides = await getActivityAbilities(view.id).catch(() => ({}));
   const artifacts = artifactAbilities(cfg, overrides);
-  const needsDiagram = view.kind === "upload" && artifacts.includes("uml_diagram");
+  const needsDiagram =
+    view.kind === "upload" && isAnswerable(view) && artifacts.includes("uml_diagram");
 
   if (needsDiagram && (mode === "text" || mode === "txt")) {
     return { error: "O diagrama só pode ser anexado em PDF ou DOCX. Escolha um desses formatos." };
@@ -579,6 +591,46 @@ interface GateContext {
   log: AiLogRecord;
 }
 
+/** Effective per-activity ability switches (global merged with overrides). */
+function effectiveAbilitySettings(
+  cfg: AiConfig,
+  overrides: Partial<Record<AbilityId, boolean>>,
+): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const ability of ABILITY_REGISTRY) {
+    out[ability.id] = abilityEnabled(cfg, ability.id, overrides);
+  }
+  return out;
+}
+
+/**
+ * Per-activity context for the gate: how the draft will be delivered (PDF,
+ * DOCX, TXT, template fill, UML page) and the structural contract. Reads only
+ * cached template detection + project summary, so it never spends tokens.
+ */
+async function buildGatePromptContext(
+  view: ExerciseView,
+  cfg: AiConfig,
+  overrides: Partial<Record<AbilityId, boolean>>,
+): Promise<GatePromptContext> {
+  const [activity, project] = await Promise.all([
+    getActivityProject(view.id).catch(() => null),
+    resolveProjectSummary(view).catch(() => null),
+  ]);
+  const plan = resolveSubmissionPlan(view, cfg, overrides, {
+    wantsTemplate: activity?.wantsTemplate === true,
+    templateFields: activity?.templateFields ?? [],
+  });
+  return {
+    submission: describeSubmissionPlan(plan),
+    contract: describeSubmissionContract(plan, {
+      projectTitle: project?.enabled ? project.title : "",
+      formatHint:
+        plan.wantsTemplate || plan.hasDocxTemplate ? "" : projectFormatHint(view),
+    }),
+  };
+}
+
 /**
  * Run the quality gate for a just-saved draft and persist it. Detached from the
  * request path: never throws, so generation is never affected. When the draft is
@@ -593,7 +645,9 @@ async function runGateAndLog(
   let gate: GateResult | null = null;
   let gateDebug: unknown = null;
   try {
-    const analysis = await analyzeDraftQualityDetailed(cfg, view, shown);
+    const overrides = await getActivityAbilities(view.id).catch(() => ({}));
+    const gateCtx = await buildGatePromptContext(view, cfg, overrides);
+    const analysis = await analyzeDraftQualityDetailed(cfg, view, shown, gateCtx);
     gate = analysis.result;
     gateDebug = analysis.debug;
     if (gate && shouldLog(gate)) {
@@ -611,7 +665,7 @@ async function runGateAndLog(
         },
         project: ctx.project,
         templateFields: ctx.templateFields,
-        abilities: cfg.abilities ?? {},
+        abilities: effectiveAbilitySettings(cfg, overrides),
         generation: {
           model: ctx.model,
           temperature: cfg.temperature,
@@ -626,7 +680,9 @@ async function runGateAndLog(
       }).catch(() => null);
       gate.logged = Boolean(written && (written.id || written.file));
     }
-    if (gate) await saveAnswerGate(ctx.contentItemId, gate);
+    // Only talk to the exact saved draft; a detached run must never overwrite
+    // the confidence of a different version.
+    if (gate) await saveAnswerGate(ctx.contentItemId, gate, shown);
   } catch {
     /* gate is best-effort */
   }
@@ -652,6 +708,8 @@ async function generateAndSave(
   const cfg = { ...(await getAiConfig()), ...(opts.model ? { model: opts.model } : {}) };
   const profile = await getProfile();
   const startedAt = Date.now();
+  const abilityOverrides = await getActivityAbilities(id).catch(() => ({}));
+  const effectiveAbilities = effectiveAbilitySettings(cfg, abilityOverrides);
 
   // Template detection (opt-in via `projectAutoDetect`) and the explicit
   // "use my project" switch are independent from each other.
@@ -659,6 +717,7 @@ async function generateAndSave(
   let wantsTemplate = false;
   let templateFields: string[] = [];
   let projectInfo: DebugProject | null = null;
+  let projectTitle = "";
   if (isAnswerable(view)) {
     if (cfg.projectAutoDetect !== false) {
       try {
@@ -673,6 +732,7 @@ async function generateAndSave(
       const resolved = await resolveProjectContext(view);
       externalBlock = resolved.external;
       if (resolved.enabled) {
+        projectTitle = resolved.externalTitle;
         projectInfo = {
           title: resolved.externalTitle,
           enabled: true,
@@ -687,10 +747,29 @@ async function generateAndSave(
   // A professor-provided model (docx table) or a detected template supersedes the
   // generic "fill a Markdown table" hint — the structured contract takes over.
   const template = view.kind === "upload" ? await findTemplateDocx(view.files).catch(() => null) : null;
+  // Tell the generation model how the draft will actually be delivered (PDF,
+  // DOCX filled from the professor's model, appended UML page) so it can shape
+  // the content for that format instead of guessing.
+  const submissionPlan = resolveSubmissionPlan(view, cfg, abilityOverrides, {
+    wantsTemplate,
+    templateFields,
+  });
+  const submissionBlock =
+    view.kind === "quiz"
+      ? ""
+      : [
+          `Formato de envio ao portal: ${describeSubmissionPlan(submissionPlan)}`,
+          describeSubmissionContract(submissionPlan, {
+            projectTitle,
+            formatHint: template || wantsTemplate ? "" : projectFormatHint(view),
+          }),
+        ]
+          .filter(Boolean)
+          .join("\n\n");
   const extra = composeEffectiveInstructions(
     view.aiRequestJson,
     externalBlock,
-    template || wantsTemplate ? "" : projectFormatHint(view),
+    submissionBlock,
   );
 
   const baseActivity = {
@@ -714,7 +793,7 @@ async function generateAndSave(
     temperature: cfg.temperature,
     maxOutputTokens: cfg.max_output_tokens ?? null,
     activitySections: cfg.activitySections,
-    abilities: cfg.abilities ?? {},
+    abilities: effectiveAbilities,
     style: cfg.style,
   };
   const baseTemplate = {
@@ -840,18 +919,31 @@ async function generateAndSave(
   // from the response path so the draft is delivered immediately, but the
   // promise is returned so callers can forward the result to the client
   // (streaming sends a `gate` event) instead of the client re-analyzing.
-  const gate = runGateAndLog(cfg, view, shown, {
-    contentItemId: id,
-    answerAttemptId: attemptId,
-    project: projectInfo,
-    templateFields,
-    model: gen.model,
-    prompt: gen.prompt,
-    promptHash: gen.promptHash,
-    tokensIn: gen.tokensIn,
-    tokensOut: gen.tokensOut,
-    log,
-  });
+  // Reuse the saved judgment when the generated text is identical (deduped
+  // attempt), so regenerating the same draft never spends tokens on the gate.
+  const savedHash = draftHash(draftHashInput(shown));
+  let gate: Promise<GateResult | null>;
+  if (rec.gate && rec.gate.draftHash === savedHash) {
+    gate = Promise.resolve(rec.gate);
+    try {
+      writeAiLog({ ...log, gate: rec.gate, gateDebug: null });
+    } catch {
+      /* logs are best-effort */
+    }
+  } else {
+    gate = runGateAndLog(cfg, view, shown, {
+      contentItemId: id,
+      answerAttemptId: attemptId,
+      project: projectInfo,
+      templateFields,
+      model: gen.model,
+      prompt: gen.prompt,
+      promptHash: gen.promptHash,
+      tokensIn: gen.tokensIn,
+      tokensOut: gen.tokensOut,
+      log,
+    });
+  }
   return { shown, rec, gate };
 }
 
@@ -1064,7 +1156,18 @@ const server = createServer(async (req, res) => {
       const id = Number(url.split("/")[3]);
       const rec = await getAnswerRecord(id);
       return json(res, 200, {
-        current: rec ? { answer: rec.answer, updatedAt: rec.updatedAt, source: rec.source } : null,
+        // `gate` (answer confidence) and selections belong to this exact saved
+        // version; include them so a page reload shows the saved judgment
+        // without re-analyzing the draft.
+        current: rec
+          ? {
+              answer: rec.answer,
+              updatedAt: rec.updatedAt,
+              source: rec.source,
+              selections: rec.selections ?? [],
+              gate: rec.gate ?? null,
+            }
+          : null,
         history: rec?.history ?? [],
       });
     }
@@ -1767,12 +1870,28 @@ const server = createServer(async (req, res) => {
         if (!isAnswerable(view)) return json(res, 400, { error: "Esta atividade não aceita resposta por aqui." });
         const draft = String(b.draft ?? view.answer ?? "").trim();
         if (!draft) return json(res, 200, { ok: true, result: null });
+        const force = b.force === true;
         try {
+          // Reuse the judgment already stored for this exact saved draft: opening
+          // the activity or pressing Analyze again must not spend tokens.
+          const rec = await getAnswerRecord(id);
+          const saved = rec?.gate ?? null;
+          const matchesCurrent = Boolean(rec && rec.answer.trim() === draft);
+          const savedHash = draftHash(draftHashInput(draft));
+          if (!force && matchesCurrent && saved?.draftHash === savedHash) {
+            return json(res, 200, { ok: true, result: saved, reused: true });
+          }
+
           const cfg = await getAiConfig();
-          const result = await analyzeDraftQuality(cfg, view, draft);
-          // Persist so a manual "Analyze" survives a page refresh. No-op when the
-          // item has no saved attempt yet (unsaved manual draft).
-          if (result) await saveAnswerGate(id, result).catch(() => undefined);
+          const overrides = await getActivityAbilities(id).catch(() => ({}));
+          const gateCtx = await buildGatePromptContext(view, cfg, overrides);
+          const result = await analyzeDraftQuality(cfg, view, draft, gateCtx);
+          // Persist only when the analyzed text is the saved version; an unsaved
+          // edit must not overwrite another version's confidence. Use the exact
+          // stored string so the SQL guard always matches.
+          if (result && matchesCurrent && rec) {
+            await saveAnswerGate(id, result, rec.answer).catch(() => undefined);
+          }
           return json(res, 200, { ok: true, result });
         } catch (err) {
           return json(res, 500, { error: err instanceof Error ? err.message : String(err) });

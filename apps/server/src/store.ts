@@ -10,7 +10,6 @@ import { linkedinAvatarUrl } from "./linkedin.js";
 import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_MODELS, DEFAULT_STYLE, loadAiConfig, loadProfile } from "./config.js";
 import { mergeAbilities } from "./abilities.js";
 import type {
-  ActivityAbility,
   ActivityProject,
   AiConfig,
   AiModels,
@@ -260,12 +259,28 @@ export async function getCurrentAttemptId(id: number | string): Promise<number |
  * saved together with the draft and travels with history/restore. No-op when the
  * item has no answer version yet.
  */
-export async function saveAnswerGate(id: number | string, gate: GateResult | null): Promise<void> {
+export async function saveAnswerGate(
+  id: number | string,
+  gate: GateResult | null,
+  expectedContent?: string,
+): Promise<void> {
   const studentId = await getStudentId();
+  const params = [gate == null ? null : JSON.stringify(gate), Number(id), studentId];
+  if (expectedContent !== undefined) {
+    // Only attach the judgment to the exact draft it analyzed. A detached gate
+    // run must never overwrite the confidence of a different saved version.
+    await query(
+      `UPDATE answer_attempt SET gate_json = $1
+        WHERE content_item_id = $2 AND student_id = $3 AND is_current
+          AND btrim(content) = btrim($4)`,
+      [...params, expectedContent],
+    );
+    return;
+  }
   await query(
     `UPDATE answer_attempt SET gate_json = $1
       WHERE content_item_id = $2 AND student_id = $3 AND is_current`,
-    [gate == null ? null : JSON.stringify(gate), Number(id), studentId],
+    params,
   );
 }
 
@@ -695,7 +710,7 @@ export async function setActivityAbility(
   contentItemId: number,
   ability: AbilityId,
   enabled: boolean | null,
-): Promise<ActivityAbility[]> {
+): Promise<Partial<Record<AbilityId, boolean>>> {
   const studentId = await getStudentId();
   if (enabled === null) {
     await query(
@@ -711,11 +726,15 @@ export async function setActivityAbility(
       [contentItemId, studentId, ability, enabled],
     );
   }
+  // Return the same object map as `getActivityAbilities` so the web toggle
+  // (which stores it directly) cannot receive an array by mistake.
   const rows = await query<ActivityAbilityRow>(
     "SELECT ability, enabled FROM activity_ability WHERE content_item_id = $1 AND student_id = $2",
     [contentItemId, studentId],
   );
-  return rows.map((r) => ({ contentItemId, ability: r.ability as AbilityId, enabled: r.enabled }));
+  const out: Partial<Record<AbilityId, boolean>> = {};
+  for (const r of rows) out[r.ability as AbilityId] = r.enabled;
+  return out;
 }
 
 export interface AiRunRecord {

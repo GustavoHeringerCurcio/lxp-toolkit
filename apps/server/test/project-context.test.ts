@@ -29,6 +29,8 @@ import {
   resolveProjectContext,
   resolveProjectEnabled,
   resolveProjectOrigin,
+  resolveProjectSummary,
+  resolveProjectSystemName,
 } from "../src/project-context.js";
 import type { Exercise } from "../src/types.js";
 
@@ -114,6 +116,30 @@ describe("resolveProjectContext", () => {
     mocks.buildExternalProjectBlock.mockResolvedValue("");
     const out = await resolveProjectContext(exercise());
     expect(out).toMatchObject({ enabled: true, configured: false, external: "" });
+  });
+});
+
+describe("resolveProjectSummary / resolveProjectSystemName", () => {
+  it("does not leak the project title into the diagram when the activity is off", async () => {
+    mocks.getModuleProjectDefault.mockResolvedValue(true);
+    mocks.getActivityProject.mockResolvedValue({ useProject: false });
+    const e = exercise({ courseName: "Banco de Dados I" });
+    const summary = await resolveProjectSummary(e);
+    expect(summary).toMatchObject({ enabled: false, origin: "activity", title: "FastAid" });
+    await expect(resolveProjectSystemName(e, e.courseName)).resolves.toBe("Banco de Dados I");
+  });
+
+  it("uses the project title only when enabled", async () => {
+    mocks.getActivityProject.mockResolvedValue({ useProject: true });
+    const e = exercise({ courseName: "Banco de Dados I" });
+    await expect(resolveProjectSystemName(e, e.courseName)).resolves.toBe("FastAid");
+  });
+
+  it("inherits the module default but still reports a disabled project", async () => {
+    mocks.getModuleProjectDefault.mockResolvedValue(false);
+    mocks.getActivityProject.mockResolvedValue(null);
+    const summary = await resolveProjectSummary(exercise());
+    expect(summary).toMatchObject({ enabled: false, origin: "off", configured: true });
   });
 });
 

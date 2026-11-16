@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { draftHash, draftHashInput, isGateVerdict, parseGateResult } from "../src/gate.js";
-import { stripHtml } from "../src/build.js";
+import {
+  buildGateUserPrompt,
+  draftHash,
+  draftHashInput,
+  isGateVerdict,
+  parseGateResult,
+} from "../src/gate.js";
+import { htmlToText, stripHtml } from "../src/build.js";
+import type { Exercise } from "../src/types.js";
 
 describe("draftHash", () => {
   it("is stable and ignores surrounding whitespace", () => {
@@ -34,6 +41,45 @@ describe("isGateVerdict", () => {
     for (const v of ["ready", "review", "weak", "", "GOOD", null, 1]) {
       expect(isGateVerdict(v)).toBe(false);
     }
+  });
+});
+
+describe("buildGateUserPrompt", () => {
+  const exercise = {
+    title: "BDI - Atividade 08 - AVD2",
+    kind: "upload",
+    instructionsText: "<p>Monte a tabela do MER.</p><p>Envie o arquivo em PDF.</p>",
+  } as unknown as Exercise;
+
+  it("preserves the draft line structure (no whitespace flattening)", () => {
+    const draft = "| Entidade | Atributos |\n|---|---|\n| Alunos | Nome |";
+    const prompt = buildGateUserPrompt(exercise, draft);
+    expect(prompt).toContain(draft);
+    expect(prompt).not.toContain("| Entidade | Atributos | |---|---|");
+  });
+
+  it("includes the final submission format and the activity contract", () => {
+    const prompt = buildGateUserPrompt(exercise, "resposta", {
+      submission: "PDF: o rascunho será renderizado e uma página de diagrama será anexada.",
+      contract: "Preencha os campos/colunas: Entidade, Atributos.",
+    });
+    expect(prompt).toContain("Formato de envio ao portal");
+    expect(prompt).toContain("PDF: o rascunho será renderizado");
+    expect(prompt).toContain("Contrato da atividade");
+    expect(prompt).toContain("Entidade, Atributos");
+  });
+
+  it("converts instruction HTML to text but keeps paragraph breaks", () => {
+    const prompt = buildGateUserPrompt(exercise, "x");
+    expect(prompt).toContain("Monte a tabela do MER.\nEnvie o arquivo em PDF.");
+  });
+});
+
+describe("htmlToText", () => {
+  it("keeps newlines and table cells readable", () => {
+    const html = "<p>Linha 1</p><p>Linha 2</p><table><tr><td>A</td><td>B</td></tr></table>";
+    expect(htmlToText(html)).toBe("Linha 1\nLinha 2\nA | B");
+    expect(stripHtml(html)).toBe("Linha 1 Linha 2 A B");
   });
 });
 

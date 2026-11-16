@@ -1,6 +1,6 @@
 import type { AiConfig, Exercise, GateResult, GateVerdict } from "./types.js";
 import { cheapJsonCompletion } from "./ai.js";
-import { stripHtml } from "./build.js";
+import { htmlToText } from "./build.js";
 
 /**
  * Stable hash of the analyzed draft, used to detect a stale saved analysis.
@@ -60,7 +60,12 @@ const SYSTEM =
   '- "ok": responde à tarefa; pode ter pequenas falhas de estilo ou detalhes, mas não impede enviar.\n' +
   '- "bad": falta uma parte importante, há erro relevante ou o texto parece claramente de IA/robótico. Corrija antes de enviar.\n' +
   '- "terrible": falta o conteúdo essencial, a resposta está vazia/genérica demais ou responde a outra tarefa. Não dá para enviar.\n' +
-  "Na dúvida entre ok e bad, escolha bad. Seja específico e breve.\n" +
+  "O texto do aluno é o RASCUNHO: o sistema gera o arquivo final (texto, TXT, PDF ou DOCX) e pode anexar " +
+  "automaticamente uma página de diagrama. Portanto: NUNCA exija que o rascunho já seja um PDF/DOCX nem " +
+  "que contenha o arquivo final; NUNCA penalize Markdown, títulos, listas, tabelas ou lacunas preenchidas, " +
+  "pois eles são renderizados no arquivo. Pedidos como \"enviar em PDF/DOCX\" são instruções de ENTREGA, " +
+  "não requisitos de conteúdo. Avalie conteúdo, completude e aderência ao que o professor pediu. " +
+  "Na dúvida entre ok e bad, só escolha bad quando houver uma falha objetiva; seja específico e breve.\n" +
   'Responda SOMENTE com JSON no formato {"verdict":"terrible|bad|ok|good","reason":"<uma frase curta em português>"}.';
 
 export interface GateDebug {
@@ -71,9 +76,44 @@ export interface GateDebug {
   error?: string;
 }
 
+/** Extra per-activity context: how the draft will be delivered + its contract. */
+export interface GatePromptContext {
+  /** Human-readable final format (PDF/DOCX/TXT + artifacts), when known. */
+  submission?: string;
+  /** Template fields, project in use, structural hints, etc. */
+  contract?: string;
+}
+
 export interface GateAnalysis {
   result: GateResult | null;
   debug: GateDebug;
+}
+
+/**
+ * The exact user message sent to the gate. Kept pure/exported so tests can lock
+ * the format contract: the draft is the RAW text (newlines preserved) and the
+ * final submission format is described explicitly.
+ */
+export function buildGateUserPrompt(
+  e: Exercise,
+  draft: string,
+  ctx: GatePromptContext = {},
+): string {
+  const scope = 6000;
+  const instructions = htmlToText(e.instructionsText ?? "").slice(0, scope);
+  // Never flatten the draft: tables, use-case blocks and lists must stay
+  // readable. The web panel hashes this same raw text.
+  const draftText = (draft ?? "").trim().slice(0, 12000);
+  return [
+    `Atividade: ${e.title}`,
+    `Tipo: ${e.kind}`,
+    `Enunciado do professor:\n${instructions || "(vazio)"}`,
+    ctx.submission?.trim() ? `Formato de envio ao portal:\n${ctx.submission.trim()}` : "",
+    ctx.contract?.trim() ? `Contrato da atividade:\n${ctx.contract.trim()}` : "",
+    `Resposta do aluno:\n${draftText}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /**
@@ -84,15 +124,10 @@ export async function analyzeDraftQualityDetailed(
   cfg: AiConfig,
   e: Exercise,
   draft: string,
+  ctx: GatePromptContext = {},
 ): Promise<GateAnalysis> {
-  const draftText = stripHtml(draft ?? "").trim();
-  const instructions = stripHtml(e.instructionsText ?? "").slice(0, 6000);
-  const user = [
-    `Atividade: ${e.title}`,
-    `Tipo: ${e.kind}`,
-    `Enunciado do professor:\n${instructions || "(vazio)"}`,
-    `Resposta do aluno:\n${draftText.slice(0, 12000)}`,
-  ].join("\n\n");
+  const draftText = (draft ?? "").trim();
+  const user = buildGateUserPrompt(e, draft, ctx);
   const baseDebug = { system: SYSTEM, user, raw: "", model: cfg.models.gate };
 
   if (!draftText) return { result: null, debug: baseDebug };
@@ -125,6 +160,7 @@ export async function analyzeDraftQuality(
   cfg: AiConfig,
   e: Exercise,
   draft: string,
+  ctx: GatePromptContext = {},
 ): Promise<GateResult | null> {
-  return (await analyzeDraftQualityDetailed(cfg, e, draft)).result;
+  return (await analyzeDraftQualityDetailed(cfg, e, draft, ctx)).result;
 }

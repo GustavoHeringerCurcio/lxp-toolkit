@@ -65,7 +65,7 @@ export function GatePanel({
   const cache = useRef<Map<string, GateResultDto>>(new Map());
 
   const run = useCallback(
-    async (text: string) => {
+    async (text: string, force = false) => {
       const trimmed = text.trim();
       if (!trimmed) {
         setResult(null);
@@ -73,16 +73,22 @@ export function GatePanel({
         return;
       }
       const key = `${e.id}:${hashDraft(trimmed)}`;
-      const cached = cache.current.get(key);
-      if (cached) {
-        setResult(cached);
-        setErr(null);
-        return;
+      if (!force) {
+        const cached = cache.current.get(key);
+        if (cached) {
+          setResult(cached);
+          setErr(null);
+          return;
+        }
+      } else {
+        cache.current.delete(key);
       }
       setLoading(true);
       setErr(null);
       try {
-        const r = await analyzeDraftGate(e.id, trimmed);
+        // Without force the server reuses the judgment saved for this exact
+        // draft; force asks for a fresh model call (the "Reanalisar" button).
+        const r = await analyzeDraftGate(e.id, trimmed, force);
         if (r) {
           cache.current.set(key, r);
           setResult(r);
@@ -105,26 +111,29 @@ export function GatePanel({
     cache.current.clear();
   }, [e.id]);
 
-  // Hydrate from the saved analysis (persisted with the answer version, or
-  // delivered by the generation stream) when it matches the current draft, so
-  // a generated draft shows its confidence without pressing Analyze.
+  // Keep exactly one judgment that belongs to the draft on screen:
+  // - a result for this draft wins;
+  // - otherwise hydrate the saved/generated `initial` when it matches (history
+  //   restore, page reload);
+  // - otherwise clear, so a judgment for old text is never shown.
+  // Single effect (not separate hydrate/invalidate effects) avoids the old
+  // ordering bug where the invalidation pass wiped a just-restored gate.
   useEffect(() => {
-    if (result || !initial) return;
     const text = draft.trim();
-    if (text && initial.draftHash === hashDraft(text)) {
-      cache.current.set(`${e.id}:${hashDraft(text)}`, initial);
-      setResult(initial);
+    if (!text) {
+      setResult(null);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial, result]);
-
-  // A changed draft invalidates the shown confidence, so the user is never
-  // looking at a judgment for text that no longer exists.
-  useEffect(() => {
-    if (!result) return;
-    const text = draft.trim();
-    if (!text || result.draftHash !== hashDraft(text)) setResult(null);
-  }, [draft, result]);
+    const hash = hashDraft(text);
+    if (result?.draftHash === hash) return;
+    if (initial?.draftHash === hash) {
+      cache.current.set(`${e.id}:${hash}`, initial);
+      setResult(initial);
+      setErr(null);
+      return;
+    }
+    setResult(null);
+  }, [draft, initial, result, e.id]);
 
   const hasDraft = Boolean(draft.trim());
   const tone = result ? TONE[result.verdict] : null;
@@ -162,7 +171,7 @@ export function GatePanel({
         <Button
           variant="ghost"
           size="xs"
-          onClick={() => void run(draft)}
+          onClick={() => void run(draft, Boolean(result))}
           disabled={loading || !hasDraft}
         >
           {loading ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}

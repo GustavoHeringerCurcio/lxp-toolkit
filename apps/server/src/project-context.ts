@@ -130,6 +130,49 @@ export async function resolveProjectContext(e: Exercise): Promise<ResolvedProjec
   };
 }
 
+/**
+ * Lightweight project summary for the gate and the UML system boundary: only
+ * reports whether the project is on, where that came from, and its title. Does
+ * not build the (potentially large) external project block.
+ */
+export interface ProjectSummary {
+  enabled: boolean;
+  origin: ProjectOrigin;
+  title: string;
+  configured: boolean;
+}
+
+export async function resolveProjectSummary(e: Exercise): Promise<ProjectSummary> {
+  const [activity, moduleDefault, source] = await Promise.all([
+    getActivityProject(e.id).catch(() => null),
+    getModuleProjectDefault(e.moduleId).catch(() => false),
+    getProjectSource().catch(() => null),
+  ]);
+  const useProject = activity?.useProject ?? null;
+  return {
+    enabled: resolveProjectEnabled(useProject, moduleDefault),
+    origin: resolveProjectOrigin(useProject, moduleDefault),
+    title: source?.title.trim() ?? "",
+    configured: Boolean(
+      source?.title.trim() ||
+        source?.githubUrl.trim() ||
+        source?.notes.trim() ||
+        source?.readmeText.trim(),
+    ),
+  };
+}
+
+/**
+ * The UML system-boundary label. The student's project title is used **only**
+ * when the project is explicitly enabled for this activity; otherwise the
+ * course name is used. Prevents leaking a disabled project (e.g. "FastAid")
+ * into a generated diagram.
+ */
+export async function resolveProjectSystemName(e: Exercise, fallback: string): Promise<string> {
+  const summary = await resolveProjectSummary(e).catch(() => null);
+  return summary?.enabled && summary.title ? summary.title : fallback;
+}
+
 /** Merge the per-exercise override with the resolved project/format instructions. */
 export function composeEffectiveInstructions(overrideRaw: string, ...blocks: string[]): string {
   const parts = [resolveExtraInstructions(overrideRaw), ...blocks];

@@ -45,6 +45,28 @@ describe("GatePanel", () => {
     expect(screen.getByText("100%")).toBeInTheDocument();
   });
 
+  it("hydrates the saved gate when a restored draft matches it", () => {
+    const restored = "Versão antiga restaurada.";
+    const restoredGate = result({
+      verdict: "ok",
+      reason: "Versão restaurada.",
+      draftHash: hashDraft(restored),
+    });
+    const { rerender } = render(
+      <LangProvider>
+        <GatePanel e={exercise} draft={draft} initial={result()} />
+      </LangProvider>,
+    );
+    expect(screen.getByText("Tudo certo.")).toBeInTheDocument();
+
+    rerender(
+      <LangProvider>
+        <GatePanel e={exercise} draft={restored} initial={restoredGate} />
+      </LangProvider>,
+    );
+    expect(screen.getByText("Versão restaurada.")).toBeInTheDocument();
+  });
+
   it("clears the judgment when the draft changes", () => {
     const { rerender } = render(
       <LangProvider>
