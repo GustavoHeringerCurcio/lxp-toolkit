@@ -632,7 +632,12 @@ export function SettingsPage() {
                     checked={notif.barkEnabled}
                     onChange={(v) => patchNotif({ barkEnabled: v })}
                   >
-                    <Field label={t("settings.notif.barkDeviceKey")} hint={t("settings.notif.barkDeviceKeyHint")}>
+                    <Field
+                      label={t("settings.notif.barkDeviceKey")}
+                      hint={`${t("settings.notif.barkDeviceKeyHint")} · ${t("settings.notif.barkServerHint", {
+                        host: notif.barkServer || "api.day.app",
+                      })}`}
+                    >
                       <Input
                         type="password"
                         autoComplete="off"

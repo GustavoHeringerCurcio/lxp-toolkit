@@ -9,6 +9,7 @@ vi.mock("../src/store.js", () => ({
   getNotificationItem: vi.fn(),
 }));
 import {
+  barkDeviceKeyProblem,
   buildBarkPayload,
   buildDiscordPayload,
   defaultNotificationConfig,
@@ -18,11 +19,16 @@ import {
   maskSecret,
   normalizeDiscordWebhookUrl,
   notifyActivityDone,
+  publicNotificationConfig,
   runNotificationScan,
   sendBark,
   sendDiscord,
+  verifyBarkDeviceKey,
 } from "../src/notifications.js";
 import * as store from "../src/store.js";
+
+const VALID_BARK_KEY = "F5u42Bd3HyW8KxkUqo2gRA";
+const APNS_TOKEN = "0a9919b0f0d1c736a6dd0ac09e6cb51d51ad97380ae41639f8412d08f9cc17bb";
 
 function makeConfig(overrides: Partial<NotificationConfig> = {}): NotificationConfig {
   return {
@@ -68,6 +74,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
   vi.useRealTimers();
 });
@@ -88,9 +95,22 @@ describe("notification helpers", () => {
   });
 
   it("valida a Device Key do Bark", () => {
-    expect(isBarkDeviceKey("abcdefgh1234")).toBe(true);
+    expect(isBarkDeviceKey(VALID_BARK_KEY)).toBe(true);
     expect(isBarkDeviceKey("has space")).toBe(false);
     expect(isBarkDeviceKey("short")).toBe(false);
+    expect(isBarkDeviceKey(APNS_TOKEN)).toBe(false);
+    expect(barkDeviceKeyProblem(APNS_TOKEN)).toContain("APNs");
+    expect(barkDeviceKeyProblem("abc")).toContain("22 caracteres");
+    expect(barkDeviceKeyProblem(VALID_BARK_KEY)).toBeNull();
+  });
+
+  it("mostra o servidor Bark configurado na configuração pública", () => {
+    vi.stubEnv("BARK_BASE_URL", "https://bark.example.com");
+    const config = publicNotificationConfig(
+      makeConfig({ barkDeviceKey: VALID_BARK_KEY }),
+      { lastEventAt: null, lastError: null },
+    );
+    expect(config.barkServer).toBe("bark.example.com");
   });
 
   it("formata os quatro eventos em pt-BR", () => {
@@ -153,6 +173,51 @@ describe("delivery", () => {
       vi.fn().mockResolvedValue(response({ ok: false, status: 500, body: { code: 500 } })),
     );
     await expect(sendBark("abcdefgh1234", "done")).rejects.toThrow("Bark");
+  });
+
+  it("traduz device token desconhecido em erro acionável", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        response({
+          ok: false,
+          status: 400,
+          body: { code: 400, message: "failed to get [x] device token from database" },
+        }),
+      ),
+    );
+    await expect(sendBark(APNS_TOKEN, "done")).rejects.toThrow("não reconhecida");
+  });
+
+  it("verifica a Device Key no /register do Bark", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(response({ body: { code: 200, message: "success" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(verifyBarkDeviceKey(VALID_BARK_KEY)).resolves.toEqual({ status: "ok" });
+    expect(String(fetchMock.mock.calls[0][0])).toContain(`/register/${VALID_BARK_KEY}`);
+  });
+
+  it("distingue key desconhecida de servidor inacessível", async () => {
+    vi.stubEnv("BARK_BASE_URL", "https://bark.example.com");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        response({
+          ok: false,
+          status: 400,
+          body: { code: 400, message: "failed to get [x] device token from database" },
+        }),
+      ),
+    );
+    const unknown = await verifyBarkDeviceKey(VALID_BARK_KEY);
+    expect(unknown.status).toBe("unknown");
+    if (unknown.status === "unknown") expect(unknown.message).toContain("bark.example.com");
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+    const offline = await verifyBarkDeviceKey(VALID_BARK_KEY);
+    expect(offline.status).toBe("unreachable");
   });
 
   it("entrega nos dois canais e preserva falhas parciais", async () => {

@@ -569,6 +569,7 @@ export interface NotificationConfigDto {
   barkEnabled: boolean;
   barkConfigured: boolean;
   barkHint: string | null;
+  barkServer: string;
   notifyNew: boolean;
   notifyDueSoon: boolean;
   notifyDone: boolean;

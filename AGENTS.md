@@ -84,6 +84,9 @@ Full detail: `agent-docs/10-deployment.md`.
   Discord webhook / Bark channels, four event toggles (new, <24h, done, expired) and an idempotency
   ledger. The scanner runs at server boot and after every refresh (no background timer); successful
   sends also fire an immediate "done" alert. Secrets stay server-side and are returned masked.
+  Bark Device Keys are validated on save (22-char shortuuid; 64-hex APNs tokens are rejected) and
+  checked against `GET {BARK_BASE_URL}/register/:key`; a 400 blocks the save, an unreachable server
+  only warns. `BARK_BASE_URL` (server env) selects the Bark server, default `https://api.day.app`.
 - **God's Eye (hidden topics):** the portal's topic-detail endpoint serves content by id even when
   the topic is absent from the student's content tree. `npm run dump` harvests those topics
   (`content.ts::harvestHiddenTopics`, cached in `scraped/raw/hidden-index.json`) and appends them

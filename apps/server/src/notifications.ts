@@ -70,6 +70,8 @@ export interface PublicNotificationConfig {
   barkEnabled: boolean;
   barkConfigured: boolean;
   barkHint: string | null;
+  /** Host pushes are sent to (public api.day.app unless BARK_BASE_URL is set). */
+  barkServer: string;
   notifyNew: boolean;
   notifyDueSoon: boolean;
   notifyDone: boolean;
@@ -114,6 +116,7 @@ export function publicNotificationConfig(
     barkEnabled: config?.barkEnabled ?? false,
     barkConfigured: Boolean(config?.barkDeviceKey),
     barkHint: maskSecret(config?.barkDeviceKey ?? null),
+    barkServer: barkHost(),
     notifyNew: config?.notifyNew ?? true,
     notifyDueSoon: config?.notifyDueSoon ?? true,
     notifyDone: config?.notifyDone ?? true,
@@ -147,8 +150,34 @@ export function normalizeDiscordWebhookUrl(raw: string): string | null {
 }
 
 export function isBarkDeviceKey(raw: string): boolean {
+  return barkDeviceKeyProblem(raw) === null;
+}
+
+/**
+ * Canonical Bark device keys are the 22-char shortuuid bark-server generates on
+ * registration (alphabet excludes 0/O/I/l). Rejecting anything else up front
+ * catches the most common mistake: pasting an APNs device token (64 hex) or an
+ * encryption key instead of the Device Key shown in the app.
+ */
+const BARK_DEVICE_KEY_PATTERN =
+  /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{22}$/;
+const APNS_DEVICE_TOKEN_PATTERN = /^[0-9a-fA-F]{64}$/;
+
+/** Human-readable reason a value cannot be a Bark Device Key, or null when valid. */
+export function barkDeviceKeyProblem(raw: string): string | null {
   const value = raw.trim();
-  return value.length >= 6 && value.length <= 256 && !/\s/.test(value);
+  if (!value) return "informe a Device Key.";
+  if (/\s/.test(value)) return "a Device Key não pode conter espaços.";
+  if (APNS_DEVICE_TOKEN_PATTERN.test(value)) {
+    return "esse valor tem 64 caracteres hexadecimais, que é o formato do token de APNs (não da Device Key). Copie a Device Key de 22 caracteres no app Bark.";
+  }
+  if (value.length !== 22) {
+    return `a Device Key do Bark tem 22 caracteres (recebido ${value.length}). Copie a Device Key no app Bark.`;
+  }
+  if (!BARK_DEVICE_KEY_PATTERN.test(value)) {
+    return "a Device Key contém caracteres inválidos. Copie a Device Key no app Bark.";
+  }
+  return null;
 }
 
 /** Bark server base URL (self-host via BARK_BASE_URL; defaults to the public one). */
@@ -160,6 +189,54 @@ export function barkBaseUrl(): string {
     return url.toString().replace(/\/+$/, "");
   } catch {
     return DEFAULT_BARK_BASE_URL;
+  }
+}
+
+/** Host shown to the user so a wrong/missing BARK_BASE_URL is obvious. */
+export function barkHost(): string {
+  try {
+    return new URL(barkBaseUrl()).host;
+  } catch {
+    return "api.day.app";
+  }
+}
+
+export type BarkKeyCheck =
+  | { status: "ok" }
+  | { status: "unknown"; message: string }
+  | { status: "unreachable"; message: string };
+
+/**
+ * Ask the Bark server whether it knows this device key (`GET /register/:key`,
+ * a read-only check). Only an explicit 400 blocks saving; an unreachable server
+ * is reported as a warning so offline/self-hosted setups can still save.
+ */
+export async function verifyBarkDeviceKey(deviceKey: string): Promise<BarkKeyCheck> {
+  const host = barkHost();
+  const hint =
+    "Copie a Device Key (22 caracteres) no app Bark" +
+    (host === "api.day.app" ? "." : `; se a key for de outro servidor, ajuste BARK_BASE_URL.`);
+  try {
+    const res = await fetch(`${barkBaseUrl()}/register/${encodeURIComponent(deviceKey)}`, {
+      method: "GET",
+      signal: AbortSignal.timeout(5_000),
+    });
+    const data = (await res.json().catch(() => null)) as { code?: number } | null;
+    if (res.ok && (data?.code === 200 || data?.code == null)) return { status: "ok" };
+    if (res.status === 400) {
+      return { status: "unknown", message: `Device Key não reconhecida por ${host}. ${hint}` };
+    }
+    return {
+      status: "unreachable",
+      message: `Não foi possível verificar a Device Key em ${host} (HTTP ${res.status}).`,
+    };
+  } catch (err) {
+    return {
+      status: "unreachable",
+      message: `Não foi possível verificar a Device Key em ${host}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    };
   }
 }
 
@@ -313,9 +390,19 @@ export async function sendBark(
     signal: AbortSignal.timeout(10_000),
   });
   const data = (await res.json().catch(() => null)) as { code?: number; message?: string } | null;
+  const message = typeof data?.message === "string" ? data.message : "";
   if (!res.ok || data?.code !== 200) {
+    // The server's "failed to get … device token from database" is just an
+    // unknown device key: explain the fix instead of echoing the raw lookup.
+    if (res.status === 400 && /device token/i.test(message)) {
+      const host = barkHost();
+      throw new Error(
+        `Bark: device key não reconhecida por ${host}. Copie a Device Key (22 caracteres) no app Bark` +
+          (host === "api.day.app" ? "." : "; se a key for de outro servidor, ajuste BARK_BASE_URL."),
+      );
+    }
     throw new Error(
-      `Bark HTTP ${res.status}${data?.message ? `: ${data.message}` : ""}${
+      `Bark HTTP ${res.status}${message ? `: ${message}` : ""}${
         data?.code != null ? ` (code ${data.code})` : ""
       }`,
     );

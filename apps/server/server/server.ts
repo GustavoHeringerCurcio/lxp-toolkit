@@ -165,12 +165,13 @@ import { applyTemplateDefaults, forceTodayDate, parseUseCases } from "../src/use
 import { parseLinkedinUrl } from "../src/linkedin.js";
 import { buildOrgDirectory, loadOrganizations, matchOrganization } from "../src/organizations.js";
 import {
+  barkDeviceKeyProblem,
   defaultNotificationConfig,
-  isBarkDeviceKey,
   normalizeDiscordWebhookUrl,
   publicNotificationConfig,
   runNotificationScan,
   sendNotificationTest,
+  verifyBarkDeviceKey,
 } from "../src/notifications.js";
 import {
   PROJECT_FILE_MAX_BYTES,
@@ -1742,13 +1743,17 @@ const server = createServer(async (req, res) => {
           next.discordWebhookUrl = normalized;
         }
 
+        let barkKeyChanged = false;
         if (b.clearBarkDeviceKey === true || b.barkDeviceKey === null || b.barkDeviceKey === "") {
+          barkKeyChanged = next.barkDeviceKey !== null;
           next.barkDeviceKey = null;
         } else if (typeof b.barkDeviceKey === "string") {
           const key = b.barkDeviceKey.trim();
-          if (!isBarkDeviceKey(key)) {
-            return json(res, 400, { error: "Device Key do Bark inválida." });
+          const problem = barkDeviceKeyProblem(key);
+          if (problem) {
+            return json(res, 400, { error: `Device Key do Bark inválida: ${problem}` });
           }
+          barkKeyChanged = next.barkDeviceKey !== key;
           next.barkDeviceKey = key;
         }
 
@@ -1757,6 +1762,16 @@ const server = createServer(async (req, res) => {
         }
         if (next.barkEnabled && !next.barkDeviceKey) {
           return json(res, 400, { error: "Configure a Device Key do Bark para ativar esse canal." });
+        }
+
+        // Ask Bark whether the key is registered before committing it, so a
+        // wrong paste fails here with an actionable message. Unreachable
+        // servers only warn (self-hosted/offline setups must still save).
+        const barkEnabling = next.barkEnabled && !current.barkEnabled;
+        if (next.barkEnabled && next.barkDeviceKey && (barkKeyChanged || barkEnabling)) {
+          const check = await verifyBarkDeviceKey(next.barkDeviceKey);
+          if (check.status === "unknown") return json(res, 400, { error: check.message });
+          if (check.status === "unreachable") console.warn(`[notifications] ${check.message}`);
         }
 
         await saveNotificationConfig(next);
@@ -1769,6 +1784,14 @@ const server = createServer(async (req, res) => {
         const channels = await sendNotificationTest(config);
         if (channels.length === 0) {
           return json(res, 400, { error: "Ative e configure pelo menos um canal." });
+        }
+        const failed = channels.filter((c) => !c.ok);
+        if (failed.length > 0) {
+          console.warn(
+            `[notifications] teste: ${failed
+              .map((c) => `${c.channel}: ${c.error ?? "falhou"}`)
+              .join(" | ")}`,
+          );
         }
         return json(res, 200, { ok: channels.every((c) => c.ok), channels });
       }
