@@ -200,17 +200,21 @@ phone/laptop anywhere via [Tailscale Serve](https://tailscale.com/kb/1247/funnel
 
 ```bash
 npm run tailscale              # map https://<node>.<tailnet>.ts.net -> 127.0.0.1:4174
-npm run tailscale -- --status  # current mapping + reachability
-npm run tailscale -- --off     # remove the mapping
-npm run tailscale -- --funnel  # ALSO public on the internet (no auth — avoid)
+npm run tailscale -- --funnel  # public on that URL, behind a password gate (4175)
+npm run tailscale -- --status  # mapping, URL, gate and app reachability
+npm run tailscale -- --off     # remove the mapping, stop the gate
+npm run gate -- --start|--stop|--status   # the password gate on its own
 ```
 
 - Serve is **tailnet-only**: the device needs Tailscale connected and MagicDNS on. It is free,
   gets a real TLS cert, and is the recommended way to use the app off-home.
 - The mapping persists across reboots; the app itself must be running (`docker compose up -d`).
 - This is independent of the cloud deployment in `10-deployment.md` — nothing changes on Vercel.
-- **A `*.ts.net` name also resolves publicly once any Funnel exists on that tailnet/node.** If a
-  device without Tailscale opens the URL, it fails at the node's public ingress — that's expected;
-  use `--funnel` only if you accept the app being publicly reachable. The API has no browser
-  login in local mode (`TOOLKIT_TOKEN` unset), so Funnel exposes scraping/send to anyone with the
-  link.
+- **A `*.ts.net` name also resolves publicly once any Funnel exists on that tailnet/node**, and
+  Chromium's Secure DNS bypasses MagicDNS and goes to the Funnel ingress. That is why the URL can
+  give `ERR_CONNECTION_CLOSED` in Chrome while `curl` works: enable Funnel (`--funnel`) instead of
+  fighting browser DNS settings.
+- `--funnel` starts `scripts/gate-proxy.mjs` on `127.0.0.1:4175` (cookie login, HMAC of the
+  password) and points Funnel at it. The password lives in the gitignored `.gate-password`
+  (or `LXP_GATE_PASSWORD`); rotation = edit the file and restart the gate. Never point Funnel at
+  4174 directly — the API has no browser login in local mode (`TOOLKIT_TOKEN` unset).
