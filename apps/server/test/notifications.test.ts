@@ -130,10 +130,40 @@ describe("notification helpers", () => {
     expect(embed.color).toBe(0x3f8a5b);
   });
 
-  it("monta o payload do Bark com grupo e nivel", () => {
-    const payload = buildBarkPayload("expired", makeItem());
-    expect(payload.group).toBe("LXP Toolkit");
-    expect(payload.level).toBe("timeSensitive");
+  it("monta o payload do Bark com grupo, som e arte por evento", () => {
+    const expired = buildBarkPayload("expired", makeItem());
+    expect(expired.group).toBe("LXP Toolkit · Prazos");
+    expect(expired.level).toBe("timeSensitive");
+    expect(expired.sound).toBe("alarm");
+    expect(String(expired.icon)).toMatch(/\/expired\.png\?v=\d+$/);
+    expect(String(expired.image)).toMatch(/\/expired-banner\.png\?v=\d+$/);
+
+    const done = buildBarkPayload("done", makeItem());
+    expect(done.group).toBe("LXP Toolkit · Concluídas");
+    expect(done.sound).toBe("paymentsuccess");
+    expect(String(done.icon)).toContain("/done.png");
+
+    const dueSoon = buildBarkPayload("due_soon", makeItem());
+    expect(dueSoon.group).toBe("LXP Toolkit · Prazos");
+    expect(String(dueSoon.icon)).toContain("/due-soon.png");
+
+    const brandNew = buildBarkPayload("new", makeItem());
+    expect(brandNew.group).toBe("LXP Toolkit · Novas");
+    expect(String(brandNew.image)).toContain("/new-banner.png");
+  });
+
+  it("usa BARK_ASSET_BASE_URL para as artes", () => {
+    vi.stubEnv("BARK_ASSET_BASE_URL", "https://cdn.example.com/bark");
+    const payload = buildBarkPayload("done", makeItem());
+    expect(payload.icon).toMatch(/^https:\/\/cdn\.example\.com\/bark\/done\.png\?v=\d+$/);
+    expect(payload.image).toMatch(/^https:\/\/cdn\.example\.com\/bark\/done-banner\.png\?v=\d+$/);
+  });
+
+  it("cai no caminho público do repo quando BARK_ASSET_BASE_URL não existe", () => {
+    const payload = buildBarkPayload("new", makeItem());
+    expect(String(payload.icon)).toContain(
+      "raw.githubusercontent.com/GustavoHeringerCurcio/lxp-toolkit/master/apps/web/public/notifications/new.png",
+    );
   });
 });
 
@@ -164,7 +194,10 @@ describe("delivery", () => {
     expect(String(target)).toContain("/push");
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.device_key).toBe("abcdefgh1234");
-    expect(body.group).toBe("LXP Toolkit");
+    expect(body.group).toBe("LXP Toolkit · Concluídas");
+    expect(body.sound).toBe("paymentsuccess");
+    expect(String(body.icon)).toMatch(/\/done\.png\?v=\d+$/);
+    expect(String(body.image)).toMatch(/\/done-banner\.png\?v=\d+$/);
   });
 
   it("rejeita uma resposta do Bark sem code 200", async () => {

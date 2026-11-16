@@ -323,6 +323,13 @@ enabled at once; the four event switches are global:
 - Webhook URLs and Bark device keys are stored server-side and only returned masked (`…abcd`).
   Discord URLs are validated against the official `discord.com`/`discordapp.com` webhook path
   (SSRF guard). Delivery is best-effort and never blocks a refresh or submission.
+- Bark pushes carry per-event art: `icon` (circular avatar, iOS 15+) and `image` (banner shown
+  when expanded) point at `apps/web/public/notifications/*.png`, rendered by `npm run notif:icons`
+  (green done, red expired, blue new, gold 24h, brand mark for the test). `group` splits
+  Notification Center into Novas / Prazos / Concluídas and `sound` picks a built-in Bark tone.
+  The phone downloads the art, so it must be a public URL: `BARK_ASSET_BASE_URL` overrides the
+  default (this repo's raw GitHub path); Vercel and the local server serve it at `/notifications`.
+  Bump `BARK_ASSET_VERSION` when the art changes (Bark caches images by URL).
 
 ---
 
@@ -356,6 +363,7 @@ enabled at once; the four event switches are global:
 | `SOFFICE_BIN` | server | no | LibreOffice binary for PDF/Office previews |
 | `GITHUB_TOKEN` | server | no | fetch private project READMEs |
 | `BARK_BASE_URL` | server | no | Bark server for notifications (default `https://api.day.app`) |
+| `BARK_ASSET_BASE_URL` | server | no | public base URL of the Bark art (default: this repo's raw GitHub path) |
 | `APP_PUBLIC_URL` | server | no | public app URL used to deep-link notifications to `/tarefa/:id` |
 | `BACKEND_URL`, `TOOLKIT_TOKEN` | Vercel | in cloud | proxy target + secret |
 

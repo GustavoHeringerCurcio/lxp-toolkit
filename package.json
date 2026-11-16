@@ -14,6 +14,7 @@
   "scripts": {
     "setup": "node setup/index.mjs",
     "doctor": "node setup/doctor.mjs",
+    "notif:icons": "node scripts/notification-icons.mjs",
     "tailscale": "node scripts/tailscale-serve.mjs",
     "gate": "node scripts/gate-proxy.mjs",
     "login": "npm run login -w @lxp-toolkit/portal",

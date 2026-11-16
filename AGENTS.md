@@ -87,6 +87,11 @@ Full detail: `agent-docs/10-deployment.md`.
   Bark Device Keys are validated on save (22-char shortuuid; 64-hex APNs tokens are rejected) and
   checked against `GET {BARK_BASE_URL}/register/:key`; a 400 blocks the save, an unreachable server
   only warns. `BARK_BASE_URL` (server env) selects the Bark server, default `https://api.day.app`.
+  Bark pushes also send per-event art (`icon` + expanded `image`) and a per-event `group`/`sound`:
+  green done, red expired, blue new, gold <24h, brand mark for tests (`apps/web/public/notifications`,
+  rendered by `npm run notif:icons`). The phone downloads the art, so it must be public —
+  `BARK_ASSET_BASE_URL` overrides the default (this repo's raw GitHub path) and `BARK_ASSET_VERSION`
+  is bumped when the art changes (Bark caches by URL).
 - **God's Eye (hidden topics):** the portal's topic-detail endpoint serves content by id even when
   the topic is absent from the student's content tree. `npm run dump` harvests those topics
   (`content.ts::harvestHiddenTopics`, cached in `scraped/raw/hidden-index.json`) and appends them

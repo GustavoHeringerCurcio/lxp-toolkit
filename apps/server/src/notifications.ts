@@ -49,6 +49,43 @@ const DISCORD_COLOR: Record<NotificationEventKind, number> = {
   test: 0x8a8a8a,
 };
 
+/**
+ * Bark art per event. Files live in `apps/web/public/notifications` and are
+ * rendered by `npm run notif:icons`. The small `icon` is masked to a circle by
+ * iOS; the `-banner` file is the `image` attachment shown when expanded.
+ */
+const BARK_ASSET: Record<NotificationEventKind, string> = {
+  new: "new",
+  due_soon: "due-soon",
+  done: "done",
+  expired: "expired",
+  test: "test",
+};
+
+/** Notification Center stack per event (keeps urgent and done work apart). */
+const BARK_GROUP: Record<NotificationEventKind, string> = {
+  new: "LXP Toolkit · Novas",
+  due_soon: "LXP Toolkit · Prazos",
+  done: "LXP Toolkit · Concluídas",
+  expired: "LXP Toolkit · Prazos",
+  test: "LXP Toolkit",
+};
+
+/** Built-in Bark/iOS sound per event (no import needed in the app). */
+const BARK_SOUND: Record<NotificationEventKind, string> = {
+  new: "newsflash",
+  due_soon: "minuet",
+  done: "paymentsuccess",
+  expired: "alarm",
+  test: "minuet",
+};
+
+/** Public directory Bark fetches the art from (the phone downloads it). */
+const DEFAULT_BARK_ASSET_BASE_URL =
+  "https://raw.githubusercontent.com/GustavoHeringerCurcio/lxp-toolkit/master/apps/web/public/notifications";
+/** Bump when the art changes: Bark caches downloaded images by URL. */
+const BARK_ASSET_VERSION = "1";
+
 export interface NotificationScanResult {
   sent: number;
   skipped: number;
@@ -201,6 +238,32 @@ export function barkHost(): string {
   }
 }
 
+/**
+ * Base URL of the public notification art (Bark fetches `icon`/`image` from
+ * the phone, so it must be reachable without auth). Override with
+ * `BARK_ASSET_BASE_URL` (e.g. `https://<app>/notifications` on Vercel); the
+ * default is this public repository's raw path so local Docker works too.
+ */
+export function barkAssetBaseUrl(): string {
+  const raw = process.env.BARK_ASSET_BASE_URL?.trim();
+  if (raw) {
+    try {
+      const url = new URL(raw);
+      if (url.protocol === "https:" || url.protocol === "http:") {
+        return url.toString().replace(/\/+$/, "");
+      }
+    } catch {
+      // fall through to the default
+    }
+  }
+  return DEFAULT_BARK_ASSET_BASE_URL;
+}
+
+/** Versioned URL for one Bark asset (`icon` or `image`). */
+function barkAssetUrl(stem: string, suffix: "" | "-banner"): string {
+  return `${barkAssetBaseUrl()}/${stem}${suffix}.png?v=${BARK_ASSET_VERSION}`;
+}
+
 export type BarkKeyCheck =
   | { status: "ok" }
   | { status: "unknown"; message: string }
@@ -346,11 +409,15 @@ export function buildBarkPayload(
   item?: NotificationItem,
 ): Record<string, unknown> {
   const { title, body } = formatNotification(kind, item);
+  const stem = BARK_ASSET[kind];
   return {
     title: truncate(title, 120),
     body: truncate(body, 800),
-    group: "LXP Toolkit",
+    group: BARK_GROUP[kind],
+    sound: BARK_SOUND[kind],
     level: kind === "due_soon" || kind === "expired" ? "timeSensitive" : "active",
+    icon: barkAssetUrl(stem, ""),
+    image: barkAssetUrl(stem, "-banner"),
     url: item ? itemUrl(item) : undefined,
   };
 }
