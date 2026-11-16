@@ -577,6 +577,56 @@ export interface SubmissionEntry {
 }
 export type Submissions = Record<string, SubmissionEntry[]>;
 
+// -- Generated artifacts + beta bug reports ---------------------------------
+
+/** What produced an archived artifact. */
+export type ArtifactSource = "preview" | "download" | "send" | "report";
+
+/** One archived preview/download/send artifact (bytes live on disk). */
+export interface GeneratedArtifact {
+  id: number;
+  contentItemId: number | null;
+  source: ArtifactSource;
+  mode: string;
+  filename: string;
+  path: string;
+  sha256: string;
+  bytes: number;
+  activityTitle: string | null;
+  courseName: string | null;
+  moduleTitle: string | null;
+  draft: string | null;
+  gate: GateResult | null;
+  createdAt: string;
+  lastUsedAt: string;
+  uses: number;
+}
+
+export type BugReportStatus = "open" | "fixed" | "dismissed";
+
+/** A user-written bug report about a generated artifact. */
+export interface BugReport {
+  id: number;
+  contentItemId: number | null;
+  artifactId: number | null;
+  activityTitle: string;
+  courseName: string | null;
+  moduleTitle: string | null;
+  mode: string;
+  message: string;
+  draft: string | null;
+  gate: GateResult | null;
+  status: BugReportStatus;
+  resolutionNotes: string | null;
+  filePath: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  /** True when the referenced artifact row (and file) is still available. */
+  hasArtifact: boolean;
+  artifactFilename: string | null;
+}
+
 // -- Notifications (Discord webhook + Bark) ---------------------------------
 
 /** What triggered a notification. `test` is the manual "send test" action. */

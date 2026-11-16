@@ -33,6 +33,9 @@ import {
   getAnswers,
   getCurrentAttemptId,
   getDebugLog,
+  getGeneratedArtifact,
+  listBugReports,
+  updateBugReport,
   getModuleProjectDefault,
   getNotificationConfig,
   getNotificationSummary,
@@ -155,6 +158,7 @@ import {
 } from "../src/send.js";
 import { officeToPdf, previewCacheDir } from "../src/office.js";
 import { answerToPdf } from "../src/pdf.js";
+import { archiveArtifact, artifactDownloadPath, createBugReport } from "../src/reports.js";
 import { renderFilledDocx } from "../src/docx.js";
 import { buildDiagram } from "../src/diagram-tool.js";
 import { applyTemplateDefaults, forceTodayDate, parseUseCases } from "../src/usecase.js";
@@ -483,6 +487,41 @@ async function buildSubmissionFile(
   }
 
   return { error: "Formato de envio sem arquivo." };
+}
+
+/** Gate verdict saved for the current answer, if it matches this revision. */
+async function currentGateFor(id: number): Promise<GateResult | null> {
+  const rec = await getAnswerRecord(id).catch(() => null);
+  return currentGate(rec?.gate);
+}
+
+/**
+ * Archive the exact artifact bytes (preview/download/send/report) and return
+ * its id. Best-effort: a failure never blocks the user-facing action.
+ */
+async function archiveForView(
+  view: ExerciseView,
+  args: {
+    mode: string;
+    filename: string;
+    bytes: Buffer;
+    source: "preview" | "download" | "send" | "report";
+    draft: string;
+  },
+): Promise<number | null> {
+  const artifact = await archiveArtifact({
+    contentItemId: view.id,
+    mode: args.mode,
+    filename: args.filename,
+    bytes: args.bytes,
+    source: args.source,
+    activityTitle: view.title,
+    courseName: view.courseName,
+    moduleTitle: view.moduleTitle,
+    draft: args.draft,
+    gate: await currentGateFor(view.id),
+  });
+  return artifact?.id ?? null;
 }
 
 function readBody(req: import("node:http").IncomingMessage): Promise<Record<string, unknown>> {
@@ -1503,26 +1542,42 @@ const server = createServer(async (req, res) => {
       if (mode === "docx" || mode === "pdf" || mode === "fill") {
         const built = await buildSubmissionFile(view, answer, mode as SendMode);
         if ("error" in built) return json(res, 400, { error: built.error });
+        const artifactId = await archiveForView(view, {
+          mode,
+          filename: built.filename,
+          bytes: built.buffer,
+          source: download ? "download" : "preview",
+          draft: answer,
+        });
         res.writeHead(200, {
           "content-type": built.contentType,
           "content-length": built.buffer.length,
           ...attachmentDisposition(built.filename, download ? "attachment" : "inline"),
           "cache-control": "no-store",
+          ...(artifactId != null ? { "x-artifact-id": String(artifactId) } : {}),
         });
         return res.end(built.buffer);
       }
 
       if (await hasFileArtifact(view)) {
         return json(res, 400, {
-          error: "O diagrama só pode ser anexado em PDF ou DOCX. Escolha um desses formatos.",
+          error: "O diagrama sA3 pode ser anexado em PDF ou DOCX. Escolha um desses formatos.",
         });
       }
 
       const filename = safeFilename(await uploadBaseName(view), "txt");
+      const artifactId = await archiveForView(view, {
+        mode,
+        filename,
+        bytes: Buffer.from(answer, "utf8"),
+        source: download ? "download" : "preview",
+        draft: answer,
+      });
       res.writeHead(200, {
         "content-type": "text/plain; charset=utf-8",
         ...attachmentDisposition(filename, download ? "attachment" : "inline"),
         "cache-control": "no-store",
+        ...(artifactId != null ? { "x-artifact-id": String(artifactId) } : {}),
       });
       return res.end(answer);
     }
@@ -1530,6 +1585,70 @@ const server = createServer(async (req, res) => {
       const id = Number(url.split("/")[3]);
       const [last, all] = await Promise.all([lastSubmission(id), submissionsFor(id)]);
       return json(res, 200, { submission: last ?? null, submissions: all });
+    }
+
+    // Beta feedback: report a problem while looking at a generated artifact.
+    if (url === "/api/bug-report" && method === "POST") {
+      const b = await readBody(req);
+      const id = Number(b.id);
+      const message = String(b.message ?? "").trim();
+      const mode = String(b.mode ?? "text");
+      const draft = String(b.draft ?? "");
+      if (!id) return json(res, 400, { error: "id obrigatório" });
+      if (!message) return json(res, 400, { error: "Escreva o problema antes de enviar." });
+      try {
+        const view = await findView(id);
+        let artifactId = Number(b.artifactId) || null;
+        if (artifactId != null) {
+          const artifact = await getGeneratedArtifact(artifactId).catch(() => null);
+          if (!artifact || artifact.contentItemId !== view.id) artifactId = null;
+        }
+        const report = await createBugReport({
+          contentItemId: view.id,
+          artifactId,
+          activityTitle: view.title,
+          courseName: view.courseName,
+          moduleTitle: view.moduleTitle,
+          mode,
+          message,
+          draft,
+          gate: await currentGateFor(view.id),
+        });
+        return json(res, 200, { ok: true, report });
+      } catch (err) {
+        return json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    if (url === "/api/bug-reports" && method === "GET") {
+      return json(res, 200, { reports: await listBugReports(50) });
+    }
+    if (url === "/api/bug-report" && method === "PATCH") {
+      const b = await readBody(req);
+      const reportId = Number(b.id);
+      const status = String(b.status ?? "");
+      if (!reportId) return json(res, 400, { error: "id obrigatório" });
+      if (status !== "open" && status !== "fixed" && status !== "dismissed") {
+        return json(res, 400, { error: "status inválido" });
+      }
+      const report = await updateBugReport(reportId, {
+        status,
+        resolutionNotes: b.resolutionNotes == null ? null : String(b.resolutionNotes),
+      });
+      if (!report) return json(res, 404, { error: "relato não encontrado" });
+      return json(res, 200, { ok: true, report });
+    }
+    if (url.startsWith("/api/artifact/") && method === "GET") {
+      const artifactId = Number(url.split("/")[3]);
+      if (!artifactId) return json(res, 400, { error: "id required" });
+      const artifact = await artifactDownloadPath(artifactId);
+      if (!artifact) return json(res, 404, { error: "artefato não encontrado" });
+      res.writeHead(200, {
+        "content-type": MIME[path.extname(artifact.filename).toLowerCase()] ?? "application/octet-stream",
+        "content-length": statSync(artifact.path).size,
+        ...attachmentDisposition(artifact.filename, "attachment"),
+        "cache-control": "no-store",
+      });
+      return void createReadStream(artifact.path).pipe(res);
     }
     if (url.startsWith("/api/project-context/") && method === "GET") {
       const id = Number(url.split("/")[3]);
@@ -2064,10 +2183,27 @@ const server = createServer(async (req, res) => {
         }
         try {
           let submission;
+          let artifactId: number | null = null;
           if (view.kind === "quiz") {
             submission = await launchQuizSubmit(view, selections);
+            const shown =
+              answer.trim() || selections.map((s) => `Q${s.questionId}: ${s.letter}`).join(", ");
+            artifactId = await archiveForView(view, {
+              mode: "quiz",
+              filename: `quiz-${view.id}.json`,
+              bytes: Buffer.from(JSON.stringify({ selections }, null, 2), "utf8"),
+              source: "send",
+              draft: shown,
+            });
           } else if (view.kind === "forum") {
             submission = await launchForumSubmit(view, answer);
+            artifactId = await archiveForView(view, {
+              mode: "forum",
+              filename: safeFilename(await uploadBaseName(view), "txt"),
+              bytes: Buffer.from(answer, "utf8"),
+              source: "send",
+              draft: answer,
+            });
           } else {
             let filePath: string | undefined;
             if (mode === "docx" || mode === "pdf" || mode === "fill") {
@@ -2077,15 +2213,38 @@ const server = createServer(async (req, res) => {
               mkdirSync(dir, { recursive: true });
               filePath = path.join(dir, built.filename);
               writeFileSync(filePath, built.buffer);
+              artifactId = await archiveForView(view, {
+                mode,
+                filename: built.filename,
+                bytes: built.buffer,
+                source: "send",
+                draft: answer,
+              });
             } else if (mode === "image") {
               const found = findUploadedImage(id);
               if (!found) return json(res, 400, { error: "Anexe a imagem antes de enviar." });
               filePath = found;
+              artifactId = await archiveForView(view, {
+                mode: "image",
+                filename: path.basename(found),
+                bytes: readFileSync(found),
+                source: "send",
+                draft: answer,
+              });
+            } else {
+              artifactId = await archiveForView(view, {
+                mode,
+                filename: safeFilename(await uploadBaseName(view), "txt"),
+                bytes: Buffer.from(answer, "utf8"),
+                source: "send",
+                draft: answer,
+              });
             }
             submission = await launchUploadSubmit(view, answer, mode, filePath);
           }
           return json(res, 200, {
             ok: true,
+            artifactId,
             submission: { status: submission.status, detail: submission.detail, at: submission.at, mode: submission.mode },
           });
         } catch (err) {

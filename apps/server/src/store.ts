@@ -16,6 +16,10 @@ import type {
   AiProfile,
   AbilityId,
   AnswerRecord,
+  ArtifactSource,
+  BugReport,
+  BugReportStatus,
+  GeneratedArtifact,
   AnswerSource,
   Answers,
   ExerciseStatus,
@@ -1466,4 +1470,283 @@ export async function getNotificationItem(id: number): Promise<NotificationItem 
     id,
   ]);
   return rows[0] ? toNotificationItem(rows[0]) : null;
+}
+
+// -- Generated artifacts + beta bug reports ---------------------------------
+
+interface ArtifactRow {
+  id: string;
+  content_item_id: string | null;
+  source: string;
+  mode: string;
+  filename: string;
+  path: string;
+  sha256: string;
+  bytes: string;
+  activity_title: string | null;
+  course_name: string | null;
+  module_title: string | null;
+  draft: string | null;
+  gate_json: unknown;
+  created_at: Date | string;
+  last_used_at: Date | string;
+  uses: number;
+}
+
+function toArtifact(r: ArtifactRow): GeneratedArtifact {
+  return {
+    id: Number(r.id),
+    contentItemId: r.content_item_id != null ? Number(r.content_item_id) : null,
+    source: r.source as ArtifactSource,
+    mode: r.mode,
+    filename: r.filename,
+    path: r.path,
+    sha256: r.sha256,
+    bytes: Number(r.bytes),
+    activityTitle: r.activity_title,
+    courseName: r.course_name,
+    moduleTitle: r.module_title,
+    draft: r.draft,
+    gate: toGate(r.gate_json),
+    createdAt: iso(r.created_at),
+    lastUsedAt: iso(r.last_used_at),
+    uses: Number(r.uses ?? 1),
+  };
+}
+
+export interface GeneratedArtifactInput {
+  contentItemId: number;
+  source: ArtifactSource;
+  mode: string;
+  filename: string;
+  path: string;
+  sha256: string;
+  bytes: number;
+  activityTitle: string | null;
+  courseName: string | null;
+  moduleTitle: string | null;
+  draft: string | null;
+  gate: GateResult | null;
+}
+
+/** Insert (or refresh) the index row for one archived artifact. */
+export async function saveGeneratedArtifact(input: GeneratedArtifactInput): Promise<GeneratedArtifact> {
+  const studentId = await getStudentId();
+  const rows = await query<ArtifactRow>(
+    `INSERT INTO generated_artifact(
+       student_id, content_item_id, source, mode, filename, path, sha256, bytes,
+       activity_title, course_name, module_title, draft, gate_json, created_at, last_used_at, uses)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now(), now(), 1)
+     ON CONFLICT (student_id, content_item_id, mode, sha256) DO UPDATE SET
+       source = EXCLUDED.source,
+       filename = EXCLUDED.filename,
+       path = EXCLUDED.path,
+       bytes = EXCLUDED.bytes,
+       activity_title = EXCLUDED.activity_title,
+       course_name = EXCLUDED.course_name,
+       module_title = EXCLUDED.module_title,
+       draft = EXCLUDED.draft,
+       gate_json = EXCLUDED.gate_json,
+       last_used_at = now(),
+       uses = generated_artifact.uses + 1
+     RETURNING *`,
+    [
+      studentId,
+      input.contentItemId,
+      input.source,
+      input.mode,
+      input.filename,
+      input.path,
+      input.sha256,
+      input.bytes,
+      input.activityTitle,
+      input.courseName,
+      input.moduleTitle,
+      input.draft,
+      input.gate == null ? null : JSON.stringify(input.gate),
+    ],
+  );
+  return toArtifact(rows[0]);
+}
+
+export async function getGeneratedArtifact(id: number): Promise<GeneratedArtifact | null> {
+  const studentId = await getStudentId();
+  const rows = await query<ArtifactRow>(
+    `SELECT * FROM generated_artifact WHERE student_id = $1 AND id = $2`,
+    [studentId, id],
+  );
+  return rows[0] ? toArtifact(rows[0]) : null;
+}
+
+/** Most recent artifact for an activity (optionally for one mode). */
+export async function latestGeneratedArtifact(
+  contentItemId: number,
+  mode?: string,
+): Promise<GeneratedArtifact | null> {
+  const studentId = await getStudentId();
+  const rows = await query<ArtifactRow>(
+    `SELECT * FROM generated_artifact
+      WHERE student_id = $1 AND content_item_id = $2
+        AND ($3::text IS NULL OR mode = $3)
+      ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [studentId, contentItemId, mode ?? null],
+  );
+  return rows[0] ? toArtifact(rows[0]) : null;
+}
+
+/**
+ * Delete artifacts that are both beyond `keepCount` and older than `keepDays`.
+ * Artifacts referenced by a bug report are never deleted. Returns the file
+ * paths so the caller can remove them from disk.
+ */
+export async function pruneGeneratedArtifacts(
+  keepCount = 500,
+  keepDays = 90,
+): Promise<string[]> {
+  const studentId = await getStudentId();
+  const rows = await query<{ path: string | null }>(
+    `DELETE FROM generated_artifact
+      WHERE student_id = $1
+        AND id NOT IN (
+          SELECT id FROM generated_artifact WHERE student_id = $1
+          ORDER BY created_at DESC, id DESC LIMIT $2
+        )
+        AND id NOT IN (
+          SELECT artifact_id FROM bug_report
+           WHERE student_id = $1 AND artifact_id IS NOT NULL
+        )
+        AND created_at < now() - ($3::int * interval '1 day')
+      RETURNING path`,
+    [studentId, keepCount, keepDays],
+  );
+  return rows.map((r) => r.path).filter((p): p is string => Boolean(p));
+}
+
+interface BugReportRow {
+  id: string;
+  content_item_id: string | null;
+  artifact_id: string | null;
+  activity_title: string;
+  course_name: string | null;
+  module_title: string | null;
+  mode: string;
+  message: string;
+  draft: string | null;
+  gate_json: unknown;
+  file_path: string | null;
+  status: string;
+  resolution_notes: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  resolved_at: Date | string | null;
+  artifact_filename?: string | null;
+  has_artifact?: boolean;
+}
+
+function toBugReport(r: BugReportRow): BugReport {
+  const status: BugReportStatus =
+    r.status === "fixed" || r.status === "dismissed" ? r.status : "open";
+  return {
+    id: Number(r.id),
+    contentItemId: r.content_item_id != null ? Number(r.content_item_id) : null,
+    artifactId: r.artifact_id != null ? Number(r.artifact_id) : null,
+    activityTitle: r.activity_title,
+    courseName: r.course_name,
+    moduleTitle: r.module_title,
+    mode: r.mode,
+    message: r.message,
+    draft: r.draft,
+    gate: toGate(r.gate_json),
+    status,
+    resolutionNotes: r.resolution_notes,
+    filePath: r.file_path,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+    resolvedAt: r.resolved_at ? iso(r.resolved_at) : null,
+    hasArtifact: r.has_artifact === true,
+    artifactFilename: r.artifact_filename ?? null,
+  };
+}
+
+export interface BugReportInput {
+  contentItemId: number;
+  artifactId: number | null;
+  activityTitle: string;
+  courseName: string | null;
+  moduleTitle: string | null;
+  mode: string;
+  message: string;
+  draft: string | null;
+  gate: GateResult | null;
+}
+
+export async function saveBugReport(input: BugReportInput): Promise<number> {
+  const studentId = await getStudentId();
+  const rows = await query<{ id: string }>(
+    `INSERT INTO bug_report(
+       student_id, content_item_id, artifact_id, activity_title, course_name,
+       module_title, mode, message, draft, gate_json)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+    [
+      studentId,
+      input.contentItemId,
+      input.artifactId,
+      input.activityTitle,
+      input.courseName,
+      input.moduleTitle,
+      input.mode,
+      input.message,
+      input.draft,
+      input.gate == null ? null : JSON.stringify(input.gate),
+    ],
+  );
+  return Number(rows[0]?.id ?? 0);
+}
+
+export async function setBugReportFilePath(id: number, filePath: string | null): Promise<void> {
+  const studentId = await getStudentId();
+  await query(
+    `UPDATE bug_report SET file_path = $3, updated_at = now() WHERE student_id = $1 AND id = $2`,
+    [studentId, id, filePath],
+  );
+}
+
+const BUG_REPORT_SELECT = `
+  SELECT b.id, b.content_item_id, b.artifact_id, b.activity_title, b.course_name,
+         b.module_title, b.mode, b.message, b.draft, b.gate_json, b.file_path,
+         b.status, b.resolution_notes, b.created_at, b.updated_at, b.resolved_at,
+         a.filename AS artifact_filename,
+         (a.id IS NOT NULL) AS has_artifact
+    FROM bug_report b
+    LEFT JOIN generated_artifact a ON a.id = b.artifact_id
+   WHERE b.student_id = $1`;
+
+export async function listBugReports(limit = 50): Promise<BugReport[]> {
+  const studentId = await getStudentId();
+  const rows = await query<BugReportRow>(
+    `${BUG_REPORT_SELECT} ORDER BY b.created_at DESC, b.id DESC LIMIT $2`,
+    [studentId, limit],
+  );
+  return rows.map(toBugReport);
+}
+
+export async function getBugReport(id: number): Promise<BugReport | null> {
+  const studentId = await getStudentId();
+  const rows = await query<BugReportRow>(`${BUG_REPORT_SELECT} AND b.id = $2`, [studentId, id]);
+  return rows[0] ? toBugReport(rows[0]) : null;
+}
+
+export async function updateBugReport(
+  id: number,
+  patch: { status: BugReportStatus; resolutionNotes?: string | null },
+): Promise<BugReport | null> {
+  const studentId = await getStudentId();
+  await query(
+    `UPDATE bug_report
+        SET status = $3, resolution_notes = $4, updated_at = now(),
+            resolved_at = CASE WHEN $3 = 'open' THEN NULL ELSE now() END
+      WHERE student_id = $1 AND id = $2`,
+    [studentId, id, patch.status, patch.resolutionNotes ?? null],
+  );
+  return getBugReport(id);
 }

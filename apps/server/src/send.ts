@@ -4,6 +4,7 @@ import { ASSISTANT_DIR, assist } from "./paths.js";
 import { spawnCommand } from "./exec.js";
 import { appendSubmission, getProfile, getSubmissions, setManualStatus } from "./store.js";
 import { notifyActivityDone } from "./notifications.js";
+import { composeUploadBaseName } from "./text.js";
 import type { QuizSelection, SendMode, SubmissionEntry } from "./types.js";
 
 export type { SendMode };
@@ -45,13 +46,10 @@ function tsxBin(): string {
   return path.join(REPO_ROOT, "node_modules", ".bin", process.platform === "win32" ? "tsx.cmd" : "tsx");
 }
 
-/** Attachment/title base name for an upload: `<nome>_<título da atividade>`. */
+/** Attachment/title base name for an upload: `<nome> - <título da atividade>`. */
 export async function uploadBaseName(view: { title: string }): Promise<string> {
   const profile = await getProfile();
-  return [profile.nome, view.title]
-    .map((part) => part?.trim() ?? "")
-    .filter(Boolean)
-    .join("_");
+  return composeUploadBaseName(profile.nome, view.title);
 }
 
 // ── Manual image uploads (print/screenshot tasks) ────────────────────────────

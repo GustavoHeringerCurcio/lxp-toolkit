@@ -19,8 +19,8 @@ lxp-toolkit/
 ├── apps/server/              CORE 2 — backend: API, Postgres, AI, send bridge, static server
 │   ├── server/server.ts      the single HTTP entrypoint (node:http)
 │   ├── src/                  db, import, store, load, project, view, ai, prompt, gate, send, …
-│   ├── db/migrations/        0001…0014 versioned SQL (Postgres is the source of truth)
-│   └── data/                 runtime outputs (gitignored): exercises.json, send/, previews/, …
+│   ├── db/migrations/        versioned SQL (Postgres is the source of truth)
+│   └── data/                 runtime outputs (gitignored): exercises.json, send/, previews/, artifacts/, reports/, …
 ├── apps/web/                 React UI (Vite + Tailwind v4), built to apps/web/dist
 ├── setup/                    `npm run setup` / `npm run doctor` (onboarding + health)
 ├── scripts/                  sync.mjs, dev.mjs, endpoint-catalog.mjs
@@ -93,6 +93,7 @@ One `createServer` handler with string-matched routes. Request order at the top:
 | Resumo | `GET /api/summary?courseId=&moduleId=&examId=&size=`, `POST /api/summary` (SSE), `GET /api/summary/items`, `POST /api/summary/pdf` |
 | Provas | `GET /api/exams?courseId=`, `POST /api/exams`, `DELETE /api/exams/:id`, `POST /api/exam-scope` |
 | Send | `GET /api/send/config`, `GET /api/send/preview`, `GET /api/send/:id`, `POST /api/send`, `POST /api/send/upload`, `POST /api/send/artifact` |
+| Beta reports | `POST /api/bug-report`, `GET /api/bug-reports`, `PATCH /api/bug-report`, `GET /api/artifact/:id` (archived preview/send bytes) |
 | Debug | `GET /api/debug-logs`, `GET /api/debug-log/:id` |
 | Refresh | `POST /api/refresh`, `GET /api/refresh/status` |
 | Notifications | `GET /api/notifications`, `POST /api/notifications`, `POST /api/notifications/test` |
@@ -156,6 +157,8 @@ never written by the app.
 | `0020_notifications` | `notification_config` (Discord/Bark channels + event toggles + `baseline_at`) and `notification_event` (idempotency ledger) |
 | `0021_project_module_defaults` | `activity_project.use_project` + `module_project_default`; drops the guessed course `project_profile` |
 | `0022_clear_legacy_gate` | clears old `answer_attempt.gate_json` and old gate `debug_log` rows (4-level confidence) |
+| `0024_generated_artifact` | `generated_artifact` — every preview/download/send artifact archived under `data/artifacts/` (deduped by sha256) |
+| `0025_bug_report` | `bug_report` — beta problem reports with activity/draft/gate snapshot + markdown bundle in `data/reports/` |
 
 Key read model: `v_exercise_current` feeds `/api/exercises` via `view.ts::enrich`.
 
@@ -212,6 +215,8 @@ Rules to preserve:
 | `classify.ts` | Lazy AI review of ambiguous uploads. |
 | `gate.ts` | `analyzeDraftQuality` — four-level advisory judgment (`terrible`/`bad`/`ok`/`good`) + one-line reason; runs automatically after every generated draft and is persisted on the `answer_attempt` (`gate_json`). The prompt keeps the draft's raw line breaks and receives the planned submission format + template/project contract, so it judges content rather than requiring the draft itself to be a PDF/DOCX. `draftHash` lets `/api/gate` and regeneration reuse a saved judgment instead of spending tokens again. |
 | `submission-plan.ts` | Deterministic planned delivery (text / TXT / PDF / DOCX, template fill, appended UML page) shared by the generation prompt, the gate and the send defaults. `describeSubmissionPlan` / `describeSubmissionContract` produce the human-readable block. |
+| `reports.ts` | Archives every preview/download/send artifact (`generated_artifact` + `data/artifacts/<id>-<sha>.ext` + sidecar JSON) and writes the beta `bug_report` markdown bundle (`data/reports/<id>-<slug>.md`). Retention: 500 artifacts / 90 days, referenced artifacts kept. |
+| `text.ts` | `humanizeActivityTitle` / `composeUploadBaseName`: `_`/URL separators become spaces and the student name joins the activity with ` - `, used by the upload filename and the PDF `<h1>` (the canonical activity title is unchanged). |
 | `ai-log.ts` | Appends every generation to `data/logs/ai/YYYY-MM-DD.jsonl` + `latest/item-<id>.json`: prompt/completion, gate, config, attachment/text diagnostics. Redacts base64/keys; 30-day retention. |
 | `ai-log-cli.ts` / `ai-export.ts` | `npm run ai:log` (latest per item / recent bad) and `npm run ai:export` (historical Postgres attempts) for agent debugging. |
 | `training.ts` | Builds the per-subject knowledge pack (catalog + bank + `content_text`) and generates practice quizzes / streamed study guides. The subject picker flags real subjects (professor-linked or substantial tree) vs exam/phantom modules; hidden God's-Eye topics are included only when unique or question-bearing (duplicate readings dropped). |

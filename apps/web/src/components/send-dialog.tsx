@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { fetchSendArtifact, type SendMode } from "@/api";
+import { Bug } from "lucide-react";
+import { fetchSendArtifact, submitBugReport, type SendMode } from "@/api";
 import type { Exercise, GateResultDto } from "@/types";
 import { useT } from "@/lib/i18n";
 import { SEND_MODES, defaultSendMode, hasDocxTemplate } from "@/lib/send";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogClose,
@@ -54,11 +56,19 @@ export function SendDialog({
   const [previewBusy, setPreviewBusy] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [previewErr, setPreviewErr] = useState<string | null>(null);
+  const [previewArtifactId, setPreviewArtifactId] = useState<number | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportText, setReportText] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportErr, setReportErr] = useState<string | null>(null);
+  const [reportSaved, setReportSaved] = useState<number | null>(null);
 
   const isUpload = exercise.kind === "upload";
   const wantsText = isUpload || exercise.kind === "forum";
   const hasContent = wantsText ? Boolean(draft.trim()) : exercise.selections.length > 0;
   const canConfirm = hasContent && !sending;
+  const reportMode =
+    exercise.kind === "quiz" || exercise.kind === "forum" ? exercise.kind : mode;
 
   const actionKey =
     exercise.kind === "forum"
@@ -81,7 +91,12 @@ export function SendDialog({
     setPreviewUrl(null);
     setPreviewText(null);
     setPreviewErr(null);
+    setPreviewArtifactId(null);
     setConfirmTerrible(false);
+    setReportOpen(false);
+    setReportText("");
+    setReportErr(null);
+    setReportSaved(null);
   }, [mode, open, draft]);
 
   useEffect(() => {
@@ -100,7 +115,8 @@ export function SendDialog({
     setPreviewBusy(true);
     setPreviewErr(null);
     try {
-      const { blob } = await fetchSendArtifact(exercise.id, draft, mode);
+      const { blob, artifactId } = await fetchSendArtifact(exercise.id, draft, mode);
+      setPreviewArtifactId(artifactId ?? null);
       if (mode === "pdf" || mode === "fill") {
         setPreviewText(null);
         setPreviewUrl(URL.createObjectURL(blob));
@@ -120,7 +136,8 @@ export function SendDialog({
     setDownloadBusy(true);
     setPreviewErr(null);
     try {
-      const { blob, filename } = await fetchSendArtifact(exercise.id, draft, mode, true);
+      const { blob, filename, artifactId } = await fetchSendArtifact(exercise.id, draft, mode, true);
+      setPreviewArtifactId(artifactId ?? null);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -133,6 +150,30 @@ export function SendDialog({
       setPreviewErr(x instanceof Error ? x.message : String(x));
     } finally {
       setDownloadBusy(false);
+    }
+  };
+
+  const submitReport = async () => {
+    const message = reportText.trim();
+    if (!message) return;
+    setReportBusy(true);
+    setReportErr(null);
+    setReportSaved(null);
+    try {
+      const report = await submitBugReport({
+        id: exercise.id,
+        mode: reportMode,
+        draft,
+        message,
+        artifactId: previewArtifactId,
+      });
+      setReportSaved(report.id);
+      setReportText("");
+      setReportOpen(false);
+    } catch (x) {
+      setReportErr(x instanceof Error ? x.message : String(x));
+    } finally {
+      setReportBusy(false);
     }
   };
 
@@ -274,6 +315,62 @@ export function SendDialog({
           ) : (
             <p className="text-xs text-muted-foreground">{t(actionKey)}</p>
           )}
+
+          <div className="border-t border-border/60 pt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => setReportOpen((v) => !v)}
+              disabled={sending}
+            >
+              <Bug className="size-3.5" />
+              {t("send.report.button")}
+            </Button>
+            {reportSaved != null && (
+              <p className="mt-2 rounded-lg border border-brand/30 bg-brand/10 px-3 py-2 text-xs text-brand">
+                {t("send.report.saved")} #{reportSaved}
+              </p>
+            )}
+            {reportOpen && (
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-muted-foreground">{t("send.report.hint")}</p>
+                <Textarea
+                  value={reportText}
+                  onChange={(e) => setReportText(e.target.value)}
+                  placeholder={t("send.report.placeholder")}
+                  rows={3}
+                  disabled={reportBusy || sending}
+                />
+                {reportErr && <p className="text-xs text-destructive">{reportErr}</p>}
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setReportOpen(false)}
+                    disabled={reportBusy}
+                  >
+                    {t("send.cancel")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    onClick={() => void submitReport()}
+                    disabled={reportBusy || !reportText.trim()}
+                  >
+                    {reportBusy ? (
+                      <SpinnerIcon className="size-3.5 animate-spin" />
+                    ) : (
+                      <Bug className="size-3.5" />
+                    )}
+                    {t("send.report.submit")}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {sendErr && (
             <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">

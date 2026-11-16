@@ -38,6 +38,7 @@ import { BackLink } from "@/components/app-sidebar";
 import { OrganizationSection } from "@/components/organization-section";
 import { ProjectSourceSection } from "@/components/project-source-section";
 import { DebugLogsSection } from "@/components/debug-logs-section";
+import { BugReportsSection } from "@/components/bug-reports-section";
 import { RefreshLogsSection } from "@/components/refresh-logs-section";
 import { ExamSettings } from "@/components/exams";
 import { DEFAULT_ACTIVITY_SECTIONS, DEFAULT_STYLE, renderStylePreview } from "@/lib/prompt-preview";
@@ -993,6 +994,10 @@ export function SettingsPage() {
 
           <Card icon={<Bug className="size-4 text-brand" aria-hidden />} title={t("debug.title")}>
             <DebugLogsSection />
+          </Card>
+
+          <Card icon={<Bug className="size-4 text-brand" aria-hidden />} title={t("bugs.title")}>
+            <BugReportsSection />
           </Card>
 
           <Card icon={<History className="size-4 text-brand" aria-hidden />} title={t("settings.logs.title")}>

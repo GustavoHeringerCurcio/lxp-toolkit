@@ -194,6 +194,30 @@ export interface GateResultDto {
   gateVersion?: number;
 }
 
+export type BugReportStatus = "open" | "fixed" | "dismissed";
+
+/** A beta bug report about a generated artifact (Settings → Advanced). */
+export interface BugReportDto {
+  id: number;
+  contentItemId: number | null;
+  artifactId: number | null;
+  activityTitle: string;
+  courseName: string | null;
+  moduleTitle: string | null;
+  mode: string;
+  message: string;
+  draft: string | null;
+  gate: GateResultDto | null;
+  status: BugReportStatus;
+  resolutionNotes: string | null;
+  filePath: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  hasArtifact: boolean;
+  artifactFilename: string | null;
+}
+
 /** Recent weak-draft diagnostic (list view; payload omitted). */
 export interface DebugLogDto {
   id: number;
