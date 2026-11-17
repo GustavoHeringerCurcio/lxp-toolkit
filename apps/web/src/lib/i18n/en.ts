@@ -18,6 +18,7 @@ export const en: Dict = {
   "nav.groupProfessors": "Professors",
   "nav.backToTasks": "back to tasks",
   "nav.godsEye": "God's Eye",
+  "nav.openTailscale": "Open in Tailscale — {{url}}",
 
   // God's Eye — hidden & upcoming activities
   "godsEye.title": "God's Eye",

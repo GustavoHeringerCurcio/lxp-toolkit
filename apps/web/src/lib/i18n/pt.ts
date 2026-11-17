@@ -22,6 +22,7 @@ export const pt = {
   "nav.groupProfessors": "Professores",
   "nav.backToTasks": "voltar para tarefas",
   "nav.godsEye": "Olho de Deus",
+  "nav.openTailscale": "Abrir no Tailscale — {{url}}",
 
   // God's Eye — hidden & upcoming activities
   "godsEye.title": "Olho de Deus",

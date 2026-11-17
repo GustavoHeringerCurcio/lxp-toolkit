@@ -9,6 +9,7 @@ import type {
   Anomaly,
   AnswerEntry,
   AnswerState,
+  AppLinkDto,
   BugReportDto,
   BugReportStatus,
   DebugLogDto,
@@ -73,6 +74,17 @@ function post(path: string, body: unknown): Promise<unknown> {
 
 export async function fetchExercises(): Promise<ExercisesPayload> {
   return req<ExercisesPayload>("/api/exercises");
+}
+
+// ── App link (public Tailscale URL) ────────────────────────────────────────
+
+export async function fetchAppLink(): Promise<AppLinkDto> {
+  return req<AppLinkDto>("/api/app-link");
+}
+
+/** Report the `*.ts.net` origin the browser reached (server ignores other hosts). */
+export async function reportAppUrl(url: string): Promise<void> {
+  await post("/api/app-link", { url });
 }
 
 export async function fetchConfig(): Promise<AiConfigDto> {

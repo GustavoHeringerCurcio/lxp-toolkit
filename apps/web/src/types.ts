@@ -592,3 +592,12 @@ export interface NotificationSaveInput {
   notifyDone?: boolean;
   notifyExpired?: boolean;
 }
+
+// -- App link (public Tailscale URL shown behind the header logo) ------------
+
+export type AppLinkSource = "env" | "reported" | "tailscale";
+
+export interface AppLinkDto {
+  url: string | null;
+  source: AppLinkSource | null;
+}

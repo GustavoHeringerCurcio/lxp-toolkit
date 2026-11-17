@@ -218,3 +218,11 @@ npm run gate -- --start|--stop|--status   # the password gate on its own
   password) and points Funnel at it. The password lives in the gitignored `.gate-password`
   (or `LXP_GATE_PASSWORD`); rotation = edit the file and restart the gate. Never point Funnel at
   4174 directly — the API has no browser login in local mode (`TOOLKIT_TOKEN` unset).
+- **Logo → Tailscale URL:** the header logo opens this public URL. The server returns it from
+  `/api/app-link`: `LXP_PUBLIC_URL` (override) → the `*.ts.net` origin a browser last used
+  (persisted in `apps/server/data/app-link.json`; the browser reports it on boot) →
+  `tailscale status --json` on host runs. It is `null` until one of those exists.
+- **App icon:** `apps/web/public/` ships `icon-192/512.png`, `icon-maskable-512.png`,
+  `apple-touch-icon.png`, `favicon.ico` and `manifest.webmanifest`, so Android/iOS "Add to Home
+  Screen" and desktop shortcuts get the Stacked-X mark. Regenerate with `npm run app:icons`.
+

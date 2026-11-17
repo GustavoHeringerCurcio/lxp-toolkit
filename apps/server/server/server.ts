@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { ASSISTANT_DIR, assist, dataDir, raw, openaiKeyLast4, openaiKeySource } from "../src/paths.js";
 import { isAuthorized, toolkitToken } from "../src/auth.js";
+import { getAppLink, rememberAppUrl } from "../src/app-link.js";
 import { createRefreshController, headfulRetryEnabled } from "../src/refresh.js";
 import { createRefreshScheduler, loadRefreshSchedulerConfig } from "../src/refresh-scheduler.js";
 import {
@@ -259,6 +260,7 @@ const MIME: Record<string, string> = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".ico": "image/x-icon",
+  ".webmanifest": "application/manifest+json",
   ".pdf": "application/pdf",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".doc": "application/msword",
@@ -1063,6 +1065,20 @@ const server = createServer(async (req, res) => {
     // private: every request must carry the shared secret. Unset = local mode.
     if ((url.startsWith("/api/") || url.startsWith("/scraped/")) && !isAuthorized(req)) {
       return json(res, 401, { error: "não autorizado" });
+    }
+
+    // Public (Tailscale) URL of this app — the header logo opens it.
+    if (url === "/api/app-link" && method === "GET") {
+      return json(res, 200, getAppLink());
+    }
+    // The browser reports the `*.ts.net` origin it reached, so a localhost
+    // session can find the same app from another device.
+    if (url === "/api/app-link" && method === "POST") {
+      const body = await readBody(req);
+      if (!rememberAppUrl(body.url ?? body.origin)) {
+        return json(res, 400, { error: "url inválida (esperado https://*.ts.net)" });
+      }
+      return json(res, 200, getAppLink());
     }
 
     if (url === "/api/exercises") {

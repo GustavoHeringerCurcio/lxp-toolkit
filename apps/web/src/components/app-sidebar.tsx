@@ -29,6 +29,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { professorInitials, professorLabel } from "@/lib/prof";
 import { BrandMark } from "@/components/brand-mark";
+import { useAppLink } from "@/lib/app-link";
 import { useAppData } from "@/lib/app-state";
 import { useT } from "@/lib/i18n";
 
@@ -60,6 +61,10 @@ export function AppSidebar() {
   const { t } = useT();
   const location = useLocation();
   const navigate = useNavigate();
+  const appLink = useAppLink();
+  // Logo → the Tailscale URL when this session is local; on the tailnet itself
+  // it keeps navigating home.
+  const externalLink = appLink && appLink !== window.location.origin ? appLink : null;
   const requestedTab = new URLSearchParams(location.search).get("tab");
 
   const professors = [
@@ -81,15 +86,35 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
-        <NavLink to="/" className="flex items-center gap-2.5 px-1 py-0.5">
-          <BrandMark className="size-8 rounded-lg shadow-md shadow-black/20" />
-          <div className="min-w-0 leading-tight">
+        <div className="flex items-center gap-2.5 px-1 py-0.5">
+          {externalLink ? (
+            <a
+              href={externalLink}
+              target="_blank"
+              rel="noreferrer"
+              title={t("nav.openTailscale", { url: externalLink })}
+              aria-label={t("nav.openTailscale", { url: externalLink })}
+              className="shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <BrandMark className="size-8 rounded-lg shadow-md shadow-black/20" />
+            </a>
+          ) : (
+            <NavLink
+              to="/"
+              title={t("app.title")}
+              aria-label={t("app.title")}
+              className="shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <BrandMark className="size-8 rounded-lg shadow-md shadow-black/20" />
+            </NavLink>
+          )}
+          <NavLink to="/" className="min-w-0 leading-tight">
             <div className="truncate font-heading text-[15px] font-semibold tracking-tight">LXP Toolkit</div>
             <div className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
               {t("app.subtitle")}
             </div>
-          </div>
-        </NavLink>
+          </NavLink>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
