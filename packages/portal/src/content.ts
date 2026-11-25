@@ -122,6 +122,14 @@ export interface ContentCourse {
    * still found.
    */
   containerIds?: number[];
+  /**
+   * Every module container (topicTypeId 1), including modules that have no
+   * activities yet. Lets the app detect a brand-new discipline as soon as the
+   * professor creates it, before it has content.
+   */
+  modules?: { id: number; title: string }[];
+  /** Topic/section detail requests that failed during this course collection. */
+  detailsFailed?: number;
 }
 
 export type ContentKind =
@@ -304,16 +312,78 @@ export function classify(topicTypeId: number, progressTypeId: number, hasPdf: bo
   }
 }
 
-export function isDone(item: {
+/** True when a value is an actual grade (0 is valid, null/"" is not). */
+function hasGradeValue(value: unknown): boolean {
+  return value != null && value !== "";
+}
+
+/**
+ * True when the gradebook says the activity was handed in.
+ *
+ * The portal gradebook is the authoritative completion source for uploads and
+ * quizzes: `value` is the awarded grade (0 is a real grade), `submitedAt` is
+ * the hand-in timestamp and `isSubmited` is the portal flag. A null `value`
+ * with no `submitedAt`/`isSubmited` means "not handed in" even when the
+ * activity is worth 10 points.
+ */
+function gradebookSubmitted(gb: GradebookActivity | null | undefined): boolean {
+  if (!gb) return false;
+  return hasGradeValue(gb.value) || gb.submitedAt != null || gb.isSubmited === true;
+}
+
+function attemptsOf(content: Record<string, unknown> | null | undefined): Record<string, unknown>[] {
+  const raw = content?.attempts;
+  return Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
+}
+
+/** A real hand-in/attempt. Drafts do not count. */
+function hasSubmittedAttempt(
+  content: Record<string, unknown> | null | undefined,
+  kind: "file_upload" | "quiz",
+): boolean {
+  return attemptsOf(content).some((attempt) => {
+    if (kind === "file_upload") return attempt.isDraft !== true;
+    return attempt.finishedAt != null;
+  });
+}
+
+export interface CompletionInput {
+  kind: ContentKind;
   progressId?: number | null;
   viewed?: boolean | null;
-  grade?: unknown;
+  studentGrade?: unknown;
   hasCompletedAllAttempts?: boolean | null;
-}): boolean {
-  if (item.progressId != null) return true;
-  if (item.hasCompletedAllAttempts === true) return true;
-  if (item.grade != null) return true;
-  return item.viewed === true;
+  content?: Record<string, unknown> | null;
+  gradebook?: GradebookActivity | null;
+}
+
+/**
+ * Whether the student actually completed the activity.
+ *
+ * IMPORTANT: never use `item.grade` here. The portal's content-tree `grade` is
+ * the activity's max/worth (10, 50…), not the student's grade. Using it marked
+ * every graded upload as done even with zero attempts. Use `studentGrade`,
+ * the topic-detail `content.attempts` and the gradebook instead.
+ */
+export function isDone(item: CompletionInput): boolean {
+  const kind = item.kind;
+
+  if (kind === "file_upload" || kind === "quiz") {
+    return (
+      gradebookSubmitted(item.gradebook) ||
+      hasGradeValue(item.studentGrade) ||
+      item.hasCompletedAllAttempts === true ||
+      hasSubmittedAttempt(item.content, kind)
+    );
+  }
+
+  if (kind === "forum") {
+    // Forums are completed by posting; the caller checks `countOfMyPosts`.
+    return false;
+  }
+
+  // Readings/PDFs/links/other: the portal records progress when opened/marked.
+  return item.progressId != null || item.viewed === true;
 }
 
 export const ACTIONABLE_KINDS: ContentKind[] = ["pdf", "reading", "quiz", "file_upload"];
@@ -380,12 +450,29 @@ export function normalizeCourseProgress(value: unknown): number | null {
   return Math.max(0, Math.min(100, Math.round(pct * 100) / 100));
 }
 
-/** Enumerate all enrolled courses, including the portal's official progress. */
+/**
+ * Enumerate all enrolled courses, including the portal's official progress.
+ *
+ * Paginated: a single `limit=50` page silently dropped courses for students with
+ * a long history (and any brand-new course beyond the cut). Pages until a short
+ * page arrives, with a hard cap so a broken endpoint cannot loop forever.
+ */
 export async function fetchCourses(client: ApiClient): Promise<PortalCourse[]> {
-  const res = await client.get<{ courses?: PortalCourse[] }>(
-    "/v1/plataforma/academic/courses/me?state=all&page=1&limit=50&sort=asc&sortBy=name&type=courses",
-  );
-  return res.data.courses ?? [];
+  const limit = 50;
+  const byId = new Map<number, PortalCourse>();
+  for (let page = 1; page <= 20; page++) {
+    const res = await client.get<{ courses?: PortalCourse[] }>(
+      `/v1/plataforma/academic/courses/me?state=all&page=${page}&limit=${limit}&sort=asc&sortBy=name&type=courses`,
+    );
+    const batch = res.data.courses ?? [];
+    const before = byId.size;
+    for (const course of batch) {
+      if (course?.id != null) byId.set(Number(course.id), course);
+    }
+    // Stop on a short page, or when the endpoint ignores `page` and repeats ids.
+    if (batch.length < limit || byId.size === before) break;
+  }
+  return [...byId.values()];
 }
 
 interface ContentTreeNode {
@@ -417,12 +504,15 @@ export async function collectContent(
   for (const course of courses) {
     if (wanted.size > 0 && !wanted.has(course.id)) continue;
 
+    try {
     const tree = await client.get<{ topics?: ContentTreeNode[] }>(
       `/v2/plataforma/content/academics-main/${course.id}/contents`,
     );
     const leaves: RawLeaf[] = [];
     const sectionIds: number[] = [];
     const containerIds = new Set<number>();
+    const modules = new Map<number, string>();
+    let detailsFailed = 0;
 
     const walk = (
       node: ContentTreeNode,
@@ -435,6 +525,9 @@ export async function collectContent(
       const children = node.children ?? [];
       if (t === 1) {
         containerIds.add(node.id);
+        // Capture every module, even one with no activities yet, so a brand-new
+        // discipline is detected before the professor publishes content.
+        if (!modules.has(node.id)) modules.set(node.id, node.title);
         for (const child of children) walk(child, node.id, node.title, null, null);
         return;
       }
@@ -471,6 +564,18 @@ export async function collectContent(
       walk(module, module.id, module.title, null, null);
     }
 
+    // The gradebook is authoritative for hand-in status (value 0 is a real
+    // grade; `isSubmited`/`submitedAt` cover submissions not graded yet).
+    // A failure must not abort the course: topic-detail attempts/studentGrade
+    // remain a valid fallback.
+    let gradebookById = new Map<number, GradebookActivity>();
+    try {
+      const gradebook = await fetchGradebookActivities(client, course.id);
+      gradebookById = new Map(gradebook.map((g) => [g.id, g]));
+    } catch (err) {
+      logger.warn({ courseId: course.id, err }, "failed to fetch gradebook for completion");
+    }
+
     const htmlByItemId = new Map<string, string>();
     for (const sid of sectionIds) {
       try {
@@ -482,6 +587,7 @@ export async function collectContent(
           if (html) htmlByItemId.set(String(child.id), html);
         }
       } catch (err) {
+        detailsFailed++;
         logger.warn({ courseId: course.id, sectionId: sid, err }, "failed to fetch section detail");
       }
     }
@@ -509,6 +615,7 @@ export async function collectContent(
           );
           topicDetailByItemId.set(String(leaf.itemId), detail.data);
         } catch (err) {
+          detailsFailed++;
           logger.warn({ itemId: leaf.itemId, err }, "failed to fetch topic detail");
         }
       }
@@ -525,11 +632,27 @@ export async function collectContent(
       const links = parseLinks(content);
       const hasPdf = attachments.some((a) => a.url.toLowerCase().endsWith(".pdf"));
       const kind = classify(leaf.topicTypeId, leaf.progressTypeId, hasPdf);
-      const done = isDone(leaf);
+      const gradebookId =
+        context?.gradeBookId != null && Number.isFinite(Number(context.gradeBookId))
+          ? Number(context.gradeBookId)
+          : null;
+      const gradebook = gradebookId != null ? gradebookById.get(gradebookId) ?? null : null;
+      const contentCompleted =
+        content?.hasCompletedAllAttempts === true ? true : leaf.hasCompletedAllAttempts;
+      const done = isDone({
+        kind,
+        progressId: leaf.progressId,
+        viewed: leaf.viewed,
+        studentGrade,
+        hasCompletedAllAttempts: contentCompleted,
+        content,
+        gradebook,
+      });
       return {
         ...leaf,
         kind,
         done,
+        gradebookId,
         attachments,
         html,
         content,
@@ -577,8 +700,15 @@ export async function collectContent(
       progress: normalizeCourseProgress(course.progress ?? course.progressPercentage),
       portalEnrollmentId: course.enrollmentId ?? course.enrollment?.id ?? null,
       containerIds: [...containerIds].sort((a, b) => a - b),
+      modules: [...modules].map(([id, title]) => ({ id, title })),
+      detailsFailed,
     });
     logger.info({ course: course.name, items: items.length }, "course content collected");
+    } catch (err) {
+      // One broken course must not abort the whole scrape (a single new course
+      // with a transient error would otherwise leave the app frozen).
+      logger.warn({ courseId: course.id, course: course.name, err }, "course collection failed");
+    }
   }
 
   return result;
@@ -596,6 +726,13 @@ export interface GradebookActivity {
   categoryTypeId: number | null;
   deadlineAt: string | null;
   isSubmited: boolean;
+  /** Awarded grade (0 is valid); null = not graded yet. */
+  value?: number | null;
+  /** Maximum/worth of the activity (e.g. 10, 50). */
+  maxValue?: number | null;
+  /** Hand-in timestamp; set even when `isSubmited` is false in some tenants. */
+  submitedAt?: string | null;
+  isDeadlineExpired?: boolean;
 }
 
 interface RawGradeNode {
@@ -605,6 +742,10 @@ interface RawGradeNode {
   categoryTypeId?: number | null;
   deadlineAt?: string | null;
   isSubmited?: boolean;
+  value?: number | string | null;
+  maxValue?: number | string | null;
+  submitedAt?: string | null;
+  isDeadlineExpired?: boolean;
   children?: RawGradeNode[];
 }
 
@@ -633,6 +774,10 @@ export async function fetchGradebookActivities(
           categoryTypeId: node.categoryTypeId ?? null,
           deadlineAt: node.deadlineAt ?? null,
           isSubmited: node.isSubmited === true,
+          value: node.value != null && node.value !== "" ? Number(node.value) : null,
+          maxValue: node.maxValue != null && node.maxValue !== "" ? Number(node.maxValue) : null,
+          submitedAt: node.submitedAt ?? null,
+          isDeadlineExpired: node.isDeadlineExpired === true,
         });
       }
       return;
@@ -662,6 +807,27 @@ function numOrNull(value: unknown): number | null {
   if (value == null) return null;
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Topic ids reachable through `context.previousAndNextTopics`. Following these
+ * lets the God's Eye sweep find new/unpublished activities that live outside the
+ * ±margin id window around the current tree.
+ */
+function neighborIdsFromContext(context: Record<string, unknown> | null | undefined): number[] {
+  const graph = context?.previousAndNextTopics as Record<string, unknown> | undefined;
+  if (!graph) return [];
+  const out: number[] = [];
+  for (const key of ["previousTopic", "nextTopic"]) {
+    const node = graph[key] as Record<string, unknown> | undefined;
+    if (!node) continue;
+    const id = numOrNull(node.id);
+    if (id != null) out.push(id);
+    const child = node.children as Record<string, unknown> | undefined;
+    const childId = child ? numOrNull(child.id) : null;
+    if (childId != null) out.push(childId);
+  }
+  return out;
 }
 
 /** Topic types that are containers (modules/sections), not content leaves. */
@@ -774,6 +940,12 @@ function hiddenItemFromTopic(
   const gradeObj = t.grade as Record<string, unknown> | undefined;
   const grade =
     gradeObj && typeof gradeObj === "object" ? gradeObj.value ?? null : t.grade ?? null;
+  const studentGrade = t.studentGrade ?? null;
+  const progressId = numOrNull(t.progressId ?? context?.progressId);
+  const contentCompleted =
+    content?.hasCompletedAllAttempts === true ? true : t.hasCompletedAllAttempts === true ? true : null;
+  const deadlineTs = deadlineAt ? new Date(deadlineAt.replace(" ", "T")).getTime() : NaN;
+  const expired = Number.isFinite(deadlineTs) && deadlineTs < Date.now();
   const title = t.title != null ? String(t.title) : `Item ${id}`;
 
   return {
@@ -790,12 +962,20 @@ function hiddenItemFromTopic(
     kind,
     progressTypeId,
     isRecordProgress: t.isRecordProgress === true,
-    done: t.viewed === true || grade != null,
+    done: isDone({
+      kind,
+      progressId,
+      viewed: t.viewed === true,
+      studentGrade,
+      hasCompletedAllAttempts: contentCompleted,
+      content,
+      gradebook: gb,
+    }),
     viewed: t.viewed === true,
-    expired: false,
+    expired,
     hasDeadline,
     deadlineAt,
-    hasCompletedAllAttempts: t.hasCompletedAllAttempts === true ? true : null,
+    hasCompletedAllAttempts: contentCompleted,
     grade,
     studentGrade: t.studentGrade ?? null,
     attachments,
@@ -842,6 +1022,8 @@ export interface HiddenHarvestResult {
   candidates: number;
   scanned: number;
   errors: number;
+  /** Expected misses (the id does not exist); not a real failure. */
+  notFound: number;
   /** True when the sweep aborted early because the AWS WAF started throttling. */
   throttled: boolean;
   hidden: ContentItem[];
@@ -912,9 +1094,19 @@ export async function harvestHiddenTopics(
 
   let scanned = 0;
   let errors = 0;
+  let notFound = 0;
   let wafErrors = 0;
   let throttled = false;
   let next = 0;
+  const queued = new Set(candidates);
+  const enqueue = (ids: number[]): void => {
+    for (const id of ids) {
+      if (id <= 0 || treeIds.has(id) || previousIds.has(id) || queued.has(id)) continue;
+      if (candidates.length >= maxCandidates) return;
+      queued.add(id);
+      candidates.push(id);
+    }
+  };
   const workers = Array.from({ length: Math.min(concurrency, candidates.length) }, async () => {
     while (next < candidates.length && !throttled) {
       const id = candidates[next++];
@@ -932,11 +1124,20 @@ export async function harvestHiddenTopics(
               )
             ).data;
         scanned++;
+        const mainId = Number((data.context?.academicMainId as number | undefined) ?? course.id);
+        if (Number.isFinite(mainId) && mainId !== course.id) {
+          // Never wander into another course's topic graph.
+          continue;
+        }
+        // Follow the portal's previous/next topic graph: newly published items
+        // often sit far from the tree id band, next to an existing topic.
+        enqueue(neighborIdsFromContext(data.context));
         const item = hiddenItemFromTopic(course, id, data, maps, treeTitles, gradebookById);
         if (item) hidden.push(item);
       } catch (err) {
         errors++;
         const message = String((err as Error)?.message ?? err);
+        if (/-> 404\b/.test(message)) notFound++;
         if (/-> (403|429)\b/.test(message)) {
           wafErrors++;
           if (wafCooldownMs > 0) await sleep(wafCooldownMs);
@@ -962,6 +1163,7 @@ export async function harvestHiddenTopics(
     candidates: candidates.length,
     scanned,
     errors,
+    notFound,
     throttled,
     hidden: unique,
   };

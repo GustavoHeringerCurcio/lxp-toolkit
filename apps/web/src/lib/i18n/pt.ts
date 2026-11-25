@@ -860,6 +860,7 @@ export const pt = {
   "refresh.lastAt": "Atualizado: {{when}}",
   "refresh.lastAtTitle": "Última atualização: {{when}} ({{tz}})",
   "refresh.warning": "Atualização parcial: {{warning}}",
+  "refresh.changes": "Novidades detectadas: {{items}} atividade(s), {{modules}} disciplina(s), {{courses}} curso(s).",
 
   // server-provided refresh steps (translated client-side)
   "server.step.db": "Verificando o banco de dados",

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   classify,
+  collectContent,
   harvestHiddenTopics,
   isDone,
   isMarkable,
@@ -54,16 +55,53 @@ describe("normalizeCourseProgress", () => {
 });
 
 describe("isDone", () => {
-  it("considera progresso, tentativas, nota e visualização", () => {
-    expect(isDone({ progressId: 1 })).toBe(true);
-    expect(isDone({ hasCompletedAllAttempts: true })).toBe(true);
-    expect(isDone({ grade: 0 })).toBe(true);
-    expect(isDone({ viewed: true })).toBe(true);
+  it("nunca usa a nota máxima (grade/worth) como conclusão", () => {
+    // Regression: the portal tree `grade` is the activity's worth (10/50), not
+    // the student's grade. This is exactly how LPW/DBE were marked done.
+    expect(isDone({ kind: "file_upload", content: { attempts: [] } })).toBe(false);
+    expect(
+      isDone({ kind: "quiz", content: { attempts: [], hasCompletedAllAttempts: false } }),
+    ).toBe(false);
   });
 
-  it("não marca como concluído quando nada foi feito", () => {
-    expect(isDone({})).toBe(false);
-    expect(isDone({ hasCompletedAllAttempts: false, viewed: false })).toBe(false);
+  it("marca upload apenas com uma entrega real", () => {
+    expect(isDone({ kind: "file_upload", content: { attempts: [{ isDraft: true }] } })).toBe(false);
+    expect(isDone({ kind: "file_upload", content: { attempts: [{ isDraft: false }] } })).toBe(true);
+    expect(isDone({ kind: "file_upload", studentGrade: 0 })).toBe(true);
+    expect(
+      isDone({
+        kind: "file_upload",
+        gradebook: {
+          id: 1,
+          name: "x",
+          categoryId: 1,
+          categoryName: "AVD",
+          topicTypeId: 8,
+          categoryTypeId: 5,
+          deadlineAt: null,
+          isSubmited: true,
+        },
+      }),
+    ).toBe(true);
+    // progressId alone is not a hand-in for uploads.
+    expect(isDone({ kind: "file_upload", progressId: 1, viewed: true })).toBe(false);
+  });
+
+  it("marca quiz concluído por tentativa finalizada/nota/tentativas esgotadas", () => {
+    expect(
+      isDone({ kind: "quiz", content: { attempts: [{ finishedAt: "2026-01-01" }] } }),
+    ).toBe(true);
+    expect(isDone({ kind: "quiz", studentGrade: 5 })).toBe(true);
+    expect(isDone({ kind: "quiz", hasCompletedAllAttempts: true })).toBe(true);
+    expect(
+      isDone({ kind: "quiz", content: { attempts: [], hasCompletedAllAttempts: false } }),
+    ).toBe(false);
+  });
+
+  it("mantém leitura como concluída por progresso/visualização", () => {
+    expect(isDone({ kind: "reading", progressId: 1 })).toBe(true);
+    expect(isDone({ kind: "reading", viewed: true })).toBe(true);
+    expect(isDone({ kind: "reading" })).toBe(false);
   });
 });
 
@@ -163,6 +201,37 @@ const GRADEBOOK: GradebookActivity[] = [
 describe("normalizeTitle", () => {
   it("ignora acentos, caixa e espaços", () => {
     expect(normalizeTitle("  Exercícios  de   BD ")).toBe("exercicios de bd");
+  });
+});
+
+describe("collectContent", () => {
+  it("captura uma disciplina nova mesmo sem atividades", async () => {
+    const get = vi.fn(async (path: string) => {
+      if (path.includes("/courses/me")) {
+        return { data: { courses: [{ id: 1, name: "Curso (T01_2026_2)" }] } };
+      }
+      if (path.endsWith("/contents")) {
+        return {
+          data: {
+            topics: [
+              { id: 10, title: "Nova Disciplina - Prof. Teste", topicTypeId: 1, children: [] },
+            ],
+          },
+        };
+      }
+      if (path.includes("/grades/me/course/1")) {
+        return { data: { structure: [] } };
+      }
+      throw new Error(`GET ${path} -> 404`);
+    });
+    const client = { get } as unknown as ApiClient;
+
+    const courses = await collectContent(client);
+
+    expect(courses).toHaveLength(1);
+    expect(courses[0].items).toHaveLength(0);
+    expect(courses[0].modules).toEqual([{ id: 10, title: "Nova Disciplina - Prof. Teste" }]);
+    expect(courses[0].detailsFailed).toBe(0);
   });
 });
 

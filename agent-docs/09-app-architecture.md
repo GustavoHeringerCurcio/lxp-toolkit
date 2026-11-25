@@ -290,11 +290,15 @@ db:migrate → dump → dump-surfaces → index → index:web
   cannot apply.
 - A partial God's Eye sweep (`[gods-eye] partial …` on the dump output) is exposed as
   `RefreshState.warning`; the UI shows it as an amber banner without marking the refresh failed.
-- Refuses a concurrent run (`start()` returns `false` while running).
+- Refuses a concurrent run (`start()` returns `false` while running); a step that exceeds its
+  timeout is killed (process tree) and a stale run is released instead of blocking forever.
 - Retries the scrape **once headful** when the log matches `/reCAPTCHA/` (for the UI/terminal case;
   a headless cloud server can't show the window).
+- Reads `raw/content-run.json` / `raw/surfaces-run.json` and warns when the dump kept previous data.
+- Reads `data/logs/catalog/last-import.json` and exposes the catalog diff as `changes`
+  (`newCourses`/`newModules`/`newItems`) so the UI can report new subjects/activities.
 - Keeps the last ~8 KB of output in `status().log`; `GET /api/refresh/status` exposes
-  `{ running, step, error, startedAt, finishedAt, log }`.
+  `{ running, step, error, warning, changes, startedAt, finishedAt, log }`.
 
 `scripts/sync.mjs` runs the same steps locally plus Docker/migrations, hard-failing on any step.
 `scripts/dev.mjs` starts API + Vite without scraping.
@@ -316,6 +320,8 @@ enabled at once; the four event switches are global:
   (success or failure); there is no background timer. Due-soon/expired checks therefore happen at
   those two moments only.
 - Only normal tree items are considered (`origin='tree'`); God's Eye/hidden topics are ignored.
+- Items already expired at `baseline_at` (never eligible for the per-item `expired` rule) are sent
+  once as a summarized backlog alert (`event_key = backlog:<baseline>`).
 - `notification_event` is the idempotency ledger: each occurrence is claimed atomically before
   sending (`INSERT … ON CONFLICT DO NOTHING`), so boot + refresh + immediate done cannot duplicate.
 - Events disabled by a toggle, or with no channel configured, are recorded as `skipped` so

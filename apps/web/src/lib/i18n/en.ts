@@ -855,6 +855,7 @@ export const en: Dict = {
   "refresh.lastAt": "Updated: {{when}}",
   "refresh.lastAtTitle": "Last refresh: {{when}} ({{tz}})",
   "refresh.warning": "Partial refresh: {{warning}}",
+  "refresh.changes": "New content detected: {{items}} activity(ies), {{modules}} subject(s), {{courses}} course(s).",
 
   // server-provided refresh steps (translated client-side)
   "server.step.db": "Checking the database",

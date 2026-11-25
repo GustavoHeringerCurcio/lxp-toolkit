@@ -24,3 +24,42 @@ export function spawnCommand(
   const line = [command, ...args].map(quoteForCmd).join(" ");
   return spawn(line, { ...options, shell: true });
 }
+
+/**
+ * Kill a child process and its descendants. `npm.cmd`/`tsx` spawn grandchildren
+ * (Playwright/Chromium, tsc), so killing only the shell leaves an orphan that
+ * keeps the refresh "running" forever.
+ */
+export function killProcessTree(child: ChildProcess): void {
+  if (!child.pid) {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      /* already gone */
+    }
+    return;
+  }
+  if (isWindows) {
+    try {
+      spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      return;
+    } catch {
+      /* fall through to child.kill */
+    }
+  }
+  try {
+    child.kill("SIGTERM");
+  } catch {
+    /* already gone */
+  }
+  setTimeout(() => {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      /* already gone */
+    }
+  }, 10_000).unref?.();
+}

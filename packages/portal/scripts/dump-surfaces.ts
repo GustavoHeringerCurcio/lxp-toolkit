@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createSession, closeSession } from "../src/session.js";
 import { fetchCourses } from "../src/content.js";
@@ -91,6 +91,22 @@ async function main(): Promise<void> {
 
     const courses = await fetchCourses(client);
 
+    const rawDir = path.join(outDir, "raw");
+    ensureDir(rawDir);
+    const surfacesPath = path.join(rawDir, "surfaces.json");
+    let previous: {
+      grades?: Record<string, unknown>;
+      surfaces?: Record<string, unknown>;
+    } = {};
+    if (existsSync(surfacesPath)) {
+      try {
+        previous = JSON.parse(readFileSync(surfacesPath, "utf-8")) as typeof previous;
+      } catch (err) {
+        logger.warn({ err }, "failed to read previous surfaces.json");
+      }
+    }
+    const failed: string[] = [];
+
     // Grades per course
     for (const c of courses) {
       try {
@@ -128,7 +144,10 @@ async function main(): Promise<void> {
         raw.surfaces[name] = r.data;
         writeFileSync(path.join(outDir, `${name}.md`), renderKeyValue(name, r.data), "utf-8");
       } catch (err) {
-        logger.warn({ endpoint, err }, "failed to fetch surface");
+        failed.push(name);
+        const previousValue = previous.surfaces?.[name];
+        if (previousValue !== undefined) raw.surfaces[name] = previousValue;
+        logger.warn({ endpoint, err }, "failed to fetch surface; keeping previous data");
       }
     }
 
@@ -143,22 +162,48 @@ async function main(): Promise<void> {
       raw.surfaces["calendar-appointments"] = r.data;
       writeFileSync(path.join(outDir, "calendar.md"), renderAppointments(r.data), "utf-8");
     } catch (err) {
-      logger.warn({ err }, "failed to fetch calendar");
+      failed.push("calendar-appointments");
+      const previousCalendar = previous.surfaces?.["calendar-appointments"];
+      if (previousCalendar !== undefined) raw.surfaces["calendar-appointments"] = previousCalendar;
+      logger.warn({ err }, "failed to fetch calendar; keeping previous data");
     }
 
     for (const c of courses) {
       try {
         const g = await client.get<unknown>(`/v1/plataforma/grades/me/course/${c.id}`);
         raw.grades[c.name] = g.data;
-      } catch {
-        /* already logged */
+      } catch (err) {
+        failed.push(`grades:${c.id}`);
+        const previousGrades = previous.grades?.[c.name];
+        if (previousGrades !== undefined) raw.grades[c.name] = previousGrades;
+        logger.warn({ courseId: c.id, err }, "failed to fetch gradebook; keeping previous data");
       }
     }
 
-    ensureDir(path.join(outDir, "raw"));
-    writeFileSync(path.join(outDir, "raw", "surfaces.json"), json(raw), "utf-8");
+    const tmp = `${surfacesPath}.tmp`;
+    writeFileSync(tmp, json(raw), "utf-8");
+    try {
+      renameSync(tmp, surfacesPath);
+    } catch {
+      try {
+        unlinkSync(surfacesPath);
+      } catch {
+        /* first write */
+      }
+      renameSync(tmp, surfacesPath);
+    }
+    writeFileSync(
+      path.join(rawDir, "surfaces-run.json"),
+      json({
+        generatedAt: new Date().toISOString(),
+        complete: failed.length === 0,
+        failed,
+        courses: courses.map((c) => ({ id: c.id, name: c.name })),
+      }),
+      "utf-8",
+    );
 
-    console.log(`\nSurfaces dumped → ${outDir}`);
+    console.log(`\nSurfaces dumped → ${outDir}${failed.length ? ` (parcial: ${failed.join(", ")})` : ""}`);
   } finally {
     await closeSession(session);
   }

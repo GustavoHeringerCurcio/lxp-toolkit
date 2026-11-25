@@ -134,3 +134,11 @@ npm run capture-api -- --url https://unifoa2.grupoa.education/plataforma/course/
 ```
 
 > ⚠ These actions submit real work to the student's academic record. Run only with explicit intent.
+
+## Completion note (2026-11-24)
+
+The content-tree `grade` field is the activity's **max/worth** (10, 50), not the student's grade.
+Using it as a completion signal hid LPW/DBE/ARS uploads with zero attempts. Completion now uses
+`content.attempts[]` (non-draft), `studentGrade`, `hasCompletedAllAttempts`, or the gradebook
+(`value`/`submitedAt`/`isSubmited`). `progressId`/`viewed` only count for readings.
+The server also reconciles older state from `raw_json` + gradebook and clears stale `done` ledger rows.

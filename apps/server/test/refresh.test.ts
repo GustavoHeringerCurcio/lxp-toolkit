@@ -55,6 +55,29 @@ function makeController(plan: SpawnSpec[]) {
 }
 
 describe("createRefreshController", () => {
+  it("encerra um passo que excede o tempo limite e libera o controlador", async () => {
+    const spawn: NonNullable<RefreshConfig["spawn"]> = () => {
+      const proc = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter };
+      proc.stdout = new EventEmitter();
+      proc.stderr = new EventEmitter();
+      return proc as unknown as ChildProcess;
+    };
+    const controller = createRefreshController({
+      repoRoot: "C:/repo",
+      assistantDir: "C:/repo/apps/server",
+      npm: "npm",
+      env: { REFRESH_TIMEOUT_MIGRATE_MINUTES: "0.001" },
+      spawn,
+    });
+
+    await controller.run();
+
+    const state = controller.status();
+    expect(state.running).toBe(false);
+    expect(state.step).toBe("Falhou");
+    expect(state.error).toMatch(/tempo limite/i);
+  });
+
   it("migra o banco antes de rodar dump, dump-surfaces e os dois índices", async () => {
     const { controller, calls } = makeController([
       { code: 0 },

@@ -82,6 +82,7 @@ export function AppSidebar() {
   const nowCount = items.filter(
     (e) => !e.done && e.status === "open" && e.daysLeft != null && e.daysLeft <= 3,
   ).length;
+  const lateCount = items.filter((e) => !e.done && e.status === "expired").length;
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -125,7 +126,17 @@ export function AppSidebar() {
                 const label = t(n.key);
                 const active = isRouteActive(n.to, location.pathname, "match" in n ? n.match : undefined);
                 const badge =
-                  n.to === "/" ? (nowCount > 0 ? nowCount : "") : n.to === "/tarefas" ? (items.length > 0 ? items.length : "") : "";
+                  n.to === "/"
+                    ? nowCount > 0
+                      ? nowCount
+                      : ""
+                    : n.to === "/tarefas"
+                      ? lateCount > 0
+                        ? lateCount
+                        : items.length > 0
+                          ? items.length
+                          : ""
+                      : "";
                 return (
                   <SidebarMenuItem key={n.to}>
                     <SidebarMenuButton
@@ -137,7 +148,16 @@ export function AppSidebar() {
                       <n.icon />
                       <span>{label}</span>
                       {badge !== "" && (
-                        <span className="ml-auto font-mono text-xs tabular-nums text-muted-foreground">{badge}</span>
+                        <span
+                          className={cn(
+                            "ml-auto font-mono text-xs tabular-nums",
+                            n.to === "/tarefas" && lateCount > 0
+                              ? "font-semibold text-late"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          {badge}
+                        </span>
                       )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>

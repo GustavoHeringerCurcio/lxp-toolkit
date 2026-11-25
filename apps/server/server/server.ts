@@ -188,6 +188,7 @@ const PORT = Number(process.env.PORT || 4174);
 const refresh = createRefreshController({
   repoRoot: path.resolve(ASSISTANT_DIR, "..", ".."),
   assistantDir: ASSISTANT_DIR,
+  dataDir: dataDir(),
   // The container has no display, so a headful reCAPTCHA retry would only
   // waste time; the failure is surfaced with an actionable message instead.
   headfulRetry: headfulRetryEnabled(process.env.REFRESH_HEADFUL_RETRY),

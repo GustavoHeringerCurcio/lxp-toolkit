@@ -370,7 +370,9 @@ export function formatNotification(kind: NotificationEventKind, item?: Notificat
     case "expired":
       return {
         title: "Prazo perdido",
-        body: `${title}${course ? ` — ${course}` : ""} · venceu ${deadlineLabel(item?.deadlineAt ?? null)}`,
+        body: `${title}${course ? ` — ${course}` : ""}${
+          item?.deadlineAt ? ` · venceu ${deadlineLabel(item.deadlineAt)}` : ""
+        }`,
       };
     default:
       return { title: "LXP Toolkit", body: "Atualização de atividades." };
@@ -570,6 +572,59 @@ async function processEvent(
 }
 
 /**
+ * One-time digest of items that were already expired when notifications were
+ * configured (deadline before `baseline_at`). Without it, a missed activity
+ * like the AER Simulado was never notified — the per-item `expired` rule
+ * intentionally ignores deadlines before the baseline.
+ */
+async function notifyOverdueBacklog(
+  config: NotificationConfig,
+  items: NotificationItem[],
+): Promise<"sent" | "skipped" | "failed"> {
+  if (items.length === 0) return "skipped";
+  const baselineIso = new Date(config.baselineAt).toISOString();
+  const ledgerId = await claimNotificationEvent("expired", `backlog:${baselineIso}`, null);
+  if (ledgerId == null) return "skipped";
+  if (!config.notifyExpired || !hasAnyChannel(config)) {
+    await finishNotificationEvent(
+      ledgerId,
+      "skipped",
+      !config.notifyExpired ? "evento desligado" : "sem canal configurado",
+    );
+    return "skipped";
+  }
+
+  const first = items[0];
+  const titles = items.slice(0, 6).map((item) => item.title).join(" · ");
+  const label = `${items.length} atividade${items.length === 1 ? "" : "s"} atrasada${
+    items.length === 1 ? "" : "s"
+  }`;
+  const synthetic: NotificationItem = {
+    ...first,
+    title: `${label}: ${titles}`,
+    courseName: "",
+    moduleName: "",
+    deadlineAt: null,
+  };
+  const results = await deliverNotification(config, "expired", synthetic);
+  const failures = results.filter((result) => !result.ok);
+  if (results.length === 0) {
+    await finishNotificationEvent(ledgerId, "skipped", "sem canal configurado");
+    return "skipped";
+  }
+  if (failures.length === 0) {
+    await finishNotificationEvent(ledgerId, "sent", null);
+    return "sent";
+  }
+  await finishNotificationEvent(
+    ledgerId,
+    "failed",
+    failures.map((f) => `${f.channel}: ${f.error ?? "falhou"}`).join(" | "),
+  );
+  return "failed";
+}
+
+/**
  * Scan the current catalog for new/due-soon/done/expired events.
  *
  * `reason` is only used for the (quiet) log line; the detection rules are the
@@ -607,6 +662,32 @@ export async function runNotificationScan(
   const actionable = items;
   const newIds = new Set<number>();
   const pending: PendingEvent[] = [];
+
+  // Items that expired before notifications existed: one summarized alert.
+  // Only real deliverables (upload/quiz/forum), most recent first, so the
+  // digest surfaces meaningful misses instead of years-old readings.
+  const backlog = actionable
+    .filter((item) => {
+      if (!isActionable(item) || item.done) return false;
+      if (!["file_upload", "quiz", "forum"].includes(item.rawKind ?? "")) return false;
+      const deadline = item.deadlineAt ? new Date(item.deadlineAt).getTime() : NaN;
+      return Number.isFinite(deadline) && deadline < baseline && deadline < now;
+    })
+    .sort((a, b) => {
+      const da = a.deadlineAt ? new Date(a.deadlineAt).getTime() : 0;
+      const db = b.deadlineAt ? new Date(b.deadlineAt).getTime() : 0;
+      return db - da;
+    });
+  if (backlog.length > 0) {
+    try {
+      result[await notifyOverdueBacklog(config, backlog)] += 1;
+    } catch (err) {
+      result.failed += 1;
+      console.warn(
+        `[notifications] backlog: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   for (const item of actionable) {
     if (!isActionable(item)) continue;

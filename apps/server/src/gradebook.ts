@@ -18,7 +18,24 @@ interface GradebookLeaf {
   name?: string;
   deadlineAt?: string | null;
   topicTypeId?: number | null;
+  isSubmited?: boolean;
+  value?: number | string | null;
+  maxValue?: number | string | null;
+  submitedAt?: string | null;
+  isDeadlineExpired?: boolean;
   children?: GradebookLeaf[];
+}
+
+function numeric(value: number | string | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function timestamp(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 interface GradebookNode {
@@ -92,14 +109,21 @@ export async function importGradebook(): Promise<GradebookImportSummary> {
       for (const child of cat.children ?? []) {
         if (!child?.id || !child.name) continue;
         await query(
-          `INSERT INTO gradebook_activity(id, course_id, category_id, name, deadline_at, topic_type_id, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6, now())
+          `INSERT INTO gradebook_activity(
+             id, course_id, category_id, name, deadline_at, topic_type_id,
+             value, max_value, is_submitted, submitted_at, is_deadline_expired, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
            ON CONFLICT (id) DO UPDATE SET
              course_id = EXCLUDED.course_id,
              category_id = EXCLUDED.category_id,
              name = EXCLUDED.name,
              deadline_at = EXCLUDED.deadline_at,
              topic_type_id = EXCLUDED.topic_type_id,
+             value = EXCLUDED.value,
+             max_value = EXCLUDED.max_value,
+             is_submitted = EXCLUDED.is_submitted,
+             submitted_at = EXCLUDED.submitted_at,
+             is_deadline_expired = EXCLUDED.is_deadline_expired,
              updated_at = now()`,
           [
             Number(child.id),
@@ -108,6 +132,11 @@ export async function importGradebook(): Promise<GradebookImportSummary> {
             child.name,
             child.deadlineAt ? new Date(child.deadlineAt) : null,
             child.topicTypeId != null ? Number(child.topicTypeId) : null,
+            numeric(child.value),
+            numeric(child.maxValue),
+            child.isSubmited === true,
+            timestamp(child.submitedAt),
+            child.isDeadlineExpired === true,
           ],
         );
         activities++;

@@ -1,4 +1,12 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { createSession, closeSession, type Session } from "../src/session.js";
 import { ApiClient } from "../src/client.js";
@@ -270,6 +278,36 @@ async function main(): Promise<void> {
     ensureDir(coursesDir);
     ensureDir(rawDir);
 
+    if (courses.length === 0) {
+      throw new Error("Nenhum curso foi coletado; mantendo o content-tree.json anterior.");
+    }
+
+    // Load the previous tree so a failed course can be preserved instead of
+    // disappearing from the app, and keep a short backup for rollback.
+    const treePath = path.join(rawDir, "content-tree.json");
+    let previousCourses: ContentCourse[] = [];
+    if (existsSync(treePath)) {
+      try {
+        previousCourses = JSON.parse(readFileSync(treePath, "utf-8")) as ContentCourse[];
+        const backupDir = path.join(rawDir, "backup");
+        ensureDir(backupDir);
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        copyFileSync(treePath, path.join(backupDir, `content-tree.${stamp}.json`));
+        const backups = readdirSync(backupDir)
+          .filter((name) => name.startsWith("content-tree.") && name.endsWith(".json"))
+          .sort();
+        for (const old of backups.slice(0, Math.max(0, backups.length - 5))) {
+          try {
+            unlinkSync(path.join(backupDir, old));
+          } catch {
+            /* best effort */
+          }
+        }
+      } catch (err) {
+        logger.warn({ err }, "failed to read/backup previous content-tree.json");
+      }
+    }
+
     // ── God's Eye: harvest topics the portal serves by id but hides from the
     // content tree. Appended with `origin:"hidden"` so the web app can surface
     // them in a dedicated route without polluting the normal task lists.
@@ -323,6 +361,8 @@ async function main(): Promise<void> {
               scanned: result.scanned,
               hidden: result.hidden.length,
               errors: result.errors,
+              notFound: result.notFound,
+              realErrors: result.errors - result.notFound,
               throttled: result.throttled,
             },
             "hidden-topic harvest complete",
@@ -353,6 +393,7 @@ async function main(): Promise<void> {
           candidates: 0,
           scanned: 0,
           errors: 0,
+          notFound: 0,
           throttled: false,
           hidden: kept,
         });
@@ -370,6 +411,7 @@ async function main(): Promise<void> {
           candidates: 0,
           scanned: 0,
           errors: 0,
+          notFound: 0,
           throttled: false,
           hidden: kept,
         });
@@ -410,6 +452,43 @@ async function main(): Promise<void> {
       }
     }
 
+    // A course whose tree request failed is absent from `courses`; keep its
+    // previous data instead of silently dropping it from the app.
+    const currentIds = new Set(courses.map((c) => c.courseId));
+    const keptCourses: number[] = [];
+    for (const previous of previousCourses) {
+      if (currentIds.has(previous.courseId)) continue;
+      courses.push(previous);
+      keptCourses.push(previous.courseId);
+    }
+
+    const partialCourses = courses
+      .filter((c) => (c.detailsFailed ?? 0) > 0)
+      .map((c) => ({ courseId: c.courseId, courseName: c.courseName, detailsFailed: c.detailsFailed }));
+    const complete = keptCourses.length === 0 && partialCourses.length === 0;
+    const runSummary = {
+      generatedAt: new Date().toISOString(),
+      complete,
+      courses: courses.map((c) => ({
+        courseId: c.courseId,
+        courseName: c.courseName,
+        items: c.items.length,
+        modules: c.modules?.length ?? 0,
+        detailsFailed: c.detailsFailed ?? 0,
+      })),
+      keptCourses,
+      partialCourses,
+      harvest: harvestResults.map((r) => ({
+        courseId: r.courseId,
+        candidates: r.candidates,
+        scanned: r.scanned,
+        hidden: r.hidden.length,
+        errors: r.errors,
+        notFound: r.notFound,
+        throttled: r.throttled,
+      })),
+    };
+
     const totalItems = courses.reduce((n, c) => n + c.items.length, 0);
     let writtenFiles = 0;
 
@@ -442,8 +521,31 @@ async function main(): Promise<void> {
       writtenFiles++;
     }
 
-    writeFileSync(path.join(rawDir, "content-tree.json"), json(courses), "utf-8");
-    writtenFiles++;
+    // Atomic replace so a crash mid-write never leaves a truncated tree.
+    const tmpTree = `${treePath}.tmp`;
+    writeFileSync(tmpTree, json(courses), "utf-8");
+    try {
+      renameSync(tmpTree, treePath);
+    } catch {
+      try {
+        unlinkSync(treePath);
+      } catch {
+        /* first write */
+      }
+      renameSync(tmpTree, treePath);
+    }
+    writeFileSync(path.join(rawDir, "content-run.json"), json(runSummary), "utf-8");
+    writtenFiles += 2;
+
+    if (!complete) {
+      logger.warn(
+        { keptCourses, partialCourses },
+        "content dump incomplete (previous courses kept / detail failures)",
+      );
+      console.log(
+        `[dump] partial — kept ${keptCourses.length} course(s), ${partialCourses.length} with detail failures`,
+      );
+    }
 
     logger.info({ courses: courses.length, items: totalItems, files: writtenFiles }, "content dump complete");
     console.log(`\nDumped ${courses.length} course(s), ${totalItems} item(s) → ${coursesDir}`);

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import type { PoolClient } from "pg";
 import { assist, raw } from "./paths.js";
 import { closePool, healthCheck, query, runMigrations, withTransaction } from "./db.js";
@@ -69,6 +70,8 @@ interface RawCourse {
   /** Enrollment id from the course summary (fallback: item context). */
   portalEnrollmentId?: number | null;
   items: RawItem[];
+  /** Every module container, including modules with no activities yet. */
+  modules?: { id: number; title: string }[];
 }
 
 const DEFAULT_HOST = process.env.LXP_HOST ?? "unifoa2.grupoa.education";
@@ -216,9 +219,14 @@ async function importCourse(client: PoolClient, course: RawCourse, studentId: nu
     );
   }
 
-  // Modules + the stable module→professor link.
+  // Modules + the stable module→professor link. Include module containers from
+  // the dump even when they have no activities yet, so a brand-new discipline
+  // is detected before the professor publishes content.
   const modules = new Map<number, string>();
   for (const item of course.items) modules.set(item.moduleId, item.moduleTitle);
+  for (const mod of course.modules ?? []) {
+    if (mod?.id > 0 && mod.title) modules.set(Number(mod.id), mod.title);
+  }
   for (const [moduleId, title] of modules) {
     const { name } = splitTitle(title);
     await client.query(
@@ -625,6 +633,157 @@ async function importAiConfig(studentId: number): Promise<void> {
   );
 }
 
+interface GradebookCompletionRow {
+  id: string;
+  value: string | null;
+  submitted_at: Date | null;
+  is_submitted: boolean;
+}
+
+interface CompletionItemRow {
+  id: string;
+  kind: string;
+  gradebook_id: string | null;
+  raw_json: RawItem | null;
+  current_done: boolean | null;
+  viewed: boolean | null;
+  grade: string | null;
+  student_grade: string | null;
+  deadline_at: Date | null;
+  has_completed_all_attempts: boolean | null;
+  progress_id: string | null;
+}
+
+function hasGradeValue(value: unknown): boolean {
+  return value != null && value !== "";
+}
+
+function gradebookSubmitted(gb: GradebookCompletionRow | undefined): boolean {
+  if (!gb) return false;
+  return gb.value != null || gb.submitted_at != null || gb.is_submitted === true;
+}
+
+function contentAttempts(raw: RawItem): Record<string, unknown>[] {
+  const attempts = raw.content?.attempts;
+  return Array.isArray(attempts) ? (attempts as Record<string, unknown>[]) : [];
+}
+
+/**
+ * Authoritative completion for uploads/quizzes, using the same rules as the
+ * portal scraper. `raw.grade` is the activity max/worth and is never used.
+ */
+function resolveCompletion(raw: RawItem | null, gb: GradebookCompletionRow | undefined): boolean | null {
+  if (!raw) return null;
+  if (raw.kind !== "file_upload" && raw.kind !== "quiz") return null;
+  if (gradebookSubmitted(gb)) return true;
+  if (hasGradeValue(raw.studentGrade)) return true;
+  const contentCompleted = raw.content?.hasCompletedAllAttempts === true;
+  if (contentCompleted || raw.hasCompletedAllAttempts === true) return true;
+  // Content evidence wins over a stale gradebook that has not caught up yet.
+  return contentAttempts(raw).some((attempt) => {
+    if (raw.kind === "file_upload") return attempt.isDraft !== true;
+    return attempt.finishedAt != null;
+  });
+}
+
+/**
+ * Repair persisted completion for uploads/quizzes.
+ *
+ * Older scrapes used the activity's max grade as "done", which hid real work
+ * (e.g. LPW/DBE/ARS). This reconciles from the gradebook (authoritative) and,
+ * when unavailable, from the stored topic content. A corrected `true → false`
+ * also clears the stale `done` notification so a real completion can notify.
+ */
+async function reconcileCompletion(studentId: number): Promise<{ corrected: number; ledgerReset: number }> {
+  return withTransaction(async (client) => {
+    const gradebook = await client.query<GradebookCompletionRow>(
+      "SELECT id, value::text AS value, submitted_at, is_submitted FROM gradebook_activity",
+    );
+    const gradebookById = new Map(gradebook.rows.map((row) => [Number(row.id), row]));
+
+    const items = await client.query<CompletionItemRow>(
+      `SELECT ci.id, ci.kind, ci.raw_json, ci.gradebook_id,
+              st.done AS current_done, st.viewed, st.grade, st.student_grade,
+              st.deadline_at, st.has_completed_all_attempts, st.progress_id
+         FROM content_item ci
+         LEFT JOIN LATERAL (
+           SELECT done, viewed, grade, student_grade, deadline_at,
+                  has_completed_all_attempts, progress_id
+             FROM item_state
+            WHERE content_item_id = ci.id
+            ORDER BY captured_at DESC, id DESC
+            LIMIT 1
+         ) st ON true
+        WHERE ci.kind IN ('file_upload', 'quiz')`,
+    );
+
+    let corrected = 0;
+    let ledgerReset = 0;
+    for (const row of items.rows) {
+      const raw = row.raw_json;
+      const gbId = Number(raw?.gradebookId ?? row.gradebook_id ?? 0);
+      const done = resolveCompletion(raw, gbId > 0 ? gradebookById.get(gbId) : undefined);
+      if (done == null || done === row.current_done) continue;
+
+      await client.query(
+        `INSERT INTO item_state(
+           content_item_id, student_id, done, viewed, grade, student_grade, status,
+           deadline_at, has_completed_all_attempts, progress_id, source)
+         VALUES ($1,$2,$3,$4,$5,$6,NULL,$7,$8,$9,'repair')`,
+        [
+          Number(row.id),
+          studentId,
+          done,
+          row.viewed === true,
+          row.grade ?? text(raw?.grade),
+          row.student_grade ?? text(raw?.studentGrade),
+          row.deadline_at ?? parsePortalDate(raw?.deadlineAt),
+          row.has_completed_all_attempts ?? raw?.hasCompletedAllAttempts ?? null,
+          row.progress_id ?? (raw?.progressId != null ? String(raw.progressId) : null),
+        ],
+      );
+      corrected++;
+
+      if (row.current_done === true && done === false) {
+        const reset = await client.query(
+          `DELETE FROM notification_event
+            WHERE student_id = $1 AND kind = 'done' AND event_key = $2`,
+          [studentId, String(row.id)],
+        );
+        ledgerReset += reset.rowCount ?? 0;
+      }
+    }
+    return { corrected, ledgerReset };
+  });
+}
+
+interface CatalogSnapshot {
+  courses: Map<number, string>;
+  modules: Map<number, string>;
+  items: Map<number, string>;
+}
+
+async function snapshotCatalog(): Promise<CatalogSnapshot> {
+  const [courses, modules, items] = await Promise.all([
+    query<{ id: string; name: string }>("SELECT id, name FROM course"),
+    query<{ id: string; title: string }>("SELECT id, title FROM module"),
+    query<{ id: string; title: string }>("SELECT id, title FROM content_item"),
+  ]);
+  return {
+    courses: new Map(courses.map((r) => [Number(r.id), r.name])),
+    modules: new Map(modules.map((r) => [Number(r.id), r.title])),
+    items: new Map(items.map((r) => [Number(r.id), r.title])),
+  };
+}
+
+function addedEntries(before: Map<number, string>, after: Map<number, string>): { id: number; name: string }[] {
+  const out: { id: number; name: string }[] = [];
+  for (const [id, name] of after) {
+    if (!before.has(id)) out.push({ id, name });
+  }
+  return out;
+}
+
 export interface ImportSummary {
   courses: number;
   items: number;
@@ -636,6 +795,14 @@ export interface ImportSummary {
   gradebookActivities: number;
   /** Phantom God's-Eye rows removed (container ids misread as hidden topics). */
   containerHiddenPurged: number;
+  /** Newly seen catalog entries (for "new subject/activity" detection). */
+  newCourses: { id: number; name: string }[];
+  newModules: { id: number; name: string }[];
+  newItems: { id: number; name: string }[];
+  /** item_state rows corrected from the authoritative completion signals. */
+  completionCorrected: number;
+  /** Stale "done" notification ledger rows cleared by that repair. */
+  notificationLedgerReset: number;
 }
 
 /**
@@ -677,6 +844,7 @@ export async function importAll(): Promise<ImportSummary> {
 
   const institutionId = await ensureInstitution();
   const studentId = await ensureStudent(institutionId);
+  const before = await snapshotCatalog();
 
   let items = 0;
   for (const course of courses) {
@@ -698,10 +866,34 @@ export async function importAll(): Promise<ImportSummary> {
   const annotations = await backfillOverrides(studentId);
   await importAiConfig(studentId);
   const gradebook = await importGradebook();
+  // The gradebook is imported after the courses (FK), so reconcile completion
+  // now that both sides exist. This also repairs older scraped trees.
+  const completion = await reconcileCompletion(studentId);
   const purged = await purgeContainerHiddenItems();
   if (purged.count > 0) {
     console.log(
       `db: purged ${purged.count} phantom God's-Eye row(s): ${purged.ids.join(", ")}`,
+    );
+  }
+
+  const after = await snapshotCatalog();
+  const newCourses = addedEntries(before.courses, after.courses);
+  const newModules = addedEntries(before.modules, after.modules);
+  const newItems = addedEntries(before.items, after.items);
+
+  const catalogLog = {
+    generatedAt: new Date().toISOString(),
+    newCourses,
+    newModules,
+    newItems,
+  };
+  try {
+    const logFile = assist("data", "logs", "catalog", "last-import.json");
+    mkdirSync(path.dirname(logFile), { recursive: true });
+    writeFileSync(logFile, JSON.stringify(catalogLog, null, 2), "utf-8");
+  } catch (err) {
+    console.warn(
+      `db: could not write catalog diff (${err instanceof Error ? err.message : String(err)})`,
     );
   }
 
@@ -716,17 +908,26 @@ export async function importAll(): Promise<ImportSummary> {
     gradebookCategories: gradebook.categories,
     gradebookActivities: gradebook.activities,
     containerHiddenPurged: purged.count,
+    newCourses,
+    newModules,
+    newItems,
+    completionCorrected: completion.corrected,
+    notificationLedgerReset: completion.ledgerReset,
   };
 }
 
 async function main(): Promise<void> {
   const summary = await importAll();
   console.log(
-    `db: import ok — courses=${summary.courses} items=${summary.items} professors=${summary.professors} ` +
+    `db: import ok - courses=${summary.courses} items=${summary.items} professors=${summary.professors} ` +
       `answers=${summary.answers} submissions=${summary.submissions} annotations=${summary.annotations}` +
       (summary.containerHiddenPurged > 0
-        ? ` · purged ${summary.containerHiddenPurged} phantom God's-Eye row(s)`
-        : ""),
+        ? ` - purged ${summary.containerHiddenPurged} phantom God's-Eye row(s)`
+        : "") +
+      (summary.completionCorrected > 0
+        ? ` - completion corrected=${summary.completionCorrected} ledgerReset=${summary.notificationLedgerReset}`
+        : "") +
+      ` - new courses=${summary.newCourses.length} modules=${summary.newModules.length} items=${summary.newItems.length}`,
   );
   const file = assist("data", "exercises.json");
   console.log(`   next: npm run index:web (projects the DB to ${file})`);

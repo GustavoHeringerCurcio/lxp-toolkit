@@ -57,7 +57,7 @@ services:
       #   REFRESH_AT=11:00,18:00   # two refreshes per day
       #   AUTO_REFRESH=0           # disable automatic refreshes
       AUTO_REFRESH: "${AUTO_REFRESH:-1}"
-      REFRESH_AT: "${REFRESH_AT:-11:00}"
+      REFRESH_AT: "${REFRESH_AT:-11:00,18:00}"
       REFRESH_TZ: "${REFRESH_TZ:-America/Sao_Paulo}"
       REFRESH_BOOT_DELAY_SECONDS: "${REFRESH_BOOT_DELAY_SECONDS:-120}"
       # Single-dash interpolation so an empty value disables the quiet window.

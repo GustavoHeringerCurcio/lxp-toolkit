@@ -315,14 +315,24 @@ describe("scan", () => {
     );
   });
 
-  it("nao notifica prazo vencido antes do baseline", async () => {
+  it("envia um unico resumo das atividades vencidas antes do baseline", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-01T12:00:00Z"));
     vi.mocked(store.listNotificationItems).mockResolvedValue([
       makeItem({ id: 22, deadlineAt: "2025-12-01T08:00:00Z" }),
     ]);
     await runNotificationScan("refresh");
-    expect(store.claimNotificationEvent).not.toHaveBeenCalled();
+    expect(store.claimNotificationEvent).toHaveBeenCalledWith(
+      "expired",
+      "backlog:2026-01-01T00:00:00.000Z",
+      null,
+    );
+    // No individual "expired" event for a deadline before the baseline.
+    expect(store.claimNotificationEvent).not.toHaveBeenCalledWith(
+      "expired",
+      expect.stringContaining("22:"),
+      22,
+    );
   });
 
   it("detecta conclusao externa e suprime done quando o item tambem e novo", async () => {

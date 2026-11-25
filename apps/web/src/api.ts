@@ -342,6 +342,8 @@ export interface RefreshStatus {
   log?: string;
   /** Finished time of the most recent successful refresh (from Postgres). */
   lastSuccessAt?: string | null;
+  /** Catalog diff produced by the last import (new subjects/activities). */
+  changes?: { newCourses: number; newModules: number; newItems: number } | null;
   /** Daily scheduler configuration and last decision. */
   auto?: RefreshScheduleStatus;
 }

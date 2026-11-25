@@ -222,7 +222,10 @@ export function ContentRefreshButton({
 
 export function ContentRefreshBanner({ state }: { state: RefreshStatus }) {
   const { t } = useT();
-  if (!state.running && !state.error && !state.warning) return null;
+  const changes = state.changes;
+  const changeCount = changes ? changes.newItems + changes.newModules + changes.newCourses : 0;
+  const showChanges = !state.running && !state.error && !state.warning && changeCount > 0;
+  if (!state.running && !state.error && !state.warning && !showChanges) return null;
   const tone = state.error
     ? "border-destructive/30 bg-destructive/10 text-destructive"
     : state.warning && !state.running
@@ -241,8 +244,16 @@ export function ContentRefreshBanner({ state }: { state: RefreshStatus }) {
         <span>{t("refresh.failed", { error: state.error })}</span>
       ) : state.running ? (
         <span>{t(state.step ? serverStepKey(state.step) : "refresh.updating")}…</span>
+      ) : state.warning ? (
+        <span>{t("refresh.warning", { warning: state.warning })}</span>
       ) : (
-        <span>{t("refresh.warning", { warning: state.warning ?? "" })}</span>
+        <span>
+          {t("refresh.changes", {
+            items: changes?.newItems ?? 0,
+            modules: changes?.newModules ?? 0,
+            courses: changes?.newCourses ?? 0,
+          })}
+        </span>
       )}
     </div>
   );

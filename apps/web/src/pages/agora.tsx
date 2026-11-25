@@ -39,7 +39,7 @@ function SkeletonMain() {
 
 export function AgoraPage() {
   const { items, loading, courses } = useAppData();
-  const { setModuleFilter } = useScopePrefs();
+  const { setModuleFilter, setScope } = useScopePrefs();
   const { t, locale } = useT();
   const navigate = useNavigate();
   const [visible, setVisible] = useState(6);
@@ -57,15 +57,24 @@ export function AgoraPage() {
   const queueAll = useMemo(
     () =>
       items
-        .filter((e) => e.status !== "done")
-        .filter((e) => e.id !== next?.id)
+        .filter((e) => e.status === "open" && e.id !== next?.id)
         .sort((a, b) => cmpOpen(a, b, locale)),
     [items, next, locale],
   );
   const queue = useMemo(() => queueAll.slice(0, visible), [queueAll, visible]);
-  const overdue = useMemo(() => queue.filter((e) => e.status === "expired"), [queue]);
-  const upcoming = useMemo(() => queue.filter((e) => e.status !== "expired"), [queue]);
-  const hidden = Math.max(0, counts.open - (next ? 1 : 0) - upcoming.length);
+  // Overdue work is always surfaced, independent of the open-item queue slice.
+  // This is what previously buried the Simulado/DBE under 28 open activities.
+  const overdueAll = useMemo(
+    () =>
+      items
+        .filter((e) => e.status === "expired" && !e.done)
+        // Most recent misses first (a deadline 2 days ago is more actionable
+        // than one from last year).
+        .sort((a, b) => (b.daysLeft ?? -Infinity) - (a.daysLeft ?? -Infinity)),
+    [items],
+  );
+  const overdue = useMemo(() => overdueAll.slice(0, 3), [overdueAll]);
+  const hidden = Math.max(0, queueAll.length - queue.length);
 
   const modules = useMemo<ModuleProgress[]>(() => {
     const map = new Map<string, ModuleProgress>();
@@ -120,15 +129,29 @@ export function AgoraPage() {
                 <ArrowRight />
               </Button>
             </div>
-            {queue.length === 0 ? (
+            {queue.length === 0 && overdue.length === 0 ? (
               <NoData title={t("now.queueEmptyTitle")} detail={t("now.queueEmptyDetail")} />
             ) : (
               <div className="space-y-4">
                 {overdue.length > 0 && (
                   <div>
-                    <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-late">
-                      {t("now.queueOverdue")}
-                    </h3>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-[11px] font-semibold uppercase tracking-widest text-late">
+                        {t("now.queueOverdue")} ({overdueAll.length})
+                      </h3>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setScope("expired");
+                          setModuleFilter(null);
+                          navigate("/tarefas");
+                        }}
+                      >
+                        {t("now.seeAll")}
+                        <ArrowRight />
+                      </Button>
+                    </div>
                     <div className="grid gap-2.5">
                       {overdue.map((e) => (
                         <ActivityCard key={e.id} e={e} />
@@ -136,20 +159,18 @@ export function AgoraPage() {
                     </div>
                   </div>
                 )}
-                {upcoming.length > 0 && (
-                  <div>
-                    {overdue.length > 0 && (
-                      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                        {t("now.queueUpcoming")}
-                      </h3>
-                    )}
-                    <div className="grid gap-2.5">
-                      {upcoming.map((e) => (
-                        <ActivityCard key={e.id} e={e} />
-                      ))}
-                    </div>
+                <div>
+                  {overdue.length > 0 && (
+                    <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      {t("now.queueUpcoming")}
+                    </h3>
+                  )}
+                  <div className="grid gap-2.5">
+                    {queue.map((e) => (
+                      <ActivityCard key={e.id} e={e} />
+                    ))}
                   </div>
-                )}
+                </div>
                 {hidden > 0 && (
                   <Button variant="outline" size="sm" className="w-full" onClick={() => setVisible((v) => v + 2)}>
                     {t("now.queueMore", { n: hidden })}

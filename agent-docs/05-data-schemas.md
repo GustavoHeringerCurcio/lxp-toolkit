@@ -133,7 +133,7 @@ Each leaf item in the scraped content tree looks like:
   "expired": false,
   "hasDeadline": false, "deadlineAt": null,
   "hasCompletedAllAttempts": null,
-  "grade": null, "studentGrade": null,
+  "grade": null, "studentGrade": null,   // grade = activity max/worth, NOT the student's grade
   "attachments": [{ "url": "https://static.plataforma.grupoa.education/.../uuid.pdf",
                     "filename": "Apostila.pdf", "filesize": 834978 }],
   "html": "<div>…rendered content…</div>",   // null for quiz & link kinds
@@ -142,6 +142,21 @@ Each leaf item in the scraped content tree looks like:
   "links": []                                // populated for link kind
 }
 ```
+
+### Completion (`done`) rules
+
+`grade` on a tree item is the activity's **max/worth** (10, 50), not the student's grade. Never use
+it to decide completion.
+
+| Kind | Done when |
+|---|---|
+| `file_upload` | a non-draft `content.attempts[]`, `studentGrade != null`, `hasCompletedAllAttempts`, or gradebook `value`/`submitedAt`/`isSubmited` |
+| `quiz` | a finished attempt, `studentGrade`, `hasCompletedAllAttempts`, or gradebook submission |
+| `reading`/`pdf`/`link`/`other` | `progressId != null` or `viewed` |
+| `forum` | the student has at least one post |
+
+`import.ts::reconcileCompletion` repairs older item state from stored `raw_json` + the gradebook;
+`content.ts::isDone` computes it during a scrape.
 
 ## Quiz content (`topicTypeId` 15/29/30/37)
 

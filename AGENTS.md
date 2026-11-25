@@ -63,14 +63,22 @@ Full detail: `agent-docs/10-deployment.md`.
 - **Full refresh = `db:migrate` → `dump` → `dump-surfaces` → `index` → `index:web`** (that's what
   `sync`, `dev:fresh`, `web`'s `preweb`, and the web app's **"Atualizar"** button run; the migrate
   preflight fails before scraping when the DB is unreachable). The content tree is
-  the only source for the catalog; the gradebook is dumped separately for the human-readable
-  `scraped/grades-*.md` surfaces, not merged into the task list.
+  the only source for the catalog. The gradebook is also dumped per course and is **authoritative
+  for completion** (submitted/graded) of uploads and quizzes; `scraped/grades-*.md` remains the
+  human-readable surface.
+- **Completion semantics:** an activity is done only by real work: a non-draft upload attempt,
+  a finished quiz attempt, `studentGrade`, `hasCompletedAllAttempts`, or a gradebook
+  `value/submitedAt/isSubmited`. **The content-tree `grade` is the activity's max/worth (10, 50),
+  never the student's grade** — using it marked every graded upload done. `content.ts::isDone` and
+  `import.ts::reconcileCompletion` implement this; uploads ignore `progressId`/`viewed`.
 - **Daily auto-refresh:** the `app` process schedules refreshes (`src/refresh-scheduler.ts`) when
   `AUTO_REFRESH=1` (Docker Compose default). It runs a **boot catch-up** on the first start of the
-  day when `refresh_run` has no `ok` row today, plus fixed `REFRESH_AT` slots (`11:00`; list for
-  more) in `REFRESH_TZ`, quiet hours `REFRESH_QUIET_START`-`REFRESH_QUIET_END` (22:00-10:30), and
-  retries (60 min, max 3/day). Manual **Atualizar** shares the same controller and bypasses quiet
-  hours. History lives in `refresh_run` (migration `0018`); Docker tuning is in a root `.env`.
+  day when `refresh_run` has no `ok` row today, plus fixed `REFRESH_AT` slots (`11:00,18:00` in the
+  local Compose default; list for more) in `REFRESH_TZ`, quiet hours
+  `REFRESH_QUIET_START`-`REFRESH_QUIET_END` (22:00-10:30), and retries (60 min, max 3/day). Manual
+  **Atualizar** shares the same controller and bypasses quiet hours. Each child step has a timeout
+  and a timed-out/stale run is released instead of blocking the scheduler. History lives in
+  `refresh_run` (migration `0018`); Docker tuning is in a root `.env`.
 - **Refresh JSON logs:** `apps/server/data/logs/refresh/` holds `status.json`, one
   `runs/<local-time>_<source>.json` per run, and `scheduler/YYYY-MM-DD.json` (app starts +
   decisions, São Paulo time, 90-day retention, secrets redacted). Read `status.json` first, then
@@ -83,7 +91,8 @@ Full detail: `agent-docs/10-deployment.md`.
 - **Notifications:** `notification_config` + `notification_event` (migration `0020`) store per-student
   Discord webhook / Bark channels, four event toggles (new, <24h, done, expired) and an idempotency
   ledger. The scanner runs at server boot and after every refresh (no background timer); successful
-  sends also fire an immediate "done" alert. Secrets stay server-side and are returned masked.
+  sends also fire an immediate "done" alert. Items that expired before `baseline_at` produce one
+  summarized backlog alert. Secrets stay server-side and are returned masked.
   Bark Device Keys are validated on save (22-char shortuuid; 64-hex APNs tokens are rejected) and
   checked against `GET {BARK_BASE_URL}/register/:key`; a 400 blocks the save, an unreachable server
   only warns. `BARK_BASE_URL` (server env) selects the Bark server, default `https://api.day.app`.
@@ -102,6 +111,10 @@ Full detail: `agent-docs/10-deployment.md`.
   only lists **activities due from today onward** (past/old ones are never shown). A
   partial sweep prints `[gods-eye] partial …` and becomes a non-fatal refresh warning. Skip the
   sweep with `SKIP_HARVEST=1`; the columns live in migration `0014_content_visibility.sql`.
+  The sweep also follows `context.previousAndNextTopics` and counts 404 misses separately.
+- **New subjects/activities:** the dump records every module container (including empty ones) and
+  the import writes `apps/server/data/logs/catalog/last-import.json` with what was new. The refresh
+  status exposes it as `changes`, and the UI banner reports new activities/subjects/courses.
 - `scraped/raw/homework-index.json` (built by `npm run index`) links each open assignment to its
   section + sibling content + local files — prefer it over re-scraping. The web UI is
   `npm run dev` (serves `apps/web` via Vite + `apps/server`) or `npm run web` (built static).

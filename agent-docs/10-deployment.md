@@ -139,7 +139,7 @@ finished run in `refresh_run` and uses that history to implement:
 
 - **boot catch-up** — the first start of the day refreshes if no success was recorded today
   (the desktop is usually off overnight), after `REFRESH_BOOT_DELAY_SECONDS` (120);
-- **fixed slots** — `REFRESH_AT` (`11:00`, or a list like `11:00,18:00`) in `REFRESH_TZ`;
+- **fixed slots** — `REFRESH_AT` (local Compose default `11:00,18:00`) in `REFRESH_TZ`;
   one success per slot, and an early catch-up satisfies the first slot;
 - **quiet hours** — automatic runs wait between `REFRESH_QUIET_START`/`REFRESH_QUIET_END`
   (22:00–10:30); the manual **Atualizar** button bypasses them;
