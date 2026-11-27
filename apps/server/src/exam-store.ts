@@ -24,6 +24,8 @@ interface ExamRow {
   name: string;
   sequence: number;
   ends_at: Date | null;
+  starts_at: Date | null;
+  include_neutral: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -35,9 +37,30 @@ function toExam(row: ExamRow): Exam {
     name: row.name,
     sequence: row.sequence,
     endsAt: row.ends_at ? row.ends_at.toISOString() : null,
+    startsAt: row.starts_at ? row.starts_at.toISOString() : null,
+    includeNeutral: row.include_neutral === true,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
+}
+
+/** Date part of an ISO/date string. */
+function datePart(value: string): string {
+  return value.slice(0, 10);
+}
+
+/** Start of a calendar day in São Paulo (UTC-3, no DST). */
+function startOfDay(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(`${datePart(value)}T00:00:00-03:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Inclusive end of a calendar day in São Paulo (UTC-3, no DST). */
+function endOfDay(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(`${datePart(value)}T23:59:59-03:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export async function listExams(courseId: number): Promise<Exam[]> {
@@ -54,28 +77,37 @@ export interface SaveExamInput {
   name: string;
   sequence: number;
   endsAt?: string | null;
+  startsAt?: string | null;
+  includeNeutral?: boolean;
 }
 
 export async function saveExam(courseId: number, input: SaveExamInput): Promise<Exam> {
   const studentId = await getStudentId();
-  const endsAt = input.endsAt ? new Date(input.endsAt) : null;
+  const endsAt = endOfDay(input.endsAt);
+  const startsAt = startOfDay(input.startsAt);
+  const includeNeutral = input.includeNeutral ?? input.sequence === 1;
   if (input.id) {
     const rows = await query<ExamRow>(
-      `UPDATE course_exam SET name = $3, sequence = $4, ends_at = $5, updated_at = now()
-       WHERE id = $1 AND student_id = $2 RETURNING *`,
-      [input.id, studentId, input.name, input.sequence, endsAt],
+      `UPDATE course_exam
+          SET name = $3, sequence = $4, ends_at = $5, starts_at = $6,
+              include_neutral = $7, updated_at = now()
+        WHERE id = $1 AND student_id = $2 RETURNING *`,
+      [input.id, studentId, input.name, input.sequence, endsAt, startsAt, includeNeutral],
     );
     if (rows[0]) return toExam(rows[0]);
   }
   const rows = await query<ExamRow>(
-    `INSERT INTO course_exam(student_id, course_id, name, sequence, ends_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5, now())
+    `INSERT INTO course_exam(
+       student_id, course_id, name, sequence, ends_at, starts_at, include_neutral, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7, now())
      ON CONFLICT (student_id, course_id, sequence) DO UPDATE SET
        name = EXCLUDED.name,
        ends_at = EXCLUDED.ends_at,
+       starts_at = EXCLUDED.starts_at,
+       include_neutral = EXCLUDED.include_neutral,
        updated_at = now()
      RETURNING *`,
-    [studentId, courseId, input.name, input.sequence, endsAt],
+    [studentId, courseId, input.name, input.sequence, endsAt, startsAt, includeNeutral],
   );
   return toExam(rows[0]);
 }
@@ -227,16 +259,27 @@ export async function suggestExams(courseId: number): Promise<ExamSuggestion[]> 
   const sub = rows.find((r) => /substitutiv|recupera|final/i.test(r.name));
 
   const suggestions: ExamSuggestion[] = [];
+  let previousEnd: string | null = null;
+  const add = (name: string, endsAt: string | null): void => {
+    const sequence = suggestions.length + 1;
+    suggestions.push({
+      name,
+      sequence,
+      endsAt,
+      startsAt: previousEnd,
+      includeNeutral: sequence === 1,
+    });
+    previousEnd = endsAt;
+  };
+
   const first = byOrder(1);
-  if (first) suggestions.push({ name: "AVD1", sequence: 1, endsAt: iso(first.ends_at) });
+  if (first) add("AVD1", iso(first.ends_at));
   const second = byOrder(2);
-  if (second) suggestions.push({ name: "AVD2", sequence: 2, endsAt: iso(second.ends_at) });
-  if (sub) suggestions.push({ name: "Substitutiva", sequence: suggestions.length + 1, endsAt: iso(sub.ends_at) });
+  if (second) add("AVD2", iso(second.ends_at));
+  if (sub) add("Substitutiva", iso(sub.ends_at));
 
   if (suggestions.length === 0) {
-    for (const r of rows.slice(0, 2)) {
-      suggestions.push({ name: r.name, sequence: suggestions.length + 1, endsAt: iso(r.ends_at) });
-    }
+    for (const r of rows.slice(0, 2)) add(r.name, iso(r.ends_at));
   }
   return suggestions;
 }

@@ -3,6 +3,7 @@ import type {
   AbilitySettings,
   AiActivitySections,
   AiConfigDto,
+  Assessment,
   AiModels,
   AiProfile,
   AiStyle,
@@ -18,6 +19,7 @@ import type {
   Exam,
   ExamOverview,
   ExercisesPayload,
+  CalendarEvent,
   FlavorSource,
   GateResultDto,
   NotificationChannelResultDto,
@@ -74,6 +76,20 @@ function post(path: string, body: unknown): Promise<unknown> {
 
 export async function fetchExercises(): Promise<ExercisesPayload> {
   return req<ExercisesPayload>("/api/exercises");
+}
+
+/** Merged app calendar (tasks + gradebook assessments + portal appointments). */
+export async function fetchCalendar(
+  from: string,
+  to: string,
+): Promise<{ events: CalendarEvent[] }> {
+  const params = new URLSearchParams({ from, to });
+  return req<{ events: CalendarEvent[] }>(`/api/calendar?${params.toString()}`);
+}
+
+/** One gradebook assessment, including in-person exams with no content topic. */
+export async function fetchAssessment(id: number): Promise<{ assessment: Assessment }> {
+  return req<{ assessment: Assessment }>(`/api/assessments/${id}`);
 }
 
 // ── App link (public Tailscale URL) ────────────────────────────────────────
@@ -902,6 +918,8 @@ export interface SaveExamInput {
   name: string;
   sequence: number;
   endsAt?: string | null;
+  startsAt?: string | null;
+  includeNeutral?: boolean;
 }
 
 export interface ExamSaveResult {

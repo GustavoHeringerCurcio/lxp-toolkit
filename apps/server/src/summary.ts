@@ -270,7 +270,7 @@ export function buildFinalSummaryMessages(
     `Inclua cerca de ${profile.questions} questões.)\n` +
     `## Pegadinhas\n\n` +
     `Seja específico e fiel ao material. Não repita as instruções nem escreva introdução ou despedida. ` +
-    `Escreva o markdown direto, sem cercas de código (nada de \`\`\`).`;
+    `Formatação: use ### para subtópicos, **negrito** nos termos-chave (destacados no PDF), listas com marcadores e tabelas markdown para comparações. Numere as questões (1., 2., ...). Escreva o markdown direto, sem cercas de código (nada de \`\`\`).`;
   return [
     { role: "system", content: system },
     { role: "user", content: user },

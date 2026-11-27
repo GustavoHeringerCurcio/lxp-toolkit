@@ -23,6 +23,12 @@ export interface NewStudySummary {
   items: SummaryItem[];
 }
 
+/**
+ * Bump when the exam scoping/context algorithm changes. Old exam-scoped
+ * Resumos are treated as stale and regenerated on demand.
+ */
+export const SUMMARY_SCOPE_VERSION = 2;
+
 interface SummaryRow {
   id: string;
   course_id: string;
@@ -35,6 +41,7 @@ interface SummaryRow {
   item_count: number;
   char_count: number;
   items_json: SummaryItem[] | null;
+  scope_version: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -73,7 +80,11 @@ export async function getStudySummary(
        AND size = $5`,
     [studentId, courseId, moduleId, examId, size],
   );
-  return rows[0] ? toSummary(rows[0]) : null;
+  const row = rows[0];
+  if (!row) return null;
+  // Exam-scoped Resumos built before the window/neutral fix are stale.
+  if (examId != null && Number(row.scope_version) < SUMMARY_SCOPE_VERSION) return null;
+  return toSummary(row);
 }
 
 /** Create or replace the saved Resumo for a scope + size; returns the fresh row. */
@@ -93,13 +104,15 @@ export async function saveStudySummary(input: NewStudySummary): Promise<StudySum
     input.itemCount,
     input.content.length,
     JSON.stringify(input.items ?? []),
+    SUMMARY_SCOPE_VERSION,
   ];
   // Manual upsert: the scope key has two nullable columns, so matching on the
   // expression index is avoided in favour of `IS NOT DISTINCT FROM`.
   const updated = await query<SummaryRow>(
     `UPDATE study_summary SET
        subject_label = $6, content = $7, model = $8, prompt_hash = $9,
-       item_count = $10, char_count = $11, items_json = $12::jsonb, updated_at = now()
+       item_count = $10, char_count = $11, items_json = $12::jsonb,
+       scope_version = $13, updated_at = now()
      WHERE student_id = $1 AND course_id = $2
        AND module_id IS NOT DISTINCT FROM $3::bigint
        AND exam_id IS NOT DISTINCT FROM $4::bigint
@@ -111,8 +124,8 @@ export async function saveStudySummary(input: NewStudySummary): Promise<StudySum
 
   const inserted = await query<SummaryRow>(
     `INSERT INTO study_summary(
-       student_id, course_id, module_id, exam_id, size, subject_label, content, model, prompt_hash, item_count, char_count, items_json, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb, now())
+       student_id, course_id, module_id, exam_id, size, subject_label, content, model, prompt_hash, item_count, char_count, items_json, scope_version, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13, now())
      RETURNING *`,
     params,
   );

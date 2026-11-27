@@ -75,18 +75,38 @@ export function pickExamByOrder(exams: Exam[], order: number): number | null {
   return found ? found.id : null;
 }
 
-/** The exam an item's date falls into (the first exam ending on/after it). */
+/**
+ * The exam an item's date falls into. Exams are windows:
+ * `(startsAt, endsAt]`; when `startsAt` is absent, it is the previous exam's
+ * end. This prevents AVD2 from swallowing AVD1 material.
+ */
 export function classifyByDate(deadlineAt: string | null, exams: Exam[]): number | null {
   if (!deadlineAt) return null;
   const t = new Date(deadlineAt).getTime();
   if (Number.isNaN(t)) return null;
   const dated = exams
     .filter((e) => e.endsAt)
-    .sort((a, b) => new Date(a.endsAt as string).getTime() - new Date(b.endsAt as string).getTime());
+    .sort(
+      (a, b) =>
+        a.sequence - b.sequence ||
+        new Date(a.endsAt as string).getTime() - new Date(b.endsAt as string).getTime(),
+    );
   if (dated.length === 0) return null;
-  for (const e of dated) {
-    if (t <= new Date(e.endsAt as string).getTime()) return e.id;
+
+  const endOf = (e: Exam): number => new Date(e.endsAt as string).getTime();
+  // The first exam owns everything up to its end (including before an explicit
+  // start; a term start is not required for classification).
+  if (t <= endOf(dated[0])) return dated[0].id;
+
+  let previousEnd = endOf(dated[0]);
+  for (let i = 1; i < dated.length; i++) {
+    const exam = dated[i];
+    const start = exam.startsAt ? new Date(exam.startsAt).getTime() : previousEnd;
+    const end = endOf(exam);
+    if (t > start && t <= end) return exam.id;
+    previousEnd = end;
   }
+  // Later than the last exam: keep it in the last phase.
   return dated[dated.length - 1].id;
 }
 
@@ -187,15 +207,20 @@ export function resolveCourseExams(
   return resolved;
 }
 
-/** Keep items assigned to `examId` or neutral. `null` keeps everything. */
+/**
+ * Keep items assigned to `examId` (plus neutral material when `includeNeutral`).
+ * `examId = null` keeps everything.
+ */
 export function filterItemsForExam<T extends { id: number }>(
   items: T[],
   resolved: Map<number, ExamResolved>,
   examId: number | null,
+  includeNeutral = true,
 ): T[] {
   if (examId == null) return items;
   return items.filter((item) => {
     const r = resolved.get(item.id);
-    return !r || r.examId == null || r.examId === examId;
+    if (!r || r.examId == null) return includeNeutral;
+    return r.examId === examId;
   });
 }

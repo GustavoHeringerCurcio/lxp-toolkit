@@ -162,6 +162,7 @@ export interface ExercisesPayload {
   generatedAt: string;
   exercises: Exercise[];
   courses?: CourseProgress[];
+  assessments?: Assessment[];
 }
 
 export interface AnswerEntry {
@@ -519,6 +520,8 @@ export interface Exam {
   name: string;
   sequence: number;
   endsAt: string | null;
+  startsAt?: string | null;
+  includeNeutral?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -541,6 +544,8 @@ export interface ExamSuggestion {
   name: string;
   sequence: number;
   endsAt: string | null;
+  startsAt?: string | null;
+  includeNeutral?: boolean;
 }
 
 export interface ExamOverview {
@@ -600,4 +605,56 @@ export type AppLinkSource = "env" | "reported" | "tailscale";
 export interface AppLinkDto {
   url: string | null;
   source: AppLinkSource | null;
+}
+
+export type AssessmentStatus = "pending" | "submitted" | "graded" | "expired";
+export type AssessmentLinkStatus = "linked" | "stale" | "gradebook_only";
+
+export interface Assessment {
+  id: number;
+  courseId: number;
+  courseName: string;
+  categoryId: number | null;
+  categoryName: string;
+  title: string;
+  deadlineAt: string | null;
+  topicTypeId: number | null;
+  value: number | null;
+  maxValue: number | null;
+  isSubmitted: boolean;
+  submittedAt: string | null;
+  status: AssessmentStatus;
+  done: boolean;
+  matchedContentItemId: number | null;
+  matchedTitle: string | null;
+  matchedKind: string | null;
+  linkStatus: AssessmentLinkStatus;
+  portalUrl: string;
+}
+
+export type CalendarEventKind = "task" | "assessment" | "appointment";
+
+export interface CalendarEvent {
+  key: string;
+  kind: CalendarEventKind;
+  id: string;
+  title: string;
+  date: string;
+  startAt: string | null;
+  endAt: string | null;
+  allDay: boolean;
+  courseId: number | null;
+  courseName: string | null;
+  moduleName: string | null;
+  sectionTitle: string | null;
+  status: "open" | "expired" | "done" | AssessmentStatus;
+  done: boolean;
+  grade: number | null;
+  maxGrade: number | null;
+  activityId: number | null;
+  gradebookId: number | null;
+  topicTypeId: number | null;
+  linkStatus: AssessmentLinkStatus | null;
+  canOpenTask: boolean;
+  portalUrl: string | null;
 }

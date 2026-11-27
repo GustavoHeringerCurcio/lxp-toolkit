@@ -115,6 +115,15 @@ Full detail: `agent-docs/10-deployment.md`.
 - **New subjects/activities:** the dump records every module container (including empty ones) and
   the import writes `apps/server/data/logs/catalog/last-import.json` with what was new. The refresh
   status exposes it as `changes`, and the UI banner reports new activities/subjects/courses.
+- **Assessments / calendar:** the gradebook is a second source of truth. `gradebook_activity` rows
+  are linked to content items with a **term-aware** rule (`gradebook.ts::reconcileGradebookLinks`):
+  a reused `gradebook_id` pointing at an old-term topic is `stale`, and the current assessment is
+  surfaced from the gradebook as `gradebook_only`. Portal calendar appointments are persisted in
+  `calendar_appointment` (migration `0027`). `/api/calendar` merges appointments + content tasks +
+  gradebook assessments; `/api/exercises` also returns `assessments`. The UI has a `/calendario`
+  page and Agora “Amanhã / Próximos 7 dias”. Gradebook-only exams are reminded by a daily 7-day
+  digest; task reminders start 72h before the deadline (`NOTIFY_DUE_SOON_HOURS`), and deadline
+  changes are recorded in `deadline_change` and notified.
 - `scraped/raw/homework-index.json` (built by `npm run index`) links each open assignment to its
   section + sibling content + local files — prefer it over re-scraping. The web UI is
   `npm run dev` (serves `apps/web` via Vite + `apps/server`) or `npm run web` (built static).

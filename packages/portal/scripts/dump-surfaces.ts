@@ -151,11 +151,19 @@ async function main(): Promise<void> {
       }
     }
 
-    // Calendar appointments for the current 5-week window
+    // Calendar appointments for the full current month through +60 days.
+    // The previous rolling 5-week window stopped showing the early days of the
+    // month; a fresh sync on the 25th could not see November 2nd.
     try {
       const now = new Date();
-      const start = new Date(now.getTime() - 7 * 86400_000).toISOString().slice(0, 10);
-      const end = new Date(now.getTime() + 35 * 86400_000).toISOString().slice(0, 10);
+      const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 60);
+      const dateKey = (d: Date): string =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+          d.getDate(),
+        ).padStart(2, "0")}`;
+      const start = dateKey(startDate);
+      const end = dateKey(endDate);
       const r = await client.get<unknown>(
         `/v1/plataforma/calendar/appointment?appointmentCategory=1,2,3,7,5,6&startDate=${start}&endDate=${end}`,
       );

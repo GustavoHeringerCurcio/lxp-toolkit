@@ -17,6 +17,7 @@
     "notif:icons": "node scripts/notification-icons.mjs",
     "app:icons": "node scripts/app-icons.mjs",
     "tailscale": "node scripts/tailscale-serve.mjs",
+    "tailscale:supervisor": "node scripts/tailscale-supervisor.mjs",
     "gate": "node scripts/gate-proxy.mjs",
     "login": "npm run login -w @lxp-toolkit/portal",
     "dump": "npm run dump -w @lxp-toolkit/portal",

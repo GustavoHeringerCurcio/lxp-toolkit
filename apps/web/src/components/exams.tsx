@@ -15,7 +15,22 @@ interface DraftExam {
   id?: number;
   name: string;
   sequence: number;
+  startsAt: string | null;
   endsAt: string | null;
+  includeNeutral: boolean;
+}
+
+/** Local date input value (São Paulo), not the UTC slice of the ISO string. */
+function dateInputValue(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function useExamOverview(courseId: number | null) {
@@ -66,7 +81,14 @@ function ExamDateEditor({
 
   useEffect(() => {
     setDraft(
-      savedExams.map((e) => ({ id: e.id, name: e.name, sequence: e.sequence, endsAt: e.endsAt })),
+      savedExams.map((e) => ({
+        id: e.id,
+        name: e.name,
+        sequence: e.sequence,
+        startsAt: e.startsAt ?? null,
+        endsAt: e.endsAt,
+        includeNeutral: e.includeNeutral !== false,
+      })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overview?.exams]);
@@ -90,7 +112,9 @@ function ExamDateEditor({
           courseId,
           name,
           sequence: seq++,
+          startsAt: row.startsAt,
           endsAt: row.endsAt,
+          includeNeutral: row.includeNeutral,
         });
         kept.add(res.exam.id);
       }
@@ -116,37 +140,64 @@ function ExamDateEditor({
 
       <div className="space-y-2">
         {draft.map((row, index) => (
-          <div key={row.id ?? `new-${index}`} className="flex items-end gap-2">
-            <label className="min-w-0 flex-1">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                {t("exams.name")}
-              </span>
-              <Input
-                value={row.name}
-                onChange={(ev) => patch(index, { name: ev.target.value })}
-                placeholder={t("exams.namePlaceholder")}
+          <div key={row.id ?? `new-${index}`} className="rounded-lg border p-2">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="min-w-40 flex-1">
+                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {t("exams.name")}
+                </span>
+                <Input
+                  value={row.name}
+                  onChange={(ev) => patch(index, { name: ev.target.value })}
+                  placeholder={t("exams.namePlaceholder")}
+                />
+              </label>
+              <label className="w-36 shrink-0">
+                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {t("exams.startsAt")}
+                </span>
+                <Input
+                  type="date"
+                  value={dateInputValue(row.startsAt)}
+                  onChange={(ev) => patch(index, { startsAt: ev.target.value || null })}
+                />
+                {!row.startsAt && index > 0 && (
+                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                    {t("exams.startsAuto")}
+                  </span>
+                )}
+              </label>
+              <label className="w-36 shrink-0">
+                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {t("exams.endsAt")}
+                </span>
+                <Input
+                  type="date"
+                  value={dateInputValue(row.endsAt)}
+                  onChange={(ev) => patch(index, { endsAt: ev.target.value || null })}
+                />
+              </label>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t("exams.remove")}
+                onClick={() => setDraft((prev) => prev.filter((_, i) => i !== index))}
+              >
+                <Trash2 aria-hidden />
+              </Button>
+            </div>
+            <label className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-3.5 accent-primary"
+                checked={row.includeNeutral}
+                onChange={(ev) => patch(index, { includeNeutral: ev.target.checked })}
               />
-            </label>
-            <label className="w-40 shrink-0">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                {t("exams.endsAt")}
+              <span>
+                <span className="font-medium text-foreground">{t("exams.includeNeutral")}</span>
+                <span className="block">{t("exams.includeNeutralHint")}</span>
               </span>
-              <Input
-                type="date"
-                value={row.endsAt ? row.endsAt.slice(0, 10) : ""}
-                onChange={(ev) =>
-                  patch(index, { endsAt: ev.target.value ? new Date(ev.target.value).toISOString() : null })
-                }
-              />
             </label>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t("exams.remove")}
-              onClick={() => setDraft((prev) => prev.filter((_, i) => i !== index))}
-            >
-              <Trash2 aria-hidden />
-            </Button>
           </div>
         ))}
       </div>
@@ -156,7 +207,16 @@ function ExamDateEditor({
           variant="outline"
           size="sm"
           onClick={() =>
-            setDraft((prev) => [...prev, { name: "", sequence: prev.length + 1, endsAt: null }])
+            setDraft((prev) => [
+              ...prev,
+              {
+                name: "",
+                sequence: prev.length + 1,
+                startsAt: null,
+                endsAt: null,
+                includeNeutral: prev.length === 0,
+              },
+            ])
           }
         >
           <Plus aria-hidden />
@@ -167,7 +227,15 @@ function ExamDateEditor({
             variant="outline"
             size="sm"
             onClick={() =>
-              setDraft(suggestions.map((s) => ({ name: s.name, sequence: s.sequence, endsAt: s.endsAt })))
+              setDraft(
+                suggestions.map((s) => ({
+                  name: s.name,
+                  sequence: s.sequence,
+                  startsAt: s.startsAt ?? null,
+                  endsAt: s.endsAt,
+                  includeNeutral: s.includeNeutral !== false,
+                })),
+              )
             }
           >
             <Wand2 aria-hidden />

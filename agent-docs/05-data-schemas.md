@@ -158,6 +158,11 @@ it to decide completion.
 `import.ts::reconcileCompletion` repairs older item state from stored `raw_json` + the gradebook;
 `content.ts::isDone` computes it during a scrape.
 
+The gradebook is also authoritative for **graded activities that have no current content topic**
+(e.g. `AVD1 - SOMATIVA 1 - 27/11/2026`). Its `gradebook_id` can be reused across terms, so
+`gradebook.ts::reconcileGradebookLinks` only links when the deadline/title agree; otherwise the link
+is `stale` and the current row is shown as `gradebook_only` from `/api/assessments` and the calendar.
+
 ## Quiz content (`topicTypeId` 15/29/30/37)
 
 ```json

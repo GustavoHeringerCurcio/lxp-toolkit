@@ -535,9 +535,8 @@ function runsToHtml(runs: MdRun[]): string {
   return runs.map((r) => (r.bold ? `<strong>${escapeHtml(r.text)}</strong>` : escapeHtml(r.text))).join("");
 }
 
-/** Markdown → HTML for the LibreOffice path (styled tables/lists/headings). */
-function markdownToHtml(src: string): string {
-  const blocks = parseMarkdown(src);
+/** Render parsed markdown blocks as HTML (shared by answer and summary PDFs). */
+function blocksToHtml(blocks: MdBlock[]): string {
   const out: string[] = [];
   let listOpen: "ul" | "ol" | null = null;
   const closeList = () => {
@@ -586,6 +585,11 @@ function markdownToHtml(src: string): string {
   return out.join("\n");
 }
 
+/** Markdown → HTML (used by the generic answer renderer). */
+function markdownToHtml(src: string): string {
+  return blocksToHtml(parseMarkdown(src));
+}
+
 /**
  * Heuristic: does this answer carry Markdown structure (table/heading/list/bold)
  * that the plain renderer would print as literal symbols? Used to auto-route the
@@ -620,6 +624,299 @@ const PDF_STYLE = `
   .diagram-page figcaption { margin-top: 0.5em; color: #525252; font-size: 9.5pt; }
 `;
 
+const SUMMARY_TONE_HEX: Record<string, string> = {
+  blue: "#0b6fd8",
+  green: "#1f8a5b",
+  amber: "#b7791f",
+  violet: "#6b46c1",
+  rose: "#b8325a",
+  teal: "#0f766e",
+};
+
+const SUMMARY_TONES = ["blue", "green", "amber", "violet", "teal", "rose"];
+
+function summaryTone(heading: string, index: number): string {
+  const text = heading
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (/visao geral|overview|introducao|contexto|resumo geral/.test(text)) return "blue";
+  if (/topico|topicos|topico-chave|topicos-chave|fundamentos/.test(text)) return "green";
+  if (/conceito|mais caem|conceitos que mais caem|definicoes/.test(text)) return "amber";
+  if (/questao|questoes|questoes provaveis|prova|exame/.test(text)) return "violet";
+  if (/dica|dicas|pegadinha|pegadinhas|atencao|erro|erros|revisao/.test(text)) return "rose";
+  return SUMMARY_TONES[index % SUMMARY_TONES.length] ?? "blue";
+}
+
+interface SummarySection {
+  heading: Extract<MdBlock, { kind: "heading" }> | null;
+  blocks: MdBlock[];
+}
+
+function splitSummarySections(blocks: MdBlock[]): SummarySection[] {
+  const sections: SummarySection[] = [];
+  let current: SummarySection = { heading: null, blocks: [] };
+  const meaningful = (blocks: MdBlock[]): boolean =>
+    blocks.some((block) => block.kind !== "blank");
+  for (const block of blocks) {
+    if (block.kind === "heading" && block.level <= 2) {
+      if (current.heading || meaningful(current.blocks)) sections.push(current);
+      current = { heading: block, blocks: [] };
+      continue;
+    }
+    current.blocks.push(block);
+  }
+  if (current.heading || meaningful(current.blocks)) sections.push(current);
+  return sections;
+}
+
+/** A richer, study-oriented HTML for the Resumo (colors + section cards). */
+function summaryMarkdownToHtml(markdown: string): string {
+  const sections = splitSummarySections(parseMarkdown(markdown));
+  const named = sections.filter((section) => section.heading);
+  const toneByHeading = new Map<number, string>();
+  named.forEach((section, index) => {
+    const text = section.heading!.runs.map((run) => run.text).join(" ").trim();
+    toneByHeading.set(index, summaryTone(text, index));
+  });
+
+  const toc = named.length >= 2
+    ? `<nav class="toc">
+  <div class="toc-title">Nesta matéria</div>
+  <ol>${named
+    .map((section, index) => {
+      const text = section.heading!.runs.map((run) => run.text).join(" ").trim();
+      const tone = toneByHeading.get(index) ?? "blue";
+      return `<li><a href="#resumo-sec-${index}"><span class="toc-dot" style="background:${SUMMARY_TONE_HEX[tone]}"></span>${escapeHtml(text)}</a></li>`;
+    })
+    .join("")}</ol>
+</nav>`
+    : "";
+
+  let sectionIndex = 0;
+  const html = sections
+    .map((section) => {
+      if (!section.heading) {
+        const body = blocksToHtml(section.blocks);
+        return body.trim() ? `<div class="lead">${body}</div>` : "";
+      }
+      const headingText = section.heading.runs.map((run) => run.text).join(" ").trim();
+      const tone = summaryTone(headingText, sectionIndex);
+      const isQuestions = /quest/i.test(
+        headingText.normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
+      );
+      const number = String(sectionIndex + 1).padStart(2, "0");
+      const current = sectionIndex++;
+      return `<section id="resumo-sec-${current}" class="section section--${tone}${isQuestions ? " section--questions" : ""}">
+  <div class="section-head">
+    <span class="section-num">${number}</span>
+    <h2>${runsToHtml(section.heading.runs)}</h2>
+  </div>
+  <div class="section-body">${blocksToHtml(section.blocks)}</div>
+</section>`;
+    })
+    .join("\n");
+
+  return `${toc}${html}`;
+}
+
+const SUMMARY_PDF_STYLE = `
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Liberation Sans", "DejaVu Sans", Arial, sans-serif;
+    font-size: 10.5pt; line-height: 1.5; color: #1f2937; background: #ffffff;
+  }
+  .hero {
+    background: linear-gradient(135deg, #0b4f9c 0%, #0b6fd8 58%, #3b9dff 100%);
+    color: #fff; padding: 26px 22px 24px; border-radius: 0 0 20px 20px;
+  }
+  .hero-kicker {
+    font-size: 8pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+    color: rgba(255,255,255,.82);
+  }
+  .hero h1 {
+    font-size: 23pt; line-height: 1.14; margin: 8px 0 12px;
+    font-weight: 700; letter-spacing: -.02em;
+  }
+  .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 999px; font-size: 8pt;
+    background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.24);
+  }
+  .toc {
+    margin: 18px 0 10px; padding: 14px 16px 12px;
+    border: 1px solid #e5e7eb; border-radius: 14px; background: #f8fafc;
+  }
+  .toc-title {
+    font-size: 8.5pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: #6b7280; margin-bottom: 8px;
+  }
+  .toc ol {
+    margin: 0; padding-left: 18px; columns: 2; column-gap: 26px;
+    font-size: 9.5pt; color: #374151;
+  }
+  .toc li { margin: 0 0 4px; break-inside: avoid; }
+  .toc a { color: #0b4f9c; text-decoration: none; }
+  .toc-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .lead { margin: 10px 0 14px; padding: 2px 2px 0; }
+  .section {
+    margin: 14px 0 0; border: 1px solid #e5e7eb; border-radius: 14px;
+    background: #ffffff;
+  }
+  .section-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; background: var(--tone-soft);
+    border-bottom: 1px solid #e5e7eb; break-after: avoid;
+    border-radius: 13px 13px 0 0;
+  }
+  .section-num {
+    width: 27px; height: 27px; border-radius: 9px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--tone); color: #fff; font-size: 9pt; font-weight: 700;
+  }
+  .section-head h2 {
+    margin: 0; font-size: 14pt; line-height: 1.25;
+    color: var(--tone-ink); letter-spacing: -.01em;
+  }
+  .section-body { padding: 12px 16px 4px; border-radius: 0 0 13px 13px; }
+  .section--blue { --tone:#0b6fd8; --tone-soft:#eaf3ff; --tone-ink:#0b4f9c; }
+  .section--green { --tone:#1f8a5b; --tone-soft:#e9f7ef; --tone-ink:#176b47; }
+  .section--amber { --tone:#b7791f; --tone-soft:#fff6e5; --tone-ink:#8a5a13; }
+  .section--violet { --tone:#6b46c1; --tone-soft:#f3edff; --tone-ink:#53349a; }
+  .section--rose { --tone:#b8325a; --tone-soft:#fdecf1; --tone-ink:#922747; }
+  .section--teal { --tone:#0f766e; --tone-soft:#e6f7f5; --tone-ink:#0b5c55; }
+  .section h3 {
+    margin: 14px 0 6px; font-size: 11.5pt; line-height: 1.3;
+    color: var(--tone-ink); break-after: avoid;
+  }
+  .section p { margin: 0 0 8px; }
+  .section ul, .section ol { margin: 0 0 10px; padding-left: 20px; }
+  .section li { margin: 0 0 4px; }
+  .section li::marker { color: var(--tone); font-weight: 700; }
+  .section-body strong {
+    color: var(--tone-ink); background: var(--tone-soft);
+    padding: 0 2px; border-radius: 3px;
+  }
+  .section table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 8px 0 12px; font-size: 9.5pt; border: 1px solid #e5e7eb;
+    border-radius: 8px; overflow: hidden;
+  }
+  .section thead { display: table-header-group; }
+  .section th {
+    background: var(--tone); color: #fff; text-align: left;
+    padding: 7px 9px; font-size: 9pt;
+  }
+  .section td { padding: 6px 9px; border-top: 1px solid #e5e7eb; vertical-align: top; }
+  .section tbody tr:nth-child(even) td { background: var(--tone-soft); }
+  .section tr { break-inside: avoid; }
+  .section blockquote {
+    margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--tone);
+    background: var(--tone-soft); color: #374151; border-radius: 0 8px 8px 0;
+  }
+  .section hr { border: 0; border-top: 1px solid #e5e7eb; margin: 14px 0; }
+  .section code {
+    font-family: "DejaVu Sans Mono", monospace; font-size: 9pt;
+    background: #f3f4f6; padding: 0 3px; border-radius: 3px;
+  }
+  .section--questions .section-body { counter-reset: resumo-q; }
+  .section--questions .section-body > ol,
+  .section--questions .section-body > ul { list-style: none; padding-left: 0; }
+  .section--questions .section-body > ol > li {
+    counter-increment: resumo-q; position: relative;
+    margin: 0 0 8px; padding: 9px 11px 9px 38px;
+    border: 1px solid #e4d8fb; border-left: 4px solid #6b46c1;
+    background: #fbf8ff; border-radius: 8px; break-inside: avoid;
+  }
+  .section--questions .section-body > ol > li::before {
+    content: counter(resumo-q);
+    position: absolute; left: 9px; top: 9px;
+    width: 20px; height: 20px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    background: #6b46c1; color: #fff; font-size: 8.5pt; font-weight: 700;
+  }
+  .section--questions .section-body > ul > li {
+    margin: 0 0 8px 28px; padding: 2px 0 2px 12px;
+    border: 0; border-left: 2px solid #d9cdf5;
+    background: transparent; border-radius: 0; color: #4b5563;
+    break-inside: avoid;
+  }
+  .section--questions .section-body li ul,
+  .section--questions .section-body li ol { margin-top: 6px; }
+`;
+
+function buildSummaryHtml(title: string, inner: string): string {
+  const today = new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "long",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date());
+  return `<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>${SUMMARY_PDF_STYLE}</style></head>
+<body>
+<header class="hero">
+  <div class="hero-kicker">LXP Toolkit · Resumo de estudo</div>
+  <h1>${escapeHtml(title)}</h1>
+  <div class="hero-meta">
+    <span class="chip">${escapeHtml(today)}</span>
+    <span class="chip">Material de revisão</span>
+  </div>
+</header>
+<main class="content">
+${inner}
+</main>
+</body></html>`;
+}
+
+const SUMMARY_PDF_VERSION = "3";
+
+/** Cache directory for the study-summary PDFs. */
+function summaryPdfCacheDir(): string {
+  return assist("data", "summary-pdf");
+}
+
+/**
+ * Render the study Resumo as a styled PDF: colored section cards, a table of
+ * contents, good tables, highlighted key terms and a page footer.
+ */
+export async function summaryToPdf(markdown: string, title: string): Promise<string | null> {
+  const cache = summaryPdfCacheDir();
+  const key = createHash("sha256")
+    .update(`${SUMMARY_PDF_VERSION}\n${title}\n${markdown}`)
+    .digest("hex");
+  const htmlPath = path.join(cache, `${key}.html`);
+  const pdfPath = path.join(cache, `${key}.pdf`);
+  if (existsSync(pdfPath)) return pdfPath;
+
+  mkdirSync(cache, { recursive: true });
+  const html = buildSummaryHtml(title, summaryMarkdownToHtml(markdown));
+  writeFileSync(htmlPath, html, "utf-8");
+
+  const footerTemplate = `<div style="width:100%; padding:0 14mm; font-family:Arial,sans-serif; font-size:7.5pt; color:#6b7280; display:flex; justify-content:space-between;">
+  <span>${escapeHtml(title)} · LXP Toolkit</span>
+  <span>página <span class="pageNumber"></span> / <span class="totalPages"></span></span>
+</div>`;
+
+  const rendered = await renderHtmlPdfChromium(html, pdfPath, {
+    displayHeaderFooter: true,
+    headerTemplate: "<div></div>",
+    footerTemplate,
+    margin: { top: "15mm", bottom: "18mm", left: "14mm", right: "14mm" },
+    preferCSSPageSize: false,
+    format: "A4",
+  });
+  if (rendered) return pdfPath;
+
+  // Last-resort deterministic renderer (no Chromium): still readable, just
+  // without the study colors.
+  writeFileSync(pdfPath, renderRichPdf(title, markdown));
+  return pdfPath;
+}
+
 export function buildAnswerHtml(
   baseName: string,
   inner: string,
@@ -639,8 +936,21 @@ export function buildAnswerHtml(
 <body><h1>${escapeHtml(baseName)}</h1>${inner}${diagramHtml}</body></html>`;
 }
 
+interface ChromiumPdfOptions {
+  displayHeaderFooter?: boolean;
+  headerTemplate?: string;
+  footerTemplate?: string;
+  margin?: { top?: string; bottom?: string; left?: string; right?: string };
+  preferCSSPageSize?: boolean;
+  format?: "A4";
+}
+
 /** Render HTML to PDF with Chromium (used when an image page is present). */
-async function renderHtmlPdfChromium(html: string, out: string): Promise<boolean> {
+async function renderHtmlPdfChromium(
+  html: string,
+  out: string,
+  options: ChromiumPdfOptions = {},
+): Promise<boolean> {
   try {
     const { chromium } = await import("playwright");
     const noSandbox = /^(1|true|yes)$/i.test(process.env.PLAYWRIGHT_NO_SANDBOX ?? "");
@@ -650,7 +960,12 @@ async function renderHtmlPdfChromium(html: string, out: string): Promise<boolean
       await page.setContent(html, { waitUntil: "load" });
       const pdf = await page.pdf({
         printBackground: true,
-        preferCSSPageSize: true,
+        preferCSSPageSize: options.preferCSSPageSize ?? true,
+        displayHeaderFooter: options.displayHeaderFooter === true,
+        headerTemplate: options.headerTemplate ?? "<div></div>",
+        footerTemplate: options.footerTemplate ?? "<div></div>",
+        margin: options.margin,
+        format: options.format,
       });
       writeFileSync(out, pdf);
       return true;

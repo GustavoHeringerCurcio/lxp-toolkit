@@ -262,12 +262,17 @@ export async function buildSubjectContext(
     params,
   );
 
-  // Scope to the current exam: keep items assigned to it plus neutral material.
+  // Scope to the current exam window. Later exams exclude neutral/general
+  // material by default (AVD2 must not re-use AVD1); the Provas toggle can
+  // include it explicitly.
   let items = rows;
+  let resolved: ReturnType<typeof resolveCourseExams> | null = null;
   if (examId != null) {
     const exams = await listExams(courseId);
+    const exam = exams.find((e) => e.id === examId);
+    const includeNeutral = exam?.includeNeutral !== false;
     const maps = await getClassifyMaps(courseId, exams);
-    const resolved = resolveCourseExams(
+    resolved = resolveCourseExams(
       rows.map((r) => ({
         id: Number(r.id),
         moduleId: r.module_id != null ? Number(r.module_id) : null,
@@ -280,9 +285,10 @@ export async function buildSubjectContext(
       exams,
       maps,
     );
-    items = rows.filter((r) => {
-      const res = resolved.get(Number(r.id));
-      return !res || res.examId == null || res.examId === examId;
+    items = rows.filter((row) => {
+      const res = resolved!.get(Number(row.id));
+      if (!res || res.examId == null) return includeNeutral;
+      return res.examId === examId;
     });
   }
 
@@ -327,9 +333,11 @@ export async function buildSubjectContext(
 
   const ctxItems: ContextItem[] = [];
   const allQuestions: ContextQuestion[] = [];
-  const blocks: string[] = [];
-  let size = 0;
+  const blocksById = new Map<number, string>();
 
+  // Build the full scoped item list first. The AI text budget may truncate
+  // later items, but Resumo (map-reduce) and mixed Quiz must see every scoped
+  // item and question — not just the items that fit the first prompt.
   for (const row of items) {
     const id = Number(row.id);
     const questions = questionsByItem.get(id) ?? [];
@@ -352,25 +360,40 @@ export async function buildSubjectContext(
     };
     ctxItems.push(item);
 
-    if (size >= MAX_CONTEXT_CHARS) continue;
     const parts: string[] = [`==== ${row.title} [${row.kind}] ====`];
-    if (row.module_name) parts.push(`Módulo: ${row.module_name}${row.section_title ? ` · ${row.section_title}` : ""}`);
-    if (instructions) parts.push(`Instruções: ${instructions}`);
+    if (row.module_name) parts.push(`MA3dulo: ${row.module_name}${row.section_title ? ` A� ${row.section_title}` : ""}`);
+    if (instructions) parts.push(`InstruAA�es: ${instructions}`);
     if (material) parts.push(material.slice(0, MAX_ITEM_CHARS));
     if (questions.length) {
-      const lines = ["Questões do quiz:"];
+      const lines = ["QuestA�es do quiz:"];
       questions.forEach((q, i) => {
-        lines.push(`  Questão ${i + 1}. ${q.text}`);
+        lines.push(`  QuestA�o ${i + 1}. ${q.text}`);
         q.options.forEach((opt, j) => lines.push(`     ${String.fromCharCode(97 + j)}) ${opt}`));
       });
       parts.push(lines.join("\n"));
     }
     if (item.fileNames.length) parts.push(`Arquivos: ${item.fileNames.join(", ")}`);
+    blocksById.set(id, parts.join("\n"));
+  }
 
-    const block = parts.join("\n");
+  // The prompt text prioritizes exam-assigned items over neutral material, so
+  // AVD2 never spends its 60k budget on AVD1/general content first.
+  const rank = (id: number): number => {
+    const exam = resolved?.get(id)?.examId ?? null;
+    if (examId == null) return 0;
+    return exam === examId ? 0 : 1;
+  };
+  const ordered = [...items].sort(
+    (a, b) => rank(Number(a.id)) - rank(Number(b.id)) || Number(a.id) - Number(b.id),
+  );
+
+  const blocks: string[] = [];
+  let size = 0;
+  for (const row of ordered) {
+    const block = blocksById.get(Number(row.id)) ?? "";
     if (size + block.length > MAX_CONTEXT_CHARS) {
       const room = MAX_CONTEXT_CHARS - size;
-      if (room > 500) blocks.push(block.slice(0, room) + "\n…[truncado]");
+      if (room > 500) blocks.push(block.slice(0, room) + "\n�?�[truncado]");
       break;
     }
     blocks.push(block);

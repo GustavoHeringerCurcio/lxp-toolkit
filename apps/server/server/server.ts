@@ -22,6 +22,7 @@ import {
 import { loadExercises, ASSISTANT_EXERCISES_FILE } from "../src/build.js";
 import { healthCheck, query, runMigrations } from "../src/db.js";
 import { importAll } from "../src/import.js";
+import { getAssessment, listAssessments, listCalendar } from "../src/assessments.js";
 import { ensureContentText } from "../src/extract.js";
 import { buildCourseProgress, getCatalogVersion, readProjectionMeta, writeProjection } from "../src/project.js";
 import {
@@ -158,7 +159,7 @@ import {
   type SendMode,
 } from "../src/send.js";
 import { officeToPdf, previewCacheDir } from "../src/office.js";
-import { answerToPdf } from "../src/pdf.js";
+import { answerToPdf, summaryToPdf } from "../src/pdf.js";
 import { archiveArtifact, artifactDownloadPath, createBugReport } from "../src/reports.js";
 import { renderFilledDocx } from "../src/docx.js";
 import { buildDiagram } from "../src/diagram-tool.js";
@@ -1083,12 +1084,34 @@ const server = createServer(async (req, res) => {
     }
 
     if (url === "/api/exercises") {
-      const [exercises, courses] = await Promise.all([allViews(), buildCourseProgress()]);
+      const [exercises, courses, assessments] = await Promise.all([
+        allViews(),
+        buildCourseProgress(),
+        listAssessments(),
+      ]);
       return json(res, 200, {
         generatedAt: new Date().toISOString(),
         exercises,
         courses,
+        assessments,
       });
+    }
+    if (url === "/api/assessments") {
+      return json(res, 200, { assessments: await listAssessments() });
+    }
+    const assessmentMatch = /^\/api\/assessments\/(\d+)$/.exec(url);
+    if (assessmentMatch && method === "GET") {
+      const assessment = await getAssessment(Number(assessmentMatch[1]));
+      if (!assessment) return json(res, 404, { error: "avaliação não encontrada" });
+      return json(res, 200, { assessment });
+    }
+    if (url === "/api/calendar" && method === "GET") {
+      const params = new URL(req.url ?? "/", "http://local").searchParams;
+      const events = await listCalendar(
+        params.get("from") ?? undefined,
+        params.get("to") ?? undefined,
+      );
+      return json(res, 200, { events });
     }
     if (url === "/api/preview" && (method === "GET" || method === "HEAD")) {
       const src = new URL(req.url ?? "/", "http://local").searchParams.get("url") ?? "";
@@ -1390,7 +1413,7 @@ const server = createServer(async (req, res) => {
       const title = String(b.title ?? "Resumo").trim() || "Resumo";
       const download = b.download === true;
       if (!markdown.trim()) return json(res, 400, { error: "markdown obrigatório" });
-      const pdfPath = await answerToPdf(markdown, title, { rich: true });
+      const pdfPath = await summaryToPdf(markdown, title);
       if (!pdfPath || !existsSync(pdfPath)) {
         return json(res, 500, { error: "não foi possível gerar o PDF" });
       }

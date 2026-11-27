@@ -1,6 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchConfig, fetchExercises, fetchProfessorLinks } from "@/api";
-import type { AiConfigDto, CourseProgress, Exercise, ExerciseKind, ProfessorLink } from "@/types";
+import type {
+  AiConfigDto,
+  Assessment,
+  CourseProgress,
+  Exercise,
+  ExerciseKind,
+  ProfessorLink,
+} from "@/types";
 
 export type Scope = "open" | "expired" | "done" | "all";
 
@@ -12,6 +19,8 @@ interface AppDataValue {
   professorLinks: ProfessorLink[];
   /** Official portal progress per course, from the last capture. */
   courses: CourseProgress[];
+  /** Gradebook assessments, including exams with no content-tree task. */
+  assessments: Assessment[];
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
@@ -39,6 +48,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [cfg, setCfg] = useState<AiConfigDto | null>(null);
   const [professorLinks, setProfessorLinks] = useState<ProfessorLink[]>([]);
   const [courses, setCourses] = useState<CourseProgress[]>([]);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState<Scope>("open");
@@ -59,6 +69,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       setCfg(c);
       setProfessorLinks(links);
       setCourses(p.courses ?? []);
+      setAssessments(p.assessments ?? []);
     } catch (x) {
       setError(x instanceof Error ? x.message : String(x));
     } finally {
@@ -78,6 +89,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       setCfg(c);
       setProfessorLinks(links);
       setCourses(p.courses ?? []);
+      setAssessments(p.assessments ?? []);
     } catch (x) {
       setError(x instanceof Error ? x.message : String(x));
     }
@@ -102,6 +114,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       cfg,
       professorLinks,
       courses,
+      assessments,
       loading,
       error,
       reload,
@@ -115,6 +128,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       cfg,
       professorLinks,
       courses,
+      assessments,
       loading,
       error,
       reload,

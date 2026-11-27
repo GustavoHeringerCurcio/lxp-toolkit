@@ -10,7 +10,9 @@
  * never blocks a refresh or a submission. The `notification_event` table is
  * an idempotency ledger, so boot + refresh cannot double-notify.
  */
+import { listAssessments } from "./assessments.js";
 import { actionKindFor } from "./build.js";
+import { query } from "./db.js";
 import {
   claimNotificationEvent,
   finishNotificationEvent,
@@ -19,6 +21,7 @@ import {
   listNotificationItems,
 } from "./store.js";
 import type {
+  Assessment,
   ContentKind,
   NotificationChannel,
   NotificationChannelResult,
@@ -27,7 +30,12 @@ import type {
   NotificationItem,
 } from "./types.js";
 
-const DUE_SOON_MS = 24 * 60 * 60 * 1000;
+/** How early a "due soon" reminder starts. Defaults to 72h (not 24h). */
+function dueSoonMs(): number {
+  const raw = process.env.NOTIFY_DUE_SOON_HOURS?.trim();
+  const hours = raw ? Number(raw) : 72;
+  return (Number.isFinite(hours) && hours > 0 ? hours : 72) * 60 * 60 * 1000;
+}
 const DEFAULT_BARK_BASE_URL = "https://api.day.app";
 
 type EventToggleKey = "notifyNew" | "notifyDueSoon" | "notifyDone" | "notifyExpired";
@@ -357,11 +365,22 @@ export function formatNotification(kind: NotificationEventKind, item?: Notificat
           item?.deadlineAt ? ` · vence ${deadlineLabel(item.deadlineAt)}` : ""
         }`,
       };
-    case "due_soon":
+    case "due_soon": {
+      const deadline = item?.deadlineAt ? new Date(item.deadlineAt).getTime() : NaN;
+      const hours = Number.isFinite(deadline)
+        ? Math.max(1, Math.ceil((deadline - Date.now()) / 3_600_000))
+        : null;
+      const heading =
+        hours == null
+          ? "Prazo próximo"
+          : hours <= 24
+            ? "Faltam menos de 24h"
+            : `Vence em ${Math.ceil(hours / 24)} dias`;
       return {
-        title: "Faltam menos de 24h",
+        title: heading,
         body: `${title}${course ? ` — ${course}` : ""} · vence ${deadlineLabel(item?.deadlineAt ?? null)}`,
       };
+    }
     case "done":
       return {
         title: "Atividade concluída",
@@ -624,6 +643,253 @@ async function notifyOverdueBacklog(
   return "failed";
 }
 
+/** Send a custom title/body digest through every enabled channel. */
+async function deliverDigest(
+  config: NotificationConfig,
+  title: string,
+  body: string,
+  url?: string,
+): Promise<NotificationChannelResult[]> {
+  const jobs: Promise<NotificationChannelResult>[] = [];
+
+  if (config.discordEnabled && config.discordWebhookUrl) {
+    jobs.push(
+      (async () => {
+        try {
+          const target = new URL(config.discordWebhookUrl!);
+          target.searchParams.set("wait", "true");
+          const res = await fetch(target, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              username: "LXP Toolkit",
+              allowed_mentions: { parse: [] },
+              embeds: [
+                {
+                  title: truncate(title, 256),
+                  description: truncate(body, 2000),
+                  color: DISCORD_COLOR.due_soon,
+                  url,
+                  timestamp: new Date().toISOString(),
+                },
+              ],
+            }),
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (!res.ok) throw new Error(`Discord ${await readError(res)}`);
+          return { channel: "discord" as NotificationChannel, ok: true };
+        } catch (err) {
+          return {
+            channel: "discord" as NotificationChannel,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      })(),
+    );
+  }
+
+  if (config.barkEnabled && config.barkDeviceKey) {
+    jobs.push(
+      (async () => {
+        try {
+          const stem = BARK_ASSET.due_soon;
+          const res = await fetch(`${barkBaseUrl()}/push`, {
+            method: "POST",
+            headers: { "content-type": "application/json; charset=utf-8" },
+            body: JSON.stringify({
+              device_key: config.barkDeviceKey!,
+              title: truncate(title, 120),
+              body: truncate(body, 800),
+              group: BARK_GROUP.due_soon,
+              sound: BARK_SOUND.due_soon,
+              level: "timeSensitive",
+              icon: barkAssetUrl(stem, ""),
+              image: barkAssetUrl(stem, "-banner"),
+              url,
+            }),
+            signal: AbortSignal.timeout(10_000),
+          });
+          const data = (await res.json().catch(() => null)) as
+            | { code?: number; message?: string }
+            | null;
+          if (!res.ok || data?.code !== 200) {
+            throw new Error(
+              `Bark HTTP ${res.status}${data?.message ? `: ${data.message}` : ""}`,
+            );
+          }
+          return { channel: "bark" as NotificationChannel, ok: true };
+        } catch (err) {
+          return {
+            channel: "bark" as NotificationChannel,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      })(),
+    );
+  }
+
+  return Promise.all(jobs);
+}
+
+function appCalendarUrl(): string | undefined {
+  const base = appBaseUrl();
+  return base ? `${base}/calendario` : undefined;
+}
+
+function shortDate(iso: string | null): string {
+  if (!iso) return "sem prazo";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "sem prazo";
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+}
+
+function todayKey(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/**
+ * Daily digest for gradebook assessments that are not covered by a normal
+ * content task (exams like AVD1 SOMATIVA, stale/old links, gradebook-only
+ * activities). One message per day, with the next 7 days.
+ */
+async function notifyAssessmentDigest(
+  config: NotificationConfig,
+): Promise<"sent" | "skipped" | "failed"> {
+  let assessments: Assessment[];
+  try {
+    assessments = await listAssessments();
+  } catch {
+    return "skipped";
+  }
+  const now = Date.now();
+  const horizon = now + 7 * 86_400_000;
+  const due = assessments
+    .filter((assessment) => {
+      if (assessment.done || !assessment.deadlineAt) return false;
+      const ts = new Date(assessment.deadlineAt).getTime();
+      if (!Number.isFinite(ts) || ts < now - 3_600_000 || ts > horizon) return false;
+      // Linked actionable tasks already get the per-item due_soon reminder.
+      const actionable =
+        assessment.linkStatus === "linked" &&
+        ["file_upload", "quiz", "forum"].includes(assessment.matchedKind ?? "");
+      return !actionable;
+    })
+    .sort(
+      (a, b) =>
+        new Date(a.deadlineAt!).getTime() - new Date(b.deadlineAt!).getTime(),
+    );
+  if (due.length === 0) return "skipped";
+
+  const ledgerId = await claimNotificationEvent(
+    "due_soon",
+    `assessment-digest:${todayKey()}`,
+    null,
+  );
+  if (ledgerId == null) return "skipped";
+  if (!config.notifyDueSoon || !hasAnyChannel(config)) {
+    await finishNotificationEvent(
+      ledgerId,
+      "skipped",
+      !config.notifyDueSoon ? "evento desligado" : "sem canal configurado",
+    );
+    return "skipped";
+  }
+
+  const lines = due
+    .slice(0, 8)
+    .map(
+      (assessment) =>
+        `${shortDate(assessment.deadlineAt)} — ${assessment.title} (${assessment.categoryName})`,
+    );
+  const more = due.length > lines.length ? `\n+${due.length - lines.length}…` : "";
+  const results = await deliverDigest(
+    config,
+    "Avaliações do boletim",
+    `${lines.join("\n")}${more}`,
+    appCalendarUrl(),
+  );
+  const failures = results.filter((result) => !result.ok);
+  if (results.length === 0) {
+    await finishNotificationEvent(ledgerId, "skipped", "sem canal configurado");
+    return "skipped";
+  }
+  if (failures.length === 0) {
+    await finishNotificationEvent(ledgerId, "sent", null);
+    return "sent";
+  }
+  await finishNotificationEvent(
+    ledgerId,
+    "failed",
+    failures.map((f) => `${f.channel}: ${f.error ?? "falhou"}`).join(" | "),
+  );
+  return "failed";
+}
+
+/** Notify deadlines that changed since the previous import. */
+async function notifyDeadlineChanges(
+  config: NotificationConfig,
+): Promise<"sent" | "skipped" | "failed"> {
+  const rows = await query<{
+    id: string;
+    title: string;
+    old_deadline: Date | null;
+    new_deadline: Date | null;
+  }>(
+    `SELECT id, title, old_deadline, new_deadline
+       FROM deadline_change
+      WHERE notified_at IS NULL
+      ORDER BY detected_at
+      LIMIT 20`,
+  );
+  if (rows.length === 0) return "skipped";
+
+  const key = `deadline-change:${rows.map((row) => row.id).join("-")}`;
+  const ledgerId = await claimNotificationEvent("due_soon", key, null);
+  if (ledgerId == null) return "skipped";
+  if (!config.notifyDueSoon || !hasAnyChannel(config)) {
+    await query(`UPDATE deadline_change SET notified_at = now() WHERE notified_at IS NULL`);
+    await finishNotificationEvent(ledgerId, "skipped", "sem canal/evento");
+    return "skipped";
+  }
+
+  const lines = rows.map(
+    (row) => `${row.title}: ${shortDate(row.old_deadline?.toISOString() ?? null)} → ${shortDate(row.new_deadline?.toISOString() ?? null)}`,
+  );
+  const results = await deliverDigest(
+    config,
+    "Prazos alterados",
+    lines.join("\n"),
+    appCalendarUrl(),
+  );
+  const failures = results.filter((result) => !result.ok);
+  if (results.length === 0) {
+    await finishNotificationEvent(ledgerId, "skipped", "sem canal configurado");
+    return "skipped";
+  }
+  if (failures.length === 0) {
+    await query(`UPDATE deadline_change SET notified_at = now() WHERE notified_at IS NULL`);
+    await finishNotificationEvent(ledgerId, "sent", null);
+    return "sent";
+  }
+  await finishNotificationEvent(
+    ledgerId,
+    "failed",
+    failures.map((f) => `${f.channel}: ${f.error ?? "falhou"}`).join(" | "),
+  );
+  return "failed";
+}
+
 /**
  * Scan the current catalog for new/due-soon/done/expired events.
  *
@@ -689,6 +955,27 @@ export async function runNotificationScan(
     }
   }
 
+  // Gradebook-only exams (e.g. AVD1 SOMATIVA) have no content task to trigger
+  // the per-item due_soon rule; a daily 7-day digest covers them.
+  try {
+    result[await notifyAssessmentDigest(config)] += 1;
+  } catch (err) {
+    result.failed += 1;
+    console.warn(
+      `[notifications] assessment digest: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Deadline shifts (portal extended/shortened a task or exam).
+  try {
+    result[await notifyDeadlineChanges(config)] += 1;
+  } catch (err) {
+    result.failed += 1;
+    console.warn(
+      `[notifications] deadline changes: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   for (const item of actionable) {
     if (!isActionable(item)) continue;
     const created = new Date(item.createdAt).getTime();
@@ -706,7 +993,7 @@ export async function runNotificationScan(
 
     const deadline = item.deadlineAt ? new Date(item.deadlineAt).getTime() : NaN;
     if (!item.done && Number.isFinite(deadline)) {
-      if (deadline > now && deadline <= now + DUE_SOON_MS) {
+      if (deadline > now && deadline <= now + dueSoonMs()) {
         pending.push({ kind: "due_soon", key: `${item.id}:${deadline}`, item });
       } else if (deadline > baseline && deadline < now) {
         pending.push({ kind: "expired", key: `${item.id}:${deadline}`, item });

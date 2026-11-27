@@ -6,7 +6,8 @@ import { assist, raw } from "./paths.js";
 import { closePool, healthCheck, query, runMigrations, withTransaction } from "./db.js";
 import { loadAiConfig, loadAnswers, loadOverrides, loadProfile, loadSubmissions } from "./config.js";
 import { stripHtml } from "./build.js";
-import { importGradebook } from "./gradebook.js";
+import { importCalendar } from "./calendar.js";
+import { importGradebook, reconcileGradebookLinks } from "./gradebook.js";
 import {
   matchProfessor,
   professorFromModuleTitle,
@@ -784,6 +785,69 @@ function addedEntries(before: Map<number, string>, after: Map<number, string>): 
   return out;
 }
 
+interface DeadlineRow {
+  id: string;
+  title: string;
+  course_id: string | null;
+  deadline_at: Date | null;
+}
+
+interface DeadlineSnapshot {
+  content: Map<number, DeadlineRow>;
+  gradebook: Map<number, DeadlineRow>;
+}
+
+async function snapshotDeadlines(): Promise<DeadlineSnapshot> {
+  const [content, gradebook] = await Promise.all([
+    query<DeadlineRow>("SELECT id, title, course_id, deadline_at FROM content_item"),
+    query<DeadlineRow>("SELECT id, name AS title, course_id, deadline_at FROM gradebook_activity"),
+  ]);
+  return {
+    content: new Map(content.map((row) => [Number(row.id), row])),
+    gradebook: new Map(gradebook.map((row) => [Number(row.id), row])),
+  };
+}
+
+function deadlineMs(value: Date | null): number | null {
+  return value ? value.getTime() : null;
+}
+
+async function detectDeadlineChanges(before: DeadlineSnapshot): Promise<number> {
+  const after = await snapshotDeadlines();
+  let changes = 0;
+  const sources: [string, Map<number, DeadlineRow>, Map<number, DeadlineRow>][] = [
+    ["content_item", before.content, after.content],
+    ["gradebook_activity", before.gradebook, after.gradebook],
+  ];
+  for (const [source, oldRows, newRows] of sources) {
+    for (const [id, next] of newRows) {
+      const previous = oldRows.get(id);
+      if (!previous) continue;
+      const oldMs = deadlineMs(previous.deadline_at);
+      const newMs = deadlineMs(next.deadline_at);
+      if (oldMs == null || newMs == null || oldMs === newMs) continue;
+      if (Math.abs(newMs - oldMs) < 60_000) continue;
+      const inserted = await query<{ id: string }>(
+        `INSERT INTO deadline_change(
+           source, ref_id, title, course_id, old_deadline, new_deadline)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (source, ref_id, old_deadline, new_deadline) DO NOTHING
+         RETURNING id`,
+        [
+          source,
+          id,
+          next.title,
+          next.course_id != null ? Number(next.course_id) : null,
+          previous.deadline_at,
+          next.deadline_at,
+        ],
+      );
+      if (inserted.length > 0) changes++;
+    }
+  }
+  return changes;
+}
+
 export interface ImportSummary {
   courses: number;
   items: number;
@@ -803,6 +867,16 @@ export interface ImportSummary {
   completionCorrected: number;
   /** Stale "done" notification ledger rows cleared by that repair. */
   notificationLedgerReset: number;
+  /** Persisted portal calendar appointments in this dump. */
+  calendarAppointments: number;
+  /** Gradebook activities linked to a current content item. */
+  gradebookLinked: number;
+  /** Gradebook id matched an old-term topic; the current assessment is standalone. */
+  gradebookStale: number;
+  /** Gradebook activities with no content item (shown from the gradebook). */
+  gradebookOnly: number;
+  /** Deadlines that changed since the previous import. */
+  deadlineChanges: number;
 }
 
 /**
@@ -845,6 +919,7 @@ export async function importAll(): Promise<ImportSummary> {
   const institutionId = await ensureInstitution();
   const studentId = await ensureStudent(institutionId);
   const before = await snapshotCatalog();
+  const deadlinesBefore = await snapshotDeadlines();
 
   let items = 0;
   for (const course of courses) {
@@ -865,10 +940,15 @@ export async function importAll(): Promise<ImportSummary> {
   const submissions = await backfillSubmissions(studentId);
   const annotations = await backfillOverrides(studentId);
   await importAiConfig(studentId);
+  const calendar = await importCalendar();
   const gradebook = await importGradebook();
   // The gradebook is imported after the courses (FK), so reconcile completion
   // now that both sides exist. This also repairs older scraped trees.
   const completion = await reconcileCompletion(studentId);
+  // Term-aware gradebook↔content links (fixes reused gradebook ids hiding a
+  // current assessment behind an old hidden topic).
+  const links = await reconcileGradebookLinks();
+  const deadlineChanges = await detectDeadlineChanges(deadlinesBefore);
   const purged = await purgeContainerHiddenItems();
   if (purged.count > 0) {
     console.log(
@@ -886,6 +966,13 @@ export async function importAll(): Promise<ImportSummary> {
     newCourses,
     newModules,
     newItems,
+    coverage: {
+      gradebookLinked: links.linked,
+      gradebookStale: links.stale,
+      gradebookOnly: links.gradebookOnly,
+      calendarAppointments: calendar.appointments,
+      deadlineChanges,
+    },
   };
   try {
     const logFile = assist("data", "logs", "catalog", "last-import.json");
@@ -913,6 +1000,11 @@ export async function importAll(): Promise<ImportSummary> {
     newItems,
     completionCorrected: completion.corrected,
     notificationLedgerReset: completion.ledgerReset,
+    calendarAppointments: calendar.appointments,
+    gradebookLinked: links.linked,
+    gradebookStale: links.stale,
+    gradebookOnly: links.gradebookOnly,
+    deadlineChanges,
   };
 }
 
@@ -927,7 +1019,9 @@ async function main(): Promise<void> {
       (summary.completionCorrected > 0
         ? ` - completion corrected=${summary.completionCorrected} ledgerReset=${summary.notificationLedgerReset}`
         : "") +
-      ` - new courses=${summary.newCourses.length} modules=${summary.newModules.length} items=${summary.newItems.length}`,
+      ` - new courses=${summary.newCourses.length} modules=${summary.newModules.length} items=${summary.newItems.length}` +
+      ` - calendar=${summary.calendarAppointments} gb-linked=${summary.gradebookLinked}` +
+      ` gb-stale=${summary.gradebookStale} gb-only=${summary.gradebookOnly} deadline-changes=${summary.deadlineChanges}`,
   );
   const file = assist("data", "exercises.json");
   console.log(`   next: npm run index:web (projects the DB to ${file})`);

@@ -23,6 +23,8 @@ import {
   usePortalRefresh,
 } from "@/components/content-refresh";
 import { AgoraPage } from "@/pages/agora";
+import { CalendarioPage } from "@/pages/calendario";
+import { AssessmentPage } from "@/pages/assessment";
 import { TarefasPage } from "@/pages/tarefas";
 import { ProgressoPage } from "@/pages/progresso";
 import { ExercisePage } from "@/pages/exercise";
@@ -42,6 +44,8 @@ function pageTitle(
 ): string {
   if (pathname === "/") return t("nav.now");
   if (pathname === "/tarefas") return t("nav.tasks");
+  if (pathname === "/calendario") return t("nav.calendar");
+  if (pathname.startsWith("/avaliacao/")) return t("assessment.title");
   if (pathname === "/progresso") return t("nav.progress");
   if (pathname === "/ajustes") return t("nav.settings");
   if (pathname === "/gods-eye") return t("nav.godsEye");
@@ -130,8 +134,10 @@ function Shell() {
               <Routes>
                 <Route path="/" element={<AgoraPage />} />
                 <Route path="/tarefas" element={<TarefasPage />} />
+                <Route path="/calendario" element={<CalendarioPage />} />
                 <Route path="/progresso" element={<ProgressoPage />} />
                 <Route path="/tarefa/:id" element={<ExercisePage />} />
+                <Route path="/avaliacao/:gradebookId" element={<AssessmentPage />} />
                 <Route path="/treino/quiz" element={<TrainingQuizPage />} />
                 <Route path="/treino/estudo" element={<TrainingStudyPage />} />
                 <Route path="/treino/resumo" element={<TrainingSummaryPage />} />

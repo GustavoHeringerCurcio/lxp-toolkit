@@ -1,6 +1,7 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   BellRing,
+  CalendarDays,
   ChartColumn,
   ChevronLeft,
   Eye,
@@ -36,6 +37,7 @@ import { useT } from "@/lib/i18n";
 const NAV = [
   { to: "/", key: "nav.now", icon: Sunrise, end: true },
   { to: "/tarefas", key: "nav.tasks", icon: ListChecks, match: ["/tarefa/"] },
+  { to: "/calendario", key: "nav.calendar", icon: CalendarDays },
   { to: "/progresso", key: "nav.progress", icon: ChartColumn },
 ] as const;
 

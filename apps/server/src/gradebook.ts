@@ -59,6 +59,153 @@ export interface GradebookImportSummary {
   activities: number;
 }
 
+export interface GradebookLinkSummary {
+  linked: number;
+  stale: number;
+  gradebookOnly: number;
+}
+
+interface ContentLinkRow {
+  id: string;
+  course_id: string;
+  title: string;
+  deadline_at: Date | null;
+  gradebook_id: string | null;
+  kind: string;
+}
+
+interface GradebookLinkRow {
+  id: string;
+  course_id: string;
+  name: string;
+  deadline_at: Date | null;
+  topic_type_id: number | null;
+}
+
+function normalizedTitle(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/** Title without dates, so "AVD1 … 27/11/2026" and "AVD1 … 10/04/2026" compare equal. */
+function baseTitle(value: string): string {
+  return normalizedTitle(value)
+    .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, "")
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function dayDiff(a: Date | null, b: Date | null): number | null {
+  if (!a || !b) return null;
+  return Math.abs(a.getTime() - b.getTime()) / 86_400_000;
+}
+
+function pickBest(
+  candidates: ContentLinkRow[],
+  gb: GradebookLinkRow,
+): { row: ContentLinkRow; diff: number | null; titleMatch: boolean } | null {
+  let best: { row: ContentLinkRow; diff: number | null; titleMatch: boolean } | null = null;
+  const gbBase = baseTitle(gb.name);
+  for (const row of candidates) {
+    const diff = dayDiff(row.deadline_at, gb.deadline_at);
+    const titleMatch = baseTitle(row.title) === gbBase;
+    const score = (diff ?? Number.POSITIVE_INFINITY) + (titleMatch ? 0 : 1000);
+    const bestScore =
+      best == null
+        ? Number.POSITIVE_INFINITY
+        : (best.diff ?? Number.POSITIVE_INFINITY) + (best.titleMatch ? 0 : 1000);
+    if (score < bestScore) best = { row, diff, titleMatch };
+  }
+  return best;
+}
+
+/**
+ * Link gradebook activities to content items using the **current term**, not
+ * only the reused `gradebook_id`.
+ *
+ * The portal reuses a gradebook activity id across terms. A current exam can
+ * therefore point at an old hidden topic with the same id and a months-old
+ * deadline; treating that old topic as the current assessment hides the real
+ * pending exam. We only link when the deadline and title agree; otherwise the
+ * link is `stale` and the current gradebook activity is shown as
+ * `gradebook_only`.
+ */
+export async function reconcileGradebookLinks(): Promise<GradebookLinkSummary> {
+  const [contentRows, gradebookRows] = await Promise.all([
+    query<ContentLinkRow>(
+      `SELECT id, course_id, title, deadline_at, gradebook_id, kind
+         FROM content_item`,
+    ),
+    query<GradebookLinkRow>(
+      `SELECT id, course_id, name, deadline_at, topic_type_id
+         FROM gradebook_activity`,
+    ),
+  ]);
+
+  const byCourse = new Map<number, ContentLinkRow[]>();
+  for (const row of contentRows) {
+    const key = Number(row.course_id);
+    const list = byCourse.get(key) ?? [];
+    list.push(row);
+    byCourse.set(key, list);
+  }
+
+  let linked = 0;
+  let stale = 0;
+  let gradebookOnly = 0;
+
+  for (const gb of gradebookRows) {
+    const candidates = byCourse.get(Number(gb.course_id)) ?? [];
+    const sameId = candidates.filter((row) => Number(row.gradebook_id) === Number(gb.id));
+    const byId = pickBest(sameId, gb);
+    let matched: ContentLinkRow | null = null;
+    let status: "linked" | "stale" | "gradebook_only" = "gradebook_only";
+
+    if (byId) {
+      const closeDeadline = byId.diff != null && byId.diff <= 30;
+      const veryClose = byId.diff != null && byId.diff <= 1;
+      if (veryClose || (closeDeadline && byId.titleMatch)) {
+        matched = byId.row;
+        status = "linked";
+      } else {
+        // Same id, but an old term/topic: keep the historical topic out of the
+        // current assessment and surface the gradebook activity itself.
+        status = "stale";
+      }
+    } else {
+      const gbBase = baseTitle(gb.name);
+      const byTitle = candidates.filter(
+        (row) =>
+          baseTitle(row.title) === gbBase &&
+          (dayDiff(row.deadline_at, gb.deadline_at) ?? 999) <= 30,
+      );
+      const best = pickBest(byTitle, gb);
+      if (best) {
+        matched = best.row;
+        status = "linked";
+      }
+    }
+
+    await query(
+      `UPDATE gradebook_activity
+          SET matched_content_item_id = $2, link_status = $3
+        WHERE id = $1`,
+      [Number(gb.id), matched ? Number(matched.id) : null, status],
+    );
+
+    if (status === "linked") linked++;
+    else if (status === "stale") stale++;
+    else gradebookOnly++;
+  }
+
+  return { linked, stale, gradebookOnly };
+}
+
 function normalized(value: string): string {
   return value
     .normalize("NFD")

@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { answerToPdf, buildAnswerHtml, looksLikeMarkdown, renderRichPdf } from "../src/pdf.js";
+import {
+  answerToPdf,
+  buildAnswerHtml,
+  looksLikeMarkdown,
+  renderRichPdf,
+  summaryToPdf,
+} from "../src/pdf.js";
 
 const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lK3Q6wAAAABJRU5ErkJggg==",
@@ -94,4 +100,34 @@ describe("renderRichPdf (fill mode)", () => {
     expect(text).toContain("/F2");
     expect(text).toContain(" l S"); // horizontal rule
   });
+});
+
+describe("summaryToPdf", () => {
+  it("renders the study layout with colored sections and a TOC", async () => {
+    const markdown = [
+      "## Vis�o geral",
+      "",
+      "Resumo com **termo-chave**.",
+      "",
+      "## T�picos-chave",
+      "",
+      "- Primeiro t�pico",
+      "",
+      "## Quest�es prov�veis",
+      "",
+      "1. **Pergunta?**",
+      "   - **Resposta:** alternativa",
+      "   - **Por qu�:** justificativa",
+    ].join("\n");
+    const title = `Resumo de teste ${Math.random().toString(36).slice(2)}`;
+    const pdfPath = await summaryToPdf(markdown, title);
+    expect(pdfPath).toBeTruthy();
+    const htmlPath = (pdfPath as string).replace(/\.pdf$/, ".html");
+    const html = readFileSync(htmlPath, "utf8");
+    expect(html).toContain("section--blue");
+    expect(html).toContain("section--green");
+    expect(html).toContain("section--questions");
+    expect(html).toContain("toc-title");
+    expect(html).toContain("hero");
+  }, 30_000);
 });

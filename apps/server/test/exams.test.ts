@@ -169,3 +169,52 @@ describe.skipIf(!enabled)("exam store (Postgres)", () => {
     expect((await listExams(COURSE)).map((e) => e.name)).toEqual(["AVD1"]);
   });
 });
+
+describe("exams - janelas", () => {
+  const WINDOWED: Exam[] = [
+    {
+      id: 10,
+      courseId: 1,
+      name: "AVD1",
+      sequence: 1,
+      endsAt: "2026-10-03T02:59:59.000Z",
+      startsAt: null,
+      includeNeutral: true,
+      createdAt: "",
+      updatedAt: "",
+    },
+    {
+      id: 20,
+      courseId: 1,
+      name: "AVD2",
+      sequence: 2,
+      endsAt: "2026-12-31T02:59:59.000Z",
+      startsAt: "2026-10-03T02:59:59.000Z",
+      includeNeutral: false,
+      createdAt: "",
+      updatedAt: "",
+    },
+  ];
+
+  it("usa o inicio da prova seguinte como limite da anterior", () => {
+    expect(classifyByDate("2026-10-02T23:00:00-03:00", WINDOWED)).toBe(10);
+    expect(classifyByDate("2026-10-03T00:30:00-03:00", WINDOWED)).toBe(20);
+    expect(classifyByDate("2026-12-30T23:00:00-03:00", WINDOWED)).toBe(20);
+  });
+
+  it("nao inclui material neutro em AVD2 por padrao", () => {
+    const items = [
+      item(1),
+      item(2),
+      item(3, { sectionId: 200, sectionTitle: "Sem rotulo" }),
+    ];
+    const resolved = resolveCourseExams(items, WINDOWED, {
+      itemExam: new Map([
+        [1, 10],
+        [2, 20],
+      ]),
+    });
+    expect(filterItemsForExam(items, resolved, 20, false).map((i) => i.id)).toEqual([2]);
+    expect(filterItemsForExam(items, resolved, 20, true).map((i) => i.id)).toEqual([2, 3]);
+  });
+});

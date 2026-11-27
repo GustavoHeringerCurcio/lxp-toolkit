@@ -115,8 +115,15 @@ describe("notification helpers", () => {
 
   it("formata os quatro eventos em pt-BR", () => {
     const item = makeItem({ deadlineAt: "2026-12-01T23:59:00Z" });
+    const soon = makeItem({
+      deadlineAt: new Date(Date.now() + 12 * 3_600_000).toISOString(),
+    });
+    const week = makeItem({
+      deadlineAt: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+    });
     expect(formatNotification("new", item).title).toBe("Nova atividade");
-    expect(formatNotification("due_soon", item).title).toBe("Faltam menos de 24h");
+    expect(formatNotification("due_soon", soon).title).toBe("Faltam menos de 24h");
+    expect(formatNotification("due_soon", week).title).toMatch(/^Vence em \d+ dias$/);
     expect(formatNotification("done", item).title).toBe("Atividade concluída");
     expect(formatNotification("expired", item).title).toBe("Prazo perdido");
     expect(formatNotification("test").body).toContain("sucesso");

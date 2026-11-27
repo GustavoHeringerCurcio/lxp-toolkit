@@ -498,7 +498,12 @@ export interface Exam {
   courseId: number;
   name: string;
   sequence: number;
+  /** Inclusive end of the exam window (end-of-day, São Paulo). */
   endsAt: string | null;
+  /** Exclusive start of the exam window; null = derived from the previous exam. */
+  startsAt?: string | null;
+  /** Include material with no exam signal (default: first exam only). */
+  includeNeutral?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -537,6 +542,8 @@ export interface ExamSuggestion {
   name: string;
   sequence: number;
   endsAt: string | null;
+  startsAt?: string | null;
+  includeNeutral?: boolean;
 }
 
 // ── Professor photos (per student) ──────────────────────────────────────────
@@ -687,4 +694,59 @@ export interface NotificationItem {
   rawKind?: string | null;
   /** Portal records progress for this item (makes a reading "markable"). */
   isRecordProgress?: boolean;
+}
+
+export type AssessmentStatus = "pending" | "submitted" | "graded" | "expired";
+export type AssessmentLinkStatus = "linked" | "stale" | "gradebook_only";
+
+/** A graded gradebook activity (exam, quiz, upload, ...), independent of the content tree. */
+export interface Assessment {
+  id: number;
+  courseId: number;
+  courseName: string;
+  categoryId: number | null;
+  categoryName: string;
+  title: string;
+  deadlineAt: string | null;
+  topicTypeId: number | null;
+  value: number | null;
+  maxValue: number | null;
+  isSubmitted: boolean;
+  submittedAt: string | null;
+  status: AssessmentStatus;
+  done: boolean;
+  matchedContentItemId: number | null;
+  matchedTitle: string | null;
+  matchedKind: string | null;
+  linkStatus: AssessmentLinkStatus;
+  /** Best-effort link to the college portal course page. */
+  portalUrl: string;
+}
+
+export type CalendarEventKind = "task" | "assessment" | "appointment";
+
+/** One event in the merged app calendar (tasks + gradebook assessments + portal calendar). */
+export interface CalendarEvent {
+  key: string;
+  kind: CalendarEventKind;
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD in America/Sao_Paulo
+  startAt: string | null;
+  endAt: string | null;
+  allDay: boolean;
+  courseId: number | null;
+  courseName: string | null;
+  moduleName: string | null;
+  sectionTitle: string | null;
+  status: "open" | "expired" | "done" | AssessmentStatus;
+  done: boolean;
+  grade: number | null;
+  maxGrade: number | null;
+  activityId: number | null;
+  gradebookId: number | null;
+  topicTypeId: number | null;
+  linkStatus: AssessmentLinkStatus | null;
+  canOpenTask: boolean;
+  portalUrl: string | null;
 }

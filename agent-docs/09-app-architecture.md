@@ -319,6 +319,25 @@ enabled at once; the four event switches are global:
 - The scanner runs on **server/container boot** (`bootstrap`) and **after every refresh run**
   (success or failure); there is no background timer. Due-soon/expired checks therefore happen at
   those two moments only.
+- `due_soon` starts **72h** before the deadline by default (`NOTIFY_DUE_SOON_HOURS`), with a dynamic
+  title. Tasks get per-item reminders; gradebook-only assessments (exams with no current topic) get
+  one daily 7-day digest. Deadline shifts recorded in `deadline_change` produce one
+  “Prazos alterados” message.
+
+### 9.2 Assessments & calendar
+
+The gradebook is treated as a second source of truth, not just metadata for Provas:
+
+- `gradebook_activity` stores submission/grade/deadline and a `link_status`
+  (`linked`/`stale`/`gradebook_only`). Linking is term-aware: a reused `gradebook_id` that points
+  at an old-term hidden topic is `stale`, so the current assessment is not hidden behind an old
+  “done”.
+- `calendar_appointment` persists portal appointments (migration `0027`). The dump fetches from the
+  first day of the current month through +60 days, so early-month events survive after the window
+  moves.
+- `GET /api/calendar?from&to` merges appointments + content tasks + assessments (deduped by task id
+  / gradebook id). `GET /api/exercises` includes `assessments`. The UI routes are `/calendario` and
+  Agora “Amanhã / Próximos 7 dias”; done items stay visible with a check.
 - Only normal tree items are considered (`origin='tree'`); God's Eye/hidden topics are ignored.
 - Items already expired at `baseline_at` (never eligible for the per-item `expired` rule) are sent
   once as a summarized backlog alert (`event_key = backlog:<baseline>`).

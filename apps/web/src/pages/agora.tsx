@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, GraduationCap } from "lucide-react";
 import { useAppData, useScopePrefs } from "@/lib/app-state";
 import { cmpOpen, countInfo } from "@/lib/status";
 import { useT, type TranslateFn } from "@/lib/i18n";
@@ -9,6 +9,103 @@ import { NextHero, ProgressSummary, type ModuleProgress } from "@/components/ago
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoData } from "@/components/state-screens";
+import type { Assessment } from "@/types";
+import { cn } from "@/lib/utils";
+
+const TZ = "America/Sao_Paulo";
+
+function isoDay(value: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function dayKey(offset: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return isoDay(date.toISOString())!;
+}
+
+function dayHeading(key: string, locale: string): string {
+  const date = new Date(`${key}T12:00:00-03:00`);
+  return new Intl.DateTimeFormat(locale, {
+    weekday: "long",
+    day: "2-digit",
+    month: "short",
+  }).format(date);
+}
+
+function assessmentDeadline(value: string | null, locale: string, fallback: string): string {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return new Intl.DateTimeFormat(locale, {
+    timeZone: TZ,
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function AssessmentRow({
+  assessment,
+  onOpen,
+}: {
+  assessment: Assessment;
+  onOpen: () => void;
+}) {
+  const { t, locale } = useT();
+  const done = assessment.done;
+  const tone = done
+    ? "border-ok/30 bg-ok-bg text-ok"
+    : assessment.status === "expired"
+      ? "border-late/30 bg-late-bg text-late"
+      : "border-soon/30 bg-soon-bg text-foreground";
+  const label = done
+    ? assessment.status === "graded"
+      ? t("calendar.graded")
+      : t("calendar.submitted")
+    : assessment.status === "expired"
+      ? t("calendar.legend.expired")
+      : t("calendar.pending");
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-opacity hover:opacity-90",
+        tone,
+      )}
+    >
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background/60">
+        <GraduationCap className="size-4" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">{assessment.title}</span>
+        <span className="block truncate text-[11px] opacity-80">
+          {assessment.categoryName} · {assessmentDeadline(assessment.deadlineAt, locale, t("calendar.noDeadline"))}
+        </span>
+      </span>
+      <span className="shrink-0 text-right">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide">{label}</span>
+        {assessment.maxValue != null && (
+          <span className="block font-mono text-[11px] tabular-nums">
+            {assessment.value != null
+              ? t("calendar.grade", { value: assessment.value, max: assessment.maxValue })
+              : t("calendar.worth", { max: assessment.maxValue })}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
 
 function greeting(t: TranslateFn): string {
   const h = new Date().getHours();
@@ -38,7 +135,7 @@ function SkeletonMain() {
 }
 
 export function AgoraPage() {
-  const { items, loading, courses } = useAppData();
+  const { items, loading, courses, assessments } = useAppData();
   const { setModuleFilter, setScope } = useScopePrefs();
   const { t, locale } = useT();
   const navigate = useNavigate();
@@ -75,6 +172,51 @@ export function AgoraPage() {
   );
   const overdue = useMemo(() => overdueAll.slice(0, 3), [overdueAll]);
   const hidden = Math.max(0, queueAll.length - queue.length);
+
+  // A linked upload/quiz/forum already appears as its task card; only show the
+  // standalone gradebook assessment (e.g. an exam with no current topic).
+  const standaloneAssessments = useMemo(
+    () =>
+      assessments.filter(
+        (assessment) =>
+          !(
+            assessment.linkStatus === "linked" &&
+            ["file_upload", "quiz", "forum"].includes(assessment.matchedKind ?? "")
+          ),
+      ),
+    [assessments],
+  );
+
+  const tomorrow = dayKey(1);
+  const tomorrowTasks = useMemo(
+    () =>
+      items
+        .filter((item) => item.status === "open" && !item.done && isoDay(item.deadlineAt) === tomorrow)
+        .sort((a, b) => cmpOpen(a, b, locale)),
+    [items, tomorrow, locale],
+  );
+  const tomorrowAssessments = useMemo(
+    () =>
+      standaloneAssessments
+        .filter((assessment) => !assessment.done && isoDay(assessment.deadlineAt) === tomorrow)
+        .sort((a, b) => a.title.localeCompare(b.title, locale)),
+    [standaloneAssessments, tomorrow, locale],
+  );
+  const nextDays = useMemo(() => {
+    return Array.from({ length: 6 }, (_, index) => dayKey(index + 2))
+      .map((key) => ({
+        key,
+        tasks: items
+          .filter((item) => item.status === "open" && !item.done && isoDay(item.deadlineAt) === key)
+          .sort((a, b) => cmpOpen(a, b, locale))
+          .slice(0, 4),
+        assessments: standaloneAssessments
+          .filter((assessment) => !assessment.done && isoDay(assessment.deadlineAt) === key)
+          .sort((a, b) => a.title.localeCompare(b.title, locale))
+          .slice(0, 4),
+      }))
+      .filter((day) => day.tasks.length > 0 || day.assessments.length > 0);
+  }, [items, standaloneAssessments, locale]);
 
   const modules = useMemo<ModuleProgress[]>(() => {
     const map = new Map<string, ModuleProgress>();
@@ -120,6 +262,67 @@ export function AgoraPage() {
       ) : (
         <>
           {next && <NextHero next={next} onClick={() => navigate(`/tarefa/${next.id}`)} />}
+
+          {(tomorrowTasks.length > 0 || tomorrowAssessments.length > 0) && (
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="font-heading text-base font-semibold tracking-tight">
+                  {t("now.tomorrow")}
+                </h2>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/calendario")}>
+                  {t("now.calendar")}
+                  <ArrowRight />
+                </Button>
+              </div>
+              <div className="grid gap-2.5">
+                {tomorrowTasks.map((item) => (
+                  <ActivityCard key={item.id} e={item} />
+                ))}
+                {tomorrowAssessments.map((assessment) => (
+                  <AssessmentRow
+                    key={assessment.id}
+                    assessment={assessment}
+                    onOpen={() => navigate(`/avaliacao/${assessment.id}`)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {nextDays.length > 0 && (
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="font-heading text-base font-semibold tracking-tight">
+                  {t("now.next7")}
+                </h2>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/calendario")}>
+                  {t("now.calendar")}
+                  <ArrowRight />
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {nextDays.map((day) => (
+                  <div key={day.key}>
+                    <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      {dayHeading(day.key, locale)}
+                    </h3>
+                    <div className="grid gap-2.5">
+                      {day.tasks.map((item) => (
+                        <ActivityCard key={item.id} e={item} />
+                      ))}
+                      {day.assessments.map((assessment) => (
+                        <AssessmentRow
+                          key={assessment.id}
+                          assessment={assessment}
+                          onOpen={() => navigate(`/avaliacao/${assessment.id}`)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section>
             <div className="mb-2 flex items-center justify-between">
